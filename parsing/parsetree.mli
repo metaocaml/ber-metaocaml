@@ -123,7 +123,7 @@ and expression_desc =
   | Pexp_bracket of expression (* NNN *)
   | Pexp_escape of expression  (* NNN *)
   | Pexp_run of expression     (* NNN *)
-  | Pexp_cspval of Obj.t * Longident.t (* NNN *)
+  | Pexp_cspval of Obj.t * Longident.t loc (* NNN *)
 
 (* Value descriptions *)
 
