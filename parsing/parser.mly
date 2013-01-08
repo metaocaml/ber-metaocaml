@@ -295,6 +295,10 @@ let wrap_type_annotation newtypes core_type body =
 
 /* Tokens */
 
+%token DOTLESS     /* NNN */
+%token GREATERDOT  /* NNN */
+%token DOTTILDE    /* NNN */
+%token DOTBANG     /* NNN */
 %token AMPERAMPER
 %token AMPERSAND
 %token AND
@@ -459,6 +463,7 @@ The precedences must be listed from low to high.
 %nonassoc prec_unary_minus prec_unary_plus /* unary - */
 %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
 %nonassoc prec_constr_appl              /* above AS BAR COLONCOLON COMMA */
+%left	  prec_escape    /* NNN */
 %nonassoc below_SHARP
 %nonassoc SHARP                         /* simple_expr/toplevel_directive */
 %nonassoc below_DOT
@@ -1069,6 +1074,12 @@ simple_expr:
       { reloc_exp $2 }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
+  | DOTLESS expr GREATERDOT                 /* NNN */
+      { mkexp(Pexp_bracket $2) }            /* NNN */
+  | DOTTILDE simple_expr %prec prec_escape  /* NNN */
+      { mkexp(Pexp_escape $2) }             /* NNN */
+  | DOTBANG expr %prec prec_escape          /* NNN */
+      { mkexp(Pexp_run $2) }                /* NNN */
   | BEGIN seq_expr END
       { reloc_exp $2 }
   | BEGIN END

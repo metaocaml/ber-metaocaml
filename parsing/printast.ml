@@ -329,6 +329,18 @@ and expression i ppf x =
   | Pexp_open (m, e) ->
       line i ppf "Pexp_open \"%a\"\n" fmt_longident m;
       expression i ppf e
+(* NNN through the end of the case *)
+  | Pexp_bracket (e) ->
+      line i ppf "Pexp_bracket\n";
+      expression i ppf e;
+  | Pexp_escape (e) ->
+      line i ppf "Pexp_escape\n";
+      expression i ppf e;
+  | Pexp_run (e) ->
+      line i ppf "Pexp_run\n";
+      expression i ppf e;
+  | Pexp_cspval (v,li) ->
+      line i ppf "Pexp_cspval <compiled_code> (as id: %a)" fmt_longident li
 
 and value_description i ppf x =
   line i ppf "value_description\n";
