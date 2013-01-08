@@ -1,5 +1,8 @@
 			BER MetaOCaml
 
+# NNNXXX Use compilerlibs as much as possible
+
+
 * Main differences from the original MetaOCaml
 
 -- Added metalib (aka ber-metaocaml) directory: the MetaOCaml library, 
@@ -24,6 +27,10 @@
 
 -- All modified lines in the OCaml code are marked by (* NNN *)
 
+
+
+./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
+-no-camlp4 -no-graph
 
 * Installation notes
 When linking the first time, beware!
