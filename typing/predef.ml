@@ -44,6 +44,7 @@ and ident_nativeint = ident_create "nativeint"
 and ident_int32 = ident_create "int32"
 and ident_int64 = ident_create "int64"
 and ident_lazy_t = ident_create "lazy_t"
+and ident_code = ident_create "code"    (* NNN *)
 
 let path_int = Pident ident_int
 and path_char = Pident ident_char
@@ -60,6 +61,7 @@ and path_nativeint = Pident ident_nativeint
 and path_int32 = Pident ident_int32
 and path_int64 = Pident ident_int64
 and path_lazy_t = Pident ident_lazy_t
+and path_code   = Pident ident_code   (* NNN *)
 
 let type_int = newgenty (Tconstr(path_int, [], ref Mnil))
 and type_char = newgenty (Tconstr(path_char, [], ref Mnil))
@@ -75,6 +77,7 @@ and type_nativeint = newgenty (Tconstr(path_nativeint, [], ref Mnil))
 and type_int32 = newgenty (Tconstr(path_int32, [], ref Mnil))
 and type_int64 = newgenty (Tconstr(path_int64, [], ref Mnil))
 and type_lazy_t t = newgenty (Tconstr(path_lazy_t, [t], ref Mnil))
+and type_code t1 t2 = newgenty (Tconstr(path_code, [t1;t2], ref Mnil)) (* NNN *)
 
 let ident_match_failure = ident_create_predef_exn "Match_failure"
 and ident_out_of_memory = ident_create_predef_exn "Out_of_memory"
@@ -196,6 +199,17 @@ let build_initial_env add_type add_exception empty_env =
      type_manifest = None;
      type_variance = [true, false, false];
      type_newtype_level = None}
+ (* NNN added decl_code *)
+  and decl_code =
+    let (tvar1,tvar2) = (newgenvar(),newgenvar()) in
+    {type_params = [tvar1;tvar2];
+     type_arity = 2;
+     type_kind = Type_abstract;
+     type_loc = Location.none;
+     type_private = Public;
+     type_manifest = None;
+     type_variance = [true, false, false; true, false, false];
+     type_newtype_level = None}
   in
 
   let add_exception id l =
@@ -219,6 +233,7 @@ let build_initial_env add_type add_exception empty_env =
   add_type ident_int32 decl_abstr (
   add_type ident_nativeint decl_abstr (
   add_type ident_lazy_t decl_lazy_t (
+  add_type ident_code decl_code (     (* NNN *)
   add_type ident_option decl_option (
   add_type ident_format6 decl_format6 (
   add_type ident_list decl_list (
@@ -230,7 +245,7 @@ let build_initial_env add_type add_exception empty_env =
   add_type ident_string decl_abstr (
   add_type ident_char decl_abstr (
   add_type ident_int decl_abstr (
-    empty_env)))))))))))))))))))))))))))
+    empty_env))))))))))))))))))))))))))) )   (* NNN extra parenthesis *)
 
 let builtin_values =
   List.map (fun id -> Ident.make_global id; (Ident.name id, id))
