@@ -294,6 +294,9 @@ let rec add_labels_expr ~text ~values ~classes expr =
   | Pexp_ident _ | Pexp_constant _ | Pexp_construct _ | Pexp_variant _
   | Pexp_new _ | Pexp_assertfalse | Pexp_object _ | Pexp_pack _ ->
       ()
+ (* NNN through the rest of the pattern-match *)
+  | Pexp_bracket e | Pexp_escape e | Pexp_run e -> add_labels_rec e
+  | Pexp_cspval _ -> ()
 
 let rec add_labels_class ~text ~classes ~values ~methods cl =
   match cl.pcl_desc with

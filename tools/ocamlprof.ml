@@ -288,6 +288,9 @@ and rw_exp iflag sexp =
   | Pexp_newtype (_, sexp) -> rewrite_exp iflag sexp
   | Pexp_open (_, e) -> rewrite_exp iflag e
   | Pexp_pack (smod) -> rewrite_mod iflag smod
+(* NNN through the rest of the pattern-match *)
+  | Pexp_bracket e | Pexp_escape e | Pexp_run e -> rewrite_exp iflag e
+  | Pexp_cspval _ -> ()
 
 and rewrite_ifbody iflag ghost sifbody =
   if !instr_if && not ghost then
