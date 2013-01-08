@@ -21,6 +21,9 @@ CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
 CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink
 COMPFLAGS= -strict-sequence -warn-error A $(INCLUDES)
 LINKFLAGS=
+# For debugging
+# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
+# LINKFLAGS=-g #NNN
 
 CAMLYACC=boot/ocamlyacc
 YACCFLAGS=-v
@@ -45,6 +48,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/syntaxerr.cmo parsing/parser.cmo \
   parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo
 
+# NNN (trx)
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \
@@ -56,6 +60,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
   typing/cmt_format.cmo typing/stypes.cmo typing/typecore.cmo \
   typing/typedecl.cmo typing/typeclass.cmo \
+  typing/trx.cmo \
   typing/typemod.cmo
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
@@ -115,7 +120,9 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
+  # NNNNN otherlibraries ocamldoc
+# NNN The rest is not tried or not yet supported
+#  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
 
 # Compile everything the first time
 world:
@@ -283,6 +290,19 @@ install:
 	cp compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma compilerlibs/ocamltoplevel.cma $(BYTESTART) $(TOPLEVELSTART) $(COMPLIBDIR)
 	cp expunge $(LIBDIR)/expunge$(EXE)
 	cp toplevel/topdirs.cmi $(LIBDIR)
+# NNN The following is needed for the sake of trx.ml (see the lazy
+# identifier resolution in that file)
+# We need to copy the following interfaces, or we can't compile
+# anything with brackets
+# If we get trx.ml to use predef, the copying below can be done at a later time
+	cp parsing/asttypes.cmi parsing/parsetree.cmi \
+	   parsing/location.cmi \
+           parsing/longident.cmi  \
+           typing/trx.cmi \
+           typing/trx.cmo \
+           typing/ident.cmi $(LIBDIR)
+# NNNXXX Use compilerlibs as much as needed
+# NNN end
 	cd tools; $(MAKE) install
 	-cd man; $(MAKE) install
 	for i in $(OTHERLIBRARIES); do \
