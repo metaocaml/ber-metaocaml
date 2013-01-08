@@ -1719,10 +1719,14 @@ operator:
   | AMPERAMPER                                  { "&&" }
   | COLONEQUAL                                  { ":=" }
 ;
-    /* NNN: whole definition */
+    /* NNN: the whole definition */
 let_operator:
-    LETOP                                   { mkexp (Pexp_ident(Lident $1)) }
-  | mod_longident DOT LETOP                 { mkexp (Pexp_ident(Ldot($1,$3))) }
+    LETOP                                   { mkexp (Pexp_ident(
+                                                     mkloc (Lident $1)
+                                                           (symbol_rloc ()))) }
+  | mod_longident DOT LETOP                 { mkexp (Pexp_ident(
+                                                     mkloc (Ldot($1,$3))
+                                                           (symbol_rloc ()))) }
 ;
 constr_ident:
     UIDENT                                      { $1 }
