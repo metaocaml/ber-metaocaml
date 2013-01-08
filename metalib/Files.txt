@@ -1,0 +1,86 @@
+OCaml files affected by the BER MetaOCaml. 
+Search for NNN in each files for concrete changes
+
+./Makefile
+
+./asmcomp/cmmgen.ml	Not changed; Const_csp_value will cause fatal error
+			Const_csp_value must not appear in native code
+
+done	./bytecomp/lambda.ml	Only adding Const_csp_value
+done	./bytecomp/lambda.mli
+done	./bytecomp/printlambda.ml
+
+
+done	./bytecomp/translcore.ml
+done	./bytecomp/symtable.ml
+
+./driver/compile.ml     No longer changed
+./driver/optcompile.ml  No longer changed
+
+done			./parsing/lexer.mll
+done			./parsing/parser.mly
+done			./parsing/parsetree.mli
+done			./parsing/printast.ml
+./parsing/printast.mli  No longer changed
+
+./toplevel/genprintval.ml Not changed any more
+./toplevel/toploop.ml	No longer changed
+./toplevel/toploop.mli  Not changed any more
+./toplevel/topmain.ml   Not changed any more
+
+./typing/btype.ml  Not changed
+./typing/ctype.ml Not changed
+./typing/ctype.mli Not changed
+./typing/datarepr.ml Not changed
+./typing/datarepr.mli Not changed
+./typing/typetexp.ml  Not changed
+./typing/typetexp.mli Not changed
+./typing/printtyp.ml  Not changed
+./typing/printtyp.mli Not changed
+./typing/parmatch.ml  Not changed
+done		./typing/typedtree.mli
+done		./typing/typedtree.ml
+done		./typing/types.ml	Not any more
+done		./typing/types.mli      Not any more
+done		./typing/predef.ml
+done		./typing/predef.mli
+done		./typing/subst.ml	Not any more
+done		./typing/mtype.ml	Not any more
+done		./typing/unused_var.ml
+done		./typing/ident.ml
+done		./typing/ident.mli
+done		./typing/env.ml
+done		./typing/env.mli
+done		./typing/typecore.mli
+done		./typing/typecore.ml
+done		./typing/typedecl.ml	Not any more
+done		./typing/typeclass.ml
+done		./typing/typemod.ml   Newly changed
+
+done		./typing/trx.mli
+done		./typing/trx.ml 
+
+
+done			./tools/depend.ml
+done			./tools/addlabels.ml
+done			./tools/dumpobj.ml (only printing Const_csp_value)
+done			./tools/ocamlprof.ml
+
+./utils/clflags.ml    Changes backed out
+./utils/clflags.mli   Changes backed out
+./utils/warnings.ml   Changes backed out
+./utils/warnings.mli  Changes backed out
+
+./stdlib/sys.ml		Not changed any more
+./stdlib/sys.mli	Not changed any more
+
+Camlp4
+./camlp4/camlp4/ast2pt.ml
+./camlp4/camlp4/mLast.mli
+./camlp4/camlp4/reloc.ml
+./camlp4/etc/pa_o.ml
+./camlp4/etc/pr_r.ml
+./camlp4/lib/plexer.ml
+./camlp4/meta/pa_r.ml
+./camlp4/ocaml_src/camlp4/ast2pt.ml
+

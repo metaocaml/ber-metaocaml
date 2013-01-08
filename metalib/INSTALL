@@ -1,0 +1,60 @@
+INSTALLATION
+
+You need a OCaml 3.11.2 distribution, which you can download from
+    http://caml.inria.fr/
+among other places.
+
+1. Download, un-tar the OCaml distribution and configure it as described
+   in the INSTALL file
+
+   For example, in the OCaml distribution directory, do
+
+    ./configure -prefix `pwd` -no-pthread -no-tk
+
+  You may chose any other installation prefix. It is best however
+  to chose the prefix different from that of the standard OCaml installation,
+  so to keep the existing OCaml installation intact.
+
+1a. Update the Makefile in the ber-metaocaml directory
+
+    change CAMLROOT= at the beginning of the ber-metaocaml/Makefile
+    to point to the OCaml distribution directory 
+
+2. Patch the OCaml distribution
+
+   In the ber-metaocaml directory, do
+
+   make patch
+
+
+3. Bootstrap the patched OCaml
+   In the OCaml distribution directory, do
+
+    make core
+    make coreboot
+
+    make all
+
+    make -i install
+
+
+4. Build the BER MetaOCaml library, the top-level, and the
+   compilation script
+
+   In the ber-metaocaml directory, do
+
+    make all
+    make install
+
+  The BER MetaOCaml top-level can be started afterwards as
+    $prefix/bin/metaocaml 
+
+  The batch compiler can be run using the command file metaocamlc. 
+
+5. Optionally run sample tests
+   
+   In the ber-metaocaml directory, do
+
+   make test
+   make test-compile
+

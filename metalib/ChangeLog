@@ -1,0 +1,30 @@
+December 28, 2012
+	Version N004 released
+
+November 8, 2012
+	Eliminating val_level from value_desc. Introducing Env map stage
+	to map an identifier to its stage, if not zero. Several
+	OCaml modules no longer have to be patched.
+	Simplified CSP code, removed a few patches from typecore.
+	SCP now carries strings, native_int, int32, int64 as
+	literal constants. Identifiers in List module are carried
+	by reference.
+
+October 4, 2012
+	Jacques Carette has committed Alain Frisch's patch implementing
+	the let! form proposed by Nicolas Pouillard for monadic
+	programming in Ocaml.
+	http://pauillac.inria.fr/~protzenk/let-bang.html
+	See metalib/test/pythagorian_triples.ml for an example.
+
+January 3, 2011
+	Added metaocamlmktop
+
+December 2010
+	Patch from Fabrice Le Fessant to remove functional values
+	from typing Env. See entry May 5, 2010 in Problems.txt.
+	Generic printing is now part of BER MetaOCaml.
+
+March 1, 2010
+	Version N002 released, based on OCaml 3.11
+

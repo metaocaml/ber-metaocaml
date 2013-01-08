@@ -1,0 +1,125 @@
+		BER MetaOCaml
+		N004 December 2012
+
+0. TABLE OF CONTENTS
+
+   1 Copyright 
+   2 Installation
+   3 Staging constructs
+   4 Common Problems
+   5 Known Bugs
+   6 Detailed Discussion
+   7 Credits
+
+1. COPYRIGHT
+
+BER MetaOCaml is a derivative work of MetaOCaml, licensed according to
+ORIGINAL-LICENSE-META
+
+
+2. INSTALLATION
+
+  Please see the file INSTALL
+
+
+3. STAGING CONSTRUCTS
+   (This section is copied verbatim from the last release of MetaOCaml;
+    Feb 3, 2006)
+
+  The three new constructs are
+
+    bracket: .< e >.  used to delay computation
+    escape:  .~ e     used to perform a computation within brackets
+    run:     .! e     used to run a computation
+
+  A special type constructor,
+  called code is used to type code expressions. For example, 
+
+    # .< 2 + 4 >.;;
+    - : ('a, int) code = .<(2 + 4)>.
+
+  Code fragments can be spliced into larger code contexts by using the
+  escape construct: 
+
+    # let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
+    - : ('a, int) code = .<((2 + 4) + (2 + 4))>.
+
+  The escape construct takes an expression of type ((_,t) code) and
+  produces an expression of type t, but only inside of a
+  code-constructing context (i.e., inside inside code brackets).
+  Attempting to escape code outside of a code-building context results
+  in the following type error:
+
+    # .~ .< 2 + 3 >.;;
+    Characters 3-14:
+      .~ .< 2 + 3 >.;;
+         ^^^^^^^^^^^
+    Wrong level: escape at level 0
+
+  The type constructor code
+  takes *two* arguments ( "int code" in the previous version becomes
+  "('a,int) code" in the current). The first argument is always a type
+  variable, called an environment classifier, and is used to correctly
+  type the run (.!)  construct. 
+
+  The run construct takes a code value, executes it and returns its result. 
+  For example: 
+
+    # .! .< 2 + 3 >.;;
+    - : int = 5
+
+  The run construct only works on code values which are polymorphic in
+  their environment classifier, and is used to prevent nonsensical programs 
+  such as the following:
+
+    # .< fun x -> .~ (.!.< x >.) >.;;
+    Characters 18-25:
+       .< fun x -> .~ (.!.< x >.) >.;;
+                         ^^^^^^^
+    .! error: 'a not generalizable in ('a, 'b) code
+
+
+4. COMMON PROBLEMS
+   (This section is copied verbatim from the last release of MetaOCaml;
+    Feb 3, 2006)
+
+   1. To use MetaOCaml under MS Windows, please do not use "Windows
+      OCaml".  Rather, use the standard OCaml system under cygwin.  If you
+      happened to install the "Windows OCaml" in the past, manually remove
+      some environment variables before you can install the standard system
+      successfully.  To do that, goto START -> Control Panel -> System ->
+      Advance -> Environment variables, and edit the OCAMLLIB variable and
+      remove any entries in that entry.
+
+
+5. KNOWN BUGS
+   (This section is copied verbatim from the last release of MetaOCaml,
+    Feb 3, 2006)
+
+  1. Regular ocaml crashed if you use bracket (".< >."), escape (".~"),
+     or run (".!").
+
+  2. Escaped expressions at the same level evaluate from right to left.
+
+  3. Objects and modules are not supported.
+
+
+6. DETAILED DISCUSSION
+   See NOTES.txt
+
+7. CREDITS
+
+  This project is fundamentally based on the an early version of
+  MetaOcaml, which was funded primarily by an NSF project titled:
+
+	"ITR/SY(CISE): Putting Multi-Stage Annotations to Work"
+
+  The project is led by Walid Taha. Most of the development
+  and implementation of staging was done by Cristiano
+  Calcagno, then at Imperial College. 
+  Edward Pizzi has implemented the pretty-printing library.
+  Xavier Leroy, INRIA, helped with the compiler specifics.
+
+  Many members of the metaocaml-users and metaocaml-hackers lists have
+  helped identify bugs and in some cases fixed them.
+

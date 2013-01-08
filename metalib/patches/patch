@@ -1,0 +1,1745 @@
+Index: tools/addlabels.ml
+===================================================================
+--- tools/addlabels.ml	(revision 5522)
++++ tools/addlabels.ml	(working copy)
+@@ -279,6 +279,9 @@
+   | Pexp_ident _ | Pexp_constant _ | Pexp_construct _ | Pexp_variant _
+   | Pexp_new _ | Pexp_assertfalse | Pexp_object _ ->
+       ()
++ (* NNN through the rest of the pattern-match *)
++  | Pexp_bracket e | Pexp_escape e | Pexp_run e -> add_labels_rec e
++  | Pexp_cspval _ -> ()
+ 
+ let rec add_labels_class ~text ~classes ~values ~methods cl =
+   match cl.pcl_desc with
+Index: tools/depend.ml
+===================================================================
+--- tools/depend.ml	(revision 5522)
++++ tools/depend.ml	(working copy)
+@@ -157,6 +157,11 @@
+   | Pexp_poly (e, t) -> add_expr bv e; add_opt add_type bv t
+   | Pexp_object (pat, fieldl) ->
+       add_pattern bv pat; List.iter (add_class_field bv) fieldl
++(* NNN through the rest of the pattern-match *)
++  | Pexp_bracket e -> add_expr bv e
++  | Pexp_escape e  -> add_expr bv e
++  | Pexp_cspval _ | Pexp_run _ -> ()
++
+ and add_pat_expr_list bv pel =
+   List.iter (fun (p, e) -> add_pattern bv p; add_expr bv e) pel
+ 
+Index: tools/dumpobj.ml
+===================================================================
+--- tools/dumpobj.ml	(revision 5522)
++++ tools/dumpobj.ml	(working copy)
+@@ -106,6 +106,8 @@
+       printf "[|";
+       List.iter (fun f -> print_float f; printf "; ") a;
+       printf "|]"
++  | Const_csp_value _ ->      (* NNN *)
++      printf "CSP_value"      (* NNN *)
+ 
+ (* Print an obj *)
+ 
+Index: tools/ocamlprof.ml
+===================================================================
+--- tools/ocamlprof.ml	(revision 5522)
++++ tools/ocamlprof.ml	(working copy)
+@@ -285,6 +285,10 @@
+   | Pexp_object (_, fieldl) ->
+       List.iter (rewrite_class_field iflag) fieldl
+ 
++(* NNN through the rest of the pattern-match *)
++  | Pexp_bracket e | Pexp_escape e | Pexp_run e -> rewrite_exp iflag e
++  | Pexp_cspval _ -> ()
++
+ and rewrite_ifbody iflag ghost sifbody =
+   if !instr_if && not ghost then
+     insert_profile rw_exp sifbody
+Index: typing/unused_var.ml
+===================================================================
+--- typing/unused_var.ml	(revision 5522)
++++ typing/unused_var.ml	(working copy)
+@@ -173,6 +173,11 @@
+   | Pexp_lazy e -> expression ppf tbl e;
+   | Pexp_poly (e, _) -> expression ppf tbl e;
+   | Pexp_object cs -> class_structure ppf tbl cs;
++(* NNN through the rest of the match clause *)
++  | Pexp_cspval(v,lid) -> ();
++  | Pexp_run e -> expression ppf tbl e; 
++  | Pexp_escape e -> expression ppf tbl e; 
++  | Pexp_bracket e -> expression ppf tbl e;
+ 
+ and expression_option ppf tbl eo =
+   match eo with
+Index: typing/ident.mli
+===================================================================
+--- typing/ident.mli	(revision 5522)
++++ typing/ident.mli	(working copy)
+@@ -57,3 +57,4 @@
+ val find_same: t -> 'a tbl -> 'a
+ val find_name: string -> 'a tbl -> 'a
+ val keys: 'a tbl -> t list
++val iter: ('a -> unit) -> 'a tbl -> unit    (* NNN *)
+Index: typing/typemod.ml
+===================================================================
+--- typing/typemod.ml	(revision 5522)
++++ typing/typemod.ml	(working copy)
+@@ -812,8 +812,21 @@
+   type_struct env sstr
+ 
+ let type_module = type_module None
+-let type_structure = type_structure None
+ 
++(* NNN begin
++Hook up the Trx post-processing
++old
++ let type_structure = type_structure None
++*)
++let type_structure env sstr scope = 
++  let (str, sg, finalenv) = type_structure None env sstr scope
++  in 
++  (Trx.trx_structure str, sg, finalenv)
++(* NNN end *)
++
++
++
++
+ (* Fill in the forward declaration *)
+ let _ =
+   Typecore.type_module := type_module
+Index: typing/env.ml
+===================================================================
+--- typing/env.ml	(revision 5522)
++++ typing/env.ml	(working copy)
+@@ -10,7 +10,7 @@
+ (*                                                                     *)
+ (***********************************************************************)
+ 
+-(* $Id: env.ml 9240 2009-04-28 05:11:54Z garrigue $ *)
++(* $Id: env.ml 10328 2010-04-30 01:56:21Z garrigue $ *)
+ 
+ (* Environment handling *)
+ 
+@@ -21,7 +21,69 @@
+ open Path
+ open Types
+ 
++module Lazy : sig
++  type 'a t
++  type ('a,'b) maker
+ 
++  val force : 'a t -> 'a
++  val create : ('a,'b) maker -> 'a -> 'b t
++  val declare_maker : string -> ('a,'b) maker
++  val register_maker : ('a,'b) maker -> ('a -> 'b) -> unit
++
++  exception UnknownLazyMaker of string
++
++end  = struct
++
++(* We can optimize this module: put the closure corresponding to the
++maker in an extra argument, that is removed by output_value, and
++recreated uninitialized by input_value. Since it will be shared by
++all lazy values with the same maker, the StringMap.find will only
++be evaluated once per maker. *)
++
++  exception UnknownLazyMaker of string
++
++  module StringMap = Map.Make(struct
++				type t = string
++				let compare = compare
++			      end)
++
++  type 'a t = 'a eval ref
++
++  and 'a eval =
++      Done of 'a
++    | Thunk of string * Obj.t
++
++  type ('a,'b) maker = string
++	
++  let makers = ref (StringMap.empty : (Obj.t -> Obj.t) StringMap.t)
++
++  let force (x : 'a t) = 
++    let x = (Obj.magic x : Obj.t t) in
++    match !x with
++	Done x -> (Obj.magic x : 'a)
++      | Thunk (name, args) ->
++	  let maker = try
++	    StringMap.find name !makers 
++	  with Not_found ->
++	    raise (UnknownLazyMaker name) 
++	  in
++	  let y = maker args in
++	    x := Done y;
++	  let y = (Obj.magic y : 'a) in
++	    y
++
++  let create maker args =
++    ref (Thunk (Obj.magic maker, Obj.magic args))
++
++  let declare_maker name = 
++    if name = "" then invalid_arg "Lazy.maker cannot by \"\"";
++    Obj.magic name
++
++  let register_maker maker f =
++    makers := StringMap.add (Obj.magic maker) (Obj.magic f) !makers
++
++end
++
+ type error =
+     Not_an_interface of string
+   | Corrupted_interface of string
+@@ -31,6 +93,20 @@
+ 
+ exception Error of error
+ 
++(* NNN added a new component of the environment: stage.
++   It maps a term variable to a list of type_expr -- actually, the list
++   of type variables, that is, env classifiers.
++   The length of the list is the stage level of a variable.
++   We only care about stage level for term variables.
++   Every key in the 'stage' map (the Ident) must occur in
++   the 'values' map.
++*)
++(* NNN
++  The list of active classifiers. The length of the list
++  is the stage level of a variable.
++*)
++type stage = type_expr list	(* NNN *)
++
+ type summary =
+     Env_empty
+   | Env_value of summary * Ident.t * value_description
+@@ -41,6 +117,7 @@
+   | Env_class of summary * Ident.t * class_declaration
+   | Env_cltype of summary * Ident.t * cltype_declaration
+   | Env_open of summary * Path.t
++  | Env_stage of summary * Ident.t * stage (* NNN *)
+ 
+ type t = {
+   values: (Path.t * value_description) Ident.tbl;
+@@ -53,7 +130,9 @@
+   components: (Path.t * module_components) Ident.tbl;
+   classes: (Path.t * class_declaration) Ident.tbl;
+   cltypes: (Path.t * cltype_declaration) Ident.tbl;
+-  summary: summary
++  stage: stage Ident.tbl;		(* NNN *)
++  summary: summary;
++  mutable ident_timestamp : int (* NNN *)
+ }
+ 
+ and module_components = module_components_repr Lazy.t
+@@ -62,6 +141,9 @@
+     Structure_comps of structure_components
+   | Functor_comps of functor_components
+ 
++(* NNN there are no stage levels here: modules must occur at the 0 level.
++   No modules in brackets.
++*)
+ and structure_components = {
+   mutable comp_values: (string, (value_description * int)) Tbl.t;
+   mutable comp_annotations: (string, (Annot.ident * int)) Tbl.t;
+@@ -84,14 +166,45 @@
+   fcomp_cache: (Path.t, module_components) Hashtbl.t  (* For memoization *)
+ }
+ 
++(* NNN the whole function *)
++let make_env_pure =
++  let rec force_env env = force_components env.components
++  and force_components c =
++        Ident.iter (fun (_,mc) -> force_module_components mc) c
++  and force_module_components mc =
++        force_module_components_repr (Lazy.force mc)
++  and force_module_components_repr = function
++      | Structure_comps sc ->
++          Tbl.iter (fun _ (mc,_) -> 
++	    force_module_components mc) sc.comp_components
++      | Functor_comps fc -> force_env fc.fcomp_env
++  in force_env
++
++let lazy_Subst__modtype = Lazy.declare_maker "Subst_modtype"
++let lazy_components_of_module = Lazy.declare_maker "components_of_module_maker"
++
++let _ =
++  Lazy.register_maker lazy_Subst__modtype
++    (fun (subst, mty) -> Subst.modtype subst mty)
++
+ let empty = {
+   values = Ident.empty; annotations = Ident.empty; constrs = Ident.empty;
+   labels = Ident.empty; types = Ident.empty;
+   modules = Ident.empty; modtypes = Ident.empty;
+   components = Ident.empty; classes = Ident.empty;
+   cltypes = Ident.empty;
+-  summary = Env_empty }
++  stage   = Ident.empty;	 (* NNN *)
++  summary = Env_empty;
++  ident_timestamp = 0 }          (* NNN *)
+ 
++(* NNN from here: operations on ident_timestamp *)
++let get_ident_timestamp env = env.ident_timestamp
++let update_ident_timestamp env =
++    env.ident_timestamp <- Ident.current_time ()
++let empty_with_timestamp () =
++  {empty with ident_timestamp = Ident.current_time ()}
++(* NNN to here *)
++
+ let diff_keys is_local tbl1 tbl2 =
+   let keys2 = Ident.keys tbl2 in
+   List.filter
+@@ -159,6 +272,7 @@
+       (fun (name, crc) -> Consistbl.check crc_units name crc filename)
+       crcs
+   with Consistbl.Inconsistency(name, source, auth) ->
++    Printf.eprintf "failed check_consistency %s %s %s\n" name source auth; (* NNNN *)
+     raise(Error(Inconsistent_import(name, auth, source)))
+ 
+ (* Reading persistent structures from .cmi files *)
+@@ -268,6 +382,11 @@
+   find (fun env -> env.classes) (fun sc -> sc.comp_classes)
+ and find_cltype =
+   find (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes)
++(* NNN there is no comp_stage since all modules are at stage 0 *)
++let find_stage path env =			(* NNN entire function *)
++  match path with
++  | Pident id -> Ident.find_same id env.stage
++  | _         -> raise Not_found
+ 
+ (* Find the manifest type associated to a type when appropriate:
+    - the type should be public or should have a private row,
+@@ -435,6 +554,9 @@
+   lookup (fun env -> env.classes) (fun sc -> sc.comp_classes)
+ and lookup_cltype =
+   lookup (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes)
++(* NNN there is no comp_stage since all modules are at stage 0 *)
++let lookup_stage =			(* NNN *)
++  lookup_simple (fun env -> env.stage) (fun sc -> raise Not_found) (* NNN *)
+ 
+ (* Expand manifest module type names at the top of the given module type *)
+ 
+@@ -510,7 +632,10 @@
+ (* Compute structure descriptions *)
+ 
+ let rec components_of_module env sub path mty =
+-  lazy(match scrape_modtype mty env with
++  Lazy.create lazy_components_of_module (env, sub, path, mty)
++
++and  components_of_module_maker (env, sub, path, mty) =
++match scrape_modtype mty env with
+     Tmty_signature sg ->
+       let c =
+         { comp_values = Tbl.empty; comp_annotations = Tbl.empty;
+@@ -556,7 +681,8 @@
+               Tbl.add (Ident.name id) (cstr, !pos) c.comp_constrs;
+             incr pos
+         | Tsig_module(id, mty, _) ->
+-            let mty' = lazy (Subst.modtype sub mty) in
++
++            let mty' = Lazy.create lazy_Subst__modtype (sub, mty) in
+             c.comp_modules <-
+               Tbl.add (Ident.name id) (mty', !pos) c.comp_modules;
+             let comps = components_of_module !env sub path mty in
+@@ -598,7 +724,7 @@
+           comp_labels = Tbl.empty; comp_types = Tbl.empty;
+           comp_modules = Tbl.empty; comp_modtypes = Tbl.empty;
+           comp_components = Tbl.empty; comp_classes = Tbl.empty;
+-          comp_cltypes = Tbl.empty })
++          comp_cltypes = Tbl.empty }
+ 
+ (* Insertion of bindings by identifier + path *)
+ 
+@@ -668,6 +794,11 @@
+     cltypes = Ident.add id (path, desc) env.cltypes;
+     summary = Env_cltype(env.summary, id, desc) }
+ 
++and store_stage id path st env =	       (* NNN whole clause *)
++  { env with
++    stage = Ident.add id st env.stage;
++    summary = Env_stage(env.summary, id, st) } (* NNN end *)
++
+ (* Compute the components of a functor application in a path. *)
+ 
+ let components_of_functor_appl f p1 p2 =
+@@ -675,7 +806,7 @@
+     Hashtbl.find f.fcomp_cache p2
+   with Not_found ->
+     let p = Papply(p1, p2) in
+-    let mty = 
++    let mty =
+       Subst.modtype (Subst.add_module f.fcomp_param p2 Subst.identity)
+                     f.fcomp_res in
+     let comps = components_of_module f.fcomp_env f.fcomp_subst p mty in
+@@ -714,6 +845,9 @@
+ and add_cltype id ty env =
+   store_cltype id (Pident id) ty env
+ 
++let add_stage id st env =		(* NNN *)
++  store_stage id (Pident id) st env     (* NNN *)
++
+ (* Insertion of bindings by name *)
+ 
+ let enter store_fun name data env =
+@@ -777,7 +911,7 @@
+                          (Subst.cltype_declaration sub decl) env)
+       env sg pl in
+   { newenv with summary = Env_open(env.summary, root) }
+-  
++
+ (* Open a signature from a file *)
+ 
+ let open_pers_signature name env =
+@@ -870,3 +1004,7 @@
+       fprintf ppf
+         "@[<hov>Unit %s imports from %s, which uses recursive types.@ %s@]"
+         import export "The compilation flag -rectypes is required"
++
++
++let _ = 
++  Lazy.register_maker lazy_components_of_module components_of_module_maker
+Index: typing/typecore.ml
+===================================================================
+--- typing/typecore.ml	(revision 5522)
++++ typing/typecore.ml	(working copy)
+@@ -22,6 +22,7 @@
+ open Btype
+ open Ctype
+ 
++
+ type error =
+     Unbound_value of Longident.t
+   | Unbound_constructor of Longident.t
+@@ -60,9 +61,87 @@
+   | Not_a_variant_type of Longident.t
+   | Incoherent_label_order
+   | Less_general of string * (type_expr * type_expr) list
++  | Wrong_stage of (type_expr list) * (type_expr list)    (* NNN *)
++  | Run_occur_check of type_expr * type_expr		  (* NNN *)
++  | Run_alpha_not_generalizable of type_expr * type_expr  (* NNN *)
+ 
+ exception Error of Location.t * error
+ 
++(* NNN: begin
++  The list of active classifiers. The length of the list
++  is the level of an expression.
++  Type-checking the body of a bracket adds a type variable
++  to the list; type-checking of an escape removes the
++  top-most classifier.
++  Be sure to reset this list upon any exception;
++  alternatively; reset the list when beginning a new type-level
++  expression or binding
++  (whenever you do Typetexp.reset_type_variables();)
++*)
++let global_stage : Env.stage ref  = ref []
++
++(* Unify classifier lists, *right-to-left*
++   See the bug Tue Jan 20 12:18:00 GMTST 2004 in XXCC-BUG-OPEN-FIXED
++   why we need this order.
++   The current clasiifier is left-most, and the lists don't have
++   to have the same length.
++   Example:
++   .<fun x -> .< x >. >.
++   When type-checking the innermost bracket, the global_stage
++   will contain ['b,'a] and the level of x will be ['a]
++   The unification will succeed, without changing anything, as expected.
++*)
++
++let unify_stage env tl1 tl2 =
++   let rec loop = function
++   | (t1::tl1,t2::tl2) -> unify env t1 t2; loop (tl1,tl2)
++   | _ -> ()
++   in loop (List.rev tl1, List.rev tl2)
++
++let with_stage_up ty body =
++   let old_stage = !global_stage in
++   let () = global_stage := ty::!global_stage in
++   try 
++    let r = body () in
++    global_stage := old_stage; r
++   with e ->
++   global_stage := old_stage; raise e
++
++let with_stage_down loc body =
++   let old_stage = !global_stage in
++   let ty = 
++     match !global_stage with
++     | (ty::tl) -> global_stage := tl; ty
++     | [] -> raise (Error (loc, Wrong_stage (!global_stage,[])))
++   in
++   try 
++    let r = body ty in
++    global_stage := old_stage; r
++   with e ->
++   global_stage := old_stage; raise e
++
++(* Check to see if we are type checking a pattern as the result
++   of run-ning the dynamically built code, whose AST contains
++   stashed results from the original type-check
++*)
++let is_type_pat_second_time sp : bool = sp.ppat_ext <> None
++
++(* Get the stashed away result from the original type checking *)
++let type_pat_0stage_tree sp : Typedtree.pattern =
++   match sp.ppat_ext with 
++   | Some v -> Obj.obj v
++   | _ -> assert false
++
++(* The same for expressions *)
++let is_type_exp_second_time sp : bool = sp.pexp_ext <> None
++
++(* Get the stashed away result from the original type checking *)
++let type_exp_0stage_tree sp : Typedtree.expression =
++   match sp.pexp_ext with 
++   | Some v -> Obj.obj v
++   | _ -> assert false
++(* NNN end *)
++
+ (* Forward declaration, to be filled in by Typemod.type_module *)
+ 
+ let type_module =
+@@ -403,6 +482,23 @@
+         pat_loc = sp.ppat_loc;
+         pat_type = newty (Ttuple(List.map (fun p -> p.pat_type) pl));
+         pat_env = env }
++  | Ppat_construct(lid, sarg, explicit_arity)   (* NNN whole clause *)
++      when is_type_pat_second_time sp ->
++      let r = type_pat_0stage_tree sp in
++      begin  
++       match r.pat_desc with
++          | Tpat_construct (cd,_) ->
++              let sargs =
++		match sarg with
++                | None -> []
++		| Some {ppat_desc = Ppat_tuple spl} when cd.cstr_arity > 1 -> 
++                  spl 
++		| Some sp -> [sp] 
++              in
++              let args = List.map (type_pat env) sargs in
++	      {r with pat_desc = Tpat_construct(cd,args)}
++          | _ -> assert false
++      end                                        
+   | Ppat_construct(lid, sarg, explicit_arity) ->
+       let constr =
+         try
+@@ -443,6 +539,16 @@
+         pat_loc = sp.ppat_loc;
+         pat_type = newty (Tvariant row);
+         pat_env = env }
++  | Ppat_record lid_sp_list            (* NNN whole clause *)
++      when is_type_pat_second_time sp ->
++      let r = type_pat_0stage_tree sp in
++      begin match r.pat_desc with
++	| Tpat_record dpl ->
++	    let dpl' = List.map2 (fun (_,p) (d,_) -> (d,type_pat env p)) 
++                        lid_sp_list dpl
++	    in {r with pat_desc = Tpat_record dpl'}
++	| _ -> assert false
++      end				(* NNN end clause *)
+   | Ppat_record lid_sp_list ->
+       let rec check_duplicates = function
+         [] -> ()
+@@ -533,7 +639,9 @@
+   let pv = get_ref pattern_variables in
+   List.fold_right
+     (fun (id, ty, loc) env ->
+-       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg} env in
++       let e1 = Env.add_value id {val_type = ty; 
++				  val_kind = Val_reg} env in
++       let e1 = Env.add_stage id !global_stage e1 in  (* NNN *)
+        Env.add_annot id (Annot.Iref_internal loc) e1;
+     )
+     pv env
+@@ -564,6 +672,9 @@
+       (fun (id, ty, loc) (pv, env) ->
+          let id' = Ident.create (Ident.name id) in
+          ((id', id, ty)::pv,
++	  (* NNN we don't do Env.add_stage id' [] 
++	     since we don't handle classes within brackets.
++	   *)
+           Env.add_value id' {val_type = ty;
+                              val_kind = Val_ivar (Immutable, cl_num)}
+             env))
+@@ -572,7 +683,7 @@
+   let val_env = add_pattern_variables val_env in
+   (pat, pv, val_env, met_env)
+ 
+-let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
++let mkpat d = { ppat_desc = d; ppat_loc = Location.none; ppat_ext = None } (* NNN *)
+ 
+ let type_self_pattern cl_num privty val_env met_env par_env spat =
+   let spat =
+@@ -588,12 +699,18 @@
+   pattern_variables := [];
+   let (val_env, met_env, par_env) =
+     List.fold_right
++	  (* NNN we don't do Env.add_stage id [] for all
++	     Env.add_value below
++	     since we don't handle classes within brackets.
++	   *)
+       (fun (id, ty, loc) (val_env, met_env, par_env) ->
+-         (Env.add_value id {val_type = ty; val_kind = Val_unbound} val_env,
++         (Env.add_value id {val_type = ty;
++			    val_kind = Val_unbound} val_env,
+           Env.add_value id {val_type = ty;
+                             val_kind = Val_self (meths, vars, cl_num, privty)}
+             met_env,
+-          Env.add_value id {val_type = ty; val_kind = Val_unbound} par_env))
++          Env.add_value id {val_type = ty;
++			    val_kind = Val_unbound} par_env))
+       pv (val_env, met_env, par_env)
+   in
+   (pat, meths, vars, val_env, met_env, par_env)
+@@ -652,6 +769,9 @@
+       Vars.fold (fun _ (mut,_,_) b -> decr count; b && mut = Immutable)
+         vars true &&
+       !count = 0
++  | Texp_bracket e -> is_nonexpansive e     (* NNN *)
++  | Texp_escape e -> is_nonexpansive e      (* NNN *)
++  | Texp_run e -> is_nonexpansive e         (* NNN *)
+   | _ -> false
+ 
+ and is_nonexpansive_opt = function
+@@ -939,6 +1059,11 @@
+           with _ -> ()
+         end;
+         let (path, desc) = Env.lookup_value lid env in
++        let stage =					(* NNN *)
++              try Env.lookup_stage lid env 
++              with Not_found ->
++                [] in
++	unify_stage env stage !global_stage;		(* NNN *)
+         re {
+           exp_desc =
+             begin match desc.val_kind with
+@@ -955,9 +1080,14 @@
+             | Val_unbound ->
+                 raise(Error(sexp.pexp_loc, Masked_instance_variable lid))
+             | _ ->
++              if (List.length stage) > (List.length !global_stage) (* NNN *)
++                 then raise (Error (sexp.pexp_loc, Wrong_stage  (* NNN *)
++	                      (stage, !global_stage)))          (* NNN *)
++	         else                                           (* NNN *)
+                 Texp_ident(path, desc)
+             end;
+           exp_loc = sexp.pexp_loc;
++(* NNN:  Instantiates type scheme to a type *)
+           exp_type = instance desc.val_type;
+           exp_env = env }
+       with Not_found ->
+@@ -1014,6 +1144,56 @@
+         exp_loc = sexp.pexp_loc;
+         exp_type = ty_res;
+         exp_env = env }
++  | Pexp_bracket(sexp) ->   (* NNN:  Typechecking bracket *)
++      let t = newvar () in
++      with_stage_up t (fun () ->
++      let exp = type_exp env sexp in
++        re { 
++          exp_desc = Texp_bracket(exp);
++          exp_loc = sexp.pexp_loc;
++          exp_type = instance (Predef.type_code t exp.exp_type);
++          exp_env = env })
++  | Pexp_escape(sexp) ->    (* NNN:  Typechecking escapes *)
++      with_stage_down sexp.pexp_loc (fun t ->
++       let exp = type_exp env sexp in
++       let ty = newvar() in
++       let codety = instance (Predef.type_code t ty) in
++       begin try unify env exp.exp_type codety
++              with Unify trace ->
++                raise(Error(sexp.pexp_loc, Expr_type_clash trace)) end;
++       re { 
++         exp_desc = Texp_escape(exp);
++         exp_loc = sexp.pexp_loc;
++         exp_type = ty;
++         exp_env = env })
++  | Pexp_run(sexp) ->       (* NNN Typechecking for R *)
++      begin_def();
++      let exp = type_exp env sexp in
++      let (ty1,ty2) = (newvar(),newvar()) in
++      let codety = instance (Predef.type_code ty1 ty2) in
++      begin
++        try unify env exp.exp_type codety;
++	end_def ();
++        if deep_occur ty1 ty2 then
++          raise (Error (sexp.pexp_loc, Run_occur_check (ty1,codety) ));
++	generalize ty1;
++	if ty1.level <> generic_level then
++          raise (Error (sexp.pexp_loc, Run_alpha_not_generalizable (ty1,codety) ));
++          re { 
++            exp_desc = Texp_run(exp);
++            exp_loc = sexp.pexp_loc;
++            exp_type = ty2;
++            exp_env = env }
++        with Unify trace ->
++                raise(Error(sexp.pexp_loc, Expr_type_clash trace))
++      end
++  | Pexp_cspval(obj,li) ->  (* NNN Typechecking for CSPVAL. *)
++     let ty = instance (newvar ()) in   
++     re { 
++        exp_desc = Texp_cspval(obj,li);
++        exp_loc = sexp.pexp_loc;
++        exp_type = ty;
++        exp_env = env }
+   | Pexp_match(sarg, caselist) ->
+       let arg = type_exp env sarg in
+       let ty_res = newvar() in
+@@ -1043,7 +1223,7 @@
+         exp_type = newty (Ttuple(List.map (fun exp -> exp.exp_type) expl));
+         exp_env = env }
+   | Pexp_construct(lid, sarg, explicit_arity) ->
+-      type_construct env sexp.pexp_loc lid sarg explicit_arity (newvar ())
++      type_construct env sexp.pexp_loc lid sarg explicit_arity (newvar ()) sexp.pexp_ext  (* NNN *)
+   | Pexp_variant(l, sarg) ->
+       let arg = may_map (type_exp env) sarg in
+       let arg_type = may_map (fun arg -> arg.exp_type) arg in
+@@ -1060,10 +1240,10 @@
+   | Pexp_record(lid_sexp_list, opt_sexp) ->
+       let ty = newvar() in
+       let num_fields = ref 0 in
+-      let type_label_exp (lid, sarg) =
++      let type_label_exp envold (lid, sarg) = (* NNN envold arg. Fishy! *)
+         let label =
+           try
+-            Env.lookup_label lid env
++            Env.lookup_label lid envold	(* NNN envold *)
+           with Not_found ->
+             raise(Error(sexp.pexp_loc, Unbound_label lid)) in
+         begin_def ();
+@@ -1075,7 +1255,7 @@
+           generalize_structure ty_res
+         end;
+         begin try
+-          unify env (instance ty_res) ty
++          unify envold (instance ty_res) ty (* NNN envold *)
+         with Unify trace ->
+           raise(Error(sexp.pexp_loc, Label_mismatch(lid, trace)))
+         end;
+@@ -1088,7 +1268,26 @@
+         if label.lbl_private = Private then
+           raise(Error(sexp.pexp_loc, Private_type ty));
+         (label, {arg with exp_type = instance arg.exp_type}) in
+-      let lbl_exp_list = type_label_a_list type_label_exp lid_sexp_list in
++     if is_type_exp_second_time sexp then (* NNN: the whole then clause *)
++        let texp = type_exp_0stage_tree sexp in
++        begin 
++        match texp.exp_desc with
++	| Texp_record (del,eo) ->
++	    let f (lid,sexp) (_,te) = 
++              let (ld_lid,tsexp) = type_label_exp texp.exp_env (lid,sexp) in
++	      let () = unify_exp te.exp_env tsexp (te.exp_type) in 
++              (ld_lid,{tsexp with exp_env = env})
++	    in
++	    let fieldsExps = List.map2 f lid_sexp_list del in
++	    let eo = 
++              match opt_sexp with
++              | None -> None
++	      | Some e -> Some (type_exp env e)
++	    in {texp with exp_desc = Texp_record(fieldsExps, eo) }
++        | _ -> assert false
++	end
++     else				(* NNN end of the added clause *)
++      let lbl_exp_list = type_label_a_list (type_label_exp env) lid_sexp_list in (* NNN extra env argument *)
+       let rec check_duplicates seen_pos lid_sexp lbl_exp =
+         match (lid_sexp, lbl_exp) with
+           ((lid, _) :: rem1, (lbl, _) :: rem2) ->
+@@ -1136,6 +1335,17 @@
+         exp_loc = sexp.pexp_loc;
+         exp_type = ty;
+         exp_env = env }
++  | Pexp_field(sarg, lid)                    (* NNN whole clause *)
++    when is_type_exp_second_time sexp -> 
++    let texp = type_exp_0stage_tree sexp in
++    begin 
++    match texp.exp_desc with
++    | Texp_field (e,ld) ->           
++       let e' = type_exp env sarg   
++       in {texp with exp_desc = Texp_field(e', ld); 
++                     exp_type = instance (newvar ())}            
++    | _ -> assert false
++    end					(* NNN end clause *)
+   | Pexp_field(sarg, lid) ->
+       let arg = type_exp env sarg in
+       let label =
+@@ -1150,6 +1360,18 @@
+         exp_loc = sexp.pexp_loc;
+         exp_type = ty_arg;
+         exp_env = env }
++  | Pexp_setfield(srecord, lid, snewval)    (* NNN whole clause *)
++    when is_type_exp_second_time sexp -> 
++    let texp = type_exp_0stage_tree sexp in
++    begin 
++    match texp.exp_desc with                          
++    | Texp_setfield (e1,ld,e2) ->                                        
++       let e1' = type_exp env srecord in                                
++       let e2' = type_exp env snewval                                   
++       in {texp with exp_desc = Texp_setfield(e1',ld,e2'); 
++		     exp_type = instance (newvar ())}
++    | _ -> assert false
++    end					(* NNN end clause *)
+   | Pexp_setfield(srecord, lid, snewval) ->
+       let record = type_exp env srecord in
+       let label =
+@@ -1223,6 +1445,8 @@
+       let (id, new_env) =
+         Env.enter_value param {val_type = instance Predef.type_int;
+                                 val_kind = Val_reg} env in
++      let (id, new_env) =				  (* NNN *)
++          (id, Env.add_stage id !global_stage new_env) in (* NNN *)
+       let body = type_statement new_env sbody in
+       re {
+         exp_desc = Texp_for(id, low, high, dir, body);
+@@ -1355,6 +1579,10 @@
+                   let (obj_ty, res_ty) = filter_arrow env method_type "" in
+                   unify env obj_ty desc.val_type;
+                   unify env res_ty (instance typ);
++                  (* NNN Texp_ident should've been accompanied by
++		     Env.add_level id !global_level
++		     But we don't support staging for objects.
++		   *)
+                   (Texp_apply({ exp_desc = Texp_ident(Path.Pident method_id,
+                                                      {val_type = method_type;
+                                                        val_kind = Val_reg});
+@@ -1404,7 +1632,15 @@
+       with Unify _ ->
+         raise(Error(e.pexp_loc, Undefined_method (obj.exp_type, met)))
+       end
+-  | Pexp_new cl ->
++  | Pexp_new cl			(* NNN whole clause *)
++    when is_type_exp_second_time sexp -> 
++    let texp = type_exp_0stage_tree sexp in
++    begin 
++    match texp.exp_desc with
++    | Texp_new _ -> {texp with exp_type = instance (newvar ())}
++    | _ -> assert false
++    end					(* NNN end clause *)
++ | Pexp_new cl ->
+       let (cl_path, cl_decl) =
+         try Env.lookup_class cl env with Not_found ->
+           raise(Error(sexp.pexp_loc, Unbound_class cl))
+@@ -1420,6 +1656,8 @@
+               exp_env = env }
+         end
+   | Pexp_setinstvar (lab, snewval) ->
++      if !global_stage != [] then                (* NNN *)
++         fatal_error "Setinstvar not supported in code."; (* NNN *)
+       begin try
+         let (path, desc) = Env.lookup_value (Longident.Lident lab) env in
+         match desc.val_kind with
+@@ -1442,6 +1680,8 @@
+           raise(Error(sexp.pexp_loc, Unbound_instance_variable lab))
+       end
+   | Pexp_override lst ->
++      if !global_stage != [] then                (* NNN *)
++         fatal_error "Override not supported in code."; (* NNN *)
+       let _ =
+        List.fold_right
+         (fun (lab, _) l ->
+@@ -1479,6 +1719,8 @@
+           assert false
+       end
+   | Pexp_letmodule(name, smodl, sbody) ->
++      if !global_stage != [] then                (* NNN *)
++         fatal_error "Letmodule not supported in code."; (* NNN *)
+       let ty = newvar() in
+       Ident.set_current_time ty.level;
+       let context = Typetexp.narrow () in
+@@ -1579,6 +1821,10 @@
+       unify_exp env {texp with exp_type = ty_fun} ty_expected;
+       if args = [] then texp else
+       (* eta-expand to avoid side effects *)
++      (* NNN Every Texp_ident below should've been accompanied by
++	 Env.add_stage. But we don't support staging for
++	 optional and named parameters.
++       *)
+       let var_pair name ty =
+         let id = Ident.create name in
+         {pat_desc = Tpat_var id; pat_type = ty;
+@@ -1777,7 +2023,24 @@
+       else
+         type_args [] [] ty ty sargs []
+ 
+-and type_construct env loc lid sarg explicit_arity ty_expected =
++and type_construct env loc lid sarg explicit_arity ty_expected  vo = (* NNN *)
++  match vo with     (* NNN begin *)
++  | Some v ->
++  let texp = Obj.obj v in
++  begin 
++    match texp.exp_desc with
++    | Texp_construct (cd,el) -> 
++      let sargs =               
++        match sarg with
++        | None -> []
++        | Some {pexp_desc = Pexp_tuple sel} when cd.cstr_arity > 1 -> sel 
++        | Some se -> [se] 
++      in
++      let args = List.map (type_exp env) sargs in
++      {texp with exp_desc = Texp_construct(cd,args)}
++    | _ -> assert false
++    end
++  | None ->				(* NNN end *)
+   let constr =
+     try
+       Env.lookup_constructor lid env
+@@ -1832,7 +2095,7 @@
+       unify_exp env exp ty_expected;
+       exp
+   | Pexp_construct(lid, sarg, explicit_arity) ->
+-      type_construct env sexp.pexp_loc lid sarg explicit_arity ty_expected
++      type_construct env sexp.pexp_loc lid sarg explicit_arity ty_expected sexp.pexp_ext (* NNN *)
+   | Pexp_let(rec_flag, spat_sexp_list, sbody) ->
+       let (pat_exp_list, new_env) = type_let env rec_flag spat_sexp_list None in
+       let body = type_expect new_env sbody ty_expected in
+@@ -1852,23 +2115,25 @@
+   | Pexp_function (l, Some default, [spat, sbody]) ->
+       let loc = default.pexp_loc in
+       let scases =
+-        [{ppat_loc = loc; ppat_desc =
++        [{ppat_loc = loc; ppat_ext = None; (* NNN *) ppat_desc =
+           Ppat_construct(Longident.Lident"Some",
+-                         Some{ppat_loc = loc; ppat_desc = Ppat_var"*sth*"},
++                         Some{ppat_loc = loc; 
++			      ppat_ext = None; (* NNN *)
++			      ppat_desc = Ppat_var"*sth*"},
+                          false)},
+-         {pexp_loc = loc; pexp_desc = Pexp_ident(Longident.Lident"*sth*")};
+-         {ppat_loc = loc; ppat_desc =
++         {pexp_loc = loc; pexp_ext = None; (* NNN *) pexp_desc = Pexp_ident(Longident.Lident"*sth*")};
++         {ppat_loc = loc; ppat_ext = None; (* NNN *) ppat_desc =
+           Ppat_construct(Longident.Lident"None", None, false)},
+          default] in
+       let smatch =
+-        {pexp_loc = loc; pexp_desc =
+-         Pexp_match({pexp_loc = loc; pexp_desc =
++        {pexp_loc = loc; pexp_ext = None; (* NNN *) pexp_desc =
++         Pexp_match({pexp_loc = loc; pexp_ext = None; (* NNN *) pexp_desc =
+                      Pexp_ident(Longident.Lident"*opt*")},
+                     scases)} in
+       let sfun =
+-        {pexp_loc = sexp.pexp_loc; pexp_desc =
+-         Pexp_function(l, None,[{ppat_loc = loc; ppat_desc = Ppat_var"*opt*"},
+-                                {pexp_loc = sexp.pexp_loc; pexp_desc =
++        {pexp_loc = sexp.pexp_loc; pexp_ext = None; (* NNN *) pexp_desc =
++         Pexp_function(l, None,[{ppat_loc = loc; ppat_ext = None; (* NNN *) ppat_desc = Ppat_var"*opt*"},
++                                {pexp_loc = sexp.pexp_loc; pexp_ext = None; (* NNN *) pexp_desc =
+                                  Pexp_let(Default, [spat, smatch], sbody)}])}
+       in
+       type_expect ?in_function env sfun ty_expected
+@@ -2076,12 +2341,14 @@
+ 
+ let type_binding env rec_flag spat_sexp_list scope =
+   Typetexp.reset_type_variables();
++  global_stage := [];			(* NNN *)
+   type_let env rec_flag spat_sexp_list scope
+ 
+ (* Typing of toplevel expressions *)
+ 
+ let type_expression env sexp =
+   Typetexp.reset_type_variables();
++  global_stage := [];			(* NNN *)
+   begin_def();
+   let exp = type_exp env sexp in
+   end_def();
+@@ -2247,3 +2514,21 @@
+       report_unification_error ppf trace
+         (fun ppf -> fprintf ppf "This %s has type" kind)
+         (fun ppf -> fprintf ppf "which is less general than")
++(* NNN through the end of the pattern-match *)
++  | Wrong_stage (n,m) -> 
++      begin 
++	match (m,n) with
++	| [],[] -> fprintf ppf "Wrong level: escape at level 0"
++	| _,_   -> fprintf ppf "Wrong level: variable bound at level %d and used at level %d" 
++	      (List.length n) (List.length m)  
++      end
++  | Run_occur_check (t1,t2) ->
++      reset_and_mark_loops t1;
++      reset_and_mark_loops t2;
++      fprintf ppf ".! occurs check error: %a occurs in %a"  
++	type_expr t1 type_expr t2
++  | Run_alpha_not_generalizable (t1,t2) ->
++      reset_and_mark_loops t1;
++      reset_and_mark_loops t2;
++      fprintf ppf ".! error: %a not generalizable in %a\n"  
++	type_expr t1 type_expr t2
+Index: typing/typedtree.ml
+===================================================================
+--- typing/typedtree.ml	(revision 5522)
++++ typing/typedtree.ml	(working copy)
+@@ -79,6 +79,11 @@
+   | Texp_assertfalse
+   | Texp_lazy of expression
+   | Texp_object of class_structure * class_signature * string list
++(* NNN through the rest of the definition of expression *)
++  | Texp_bracket of expression
++  | Texp_escape of expression
++  | Texp_run of expression
++  | Texp_cspval of Obj.t * Longident.t
+ 
+ and meth =
+     Tmeth_name of string
+Index: typing/predef.ml
+===================================================================
+--- typing/predef.ml	(revision 5522)
++++ typing/predef.ml	(working copy)
+@@ -34,6 +34,7 @@
+ and ident_int32 = Ident.create "int32"
+ and ident_int64 = Ident.create "int64"
+ and ident_lazy_t = Ident.create "lazy_t"
++and ident_code = Ident.create "code" (* NNN *)
+ 
+ let path_int = Pident ident_int
+ and path_char = Pident ident_char
+@@ -50,6 +51,7 @@
+ and path_int32 = Pident ident_int32
+ and path_int64 = Pident ident_int64
+ and path_lazy_t = Pident ident_lazy_t
++and path_code   = Pident ident_code   (* NNN *)
+ 
+ let type_int = newgenty (Tconstr(path_int, [], ref Mnil))
+ and type_char = newgenty (Tconstr(path_char, [], ref Mnil))
+@@ -65,6 +67,7 @@
+ and type_int32 = newgenty (Tconstr(path_int32, [], ref Mnil))
+ and type_int64 = newgenty (Tconstr(path_int64, [], ref Mnil))
+ and type_lazy_t t = newgenty (Tconstr(path_lazy_t, [t], ref Mnil))
++and type_code t1 t2 = newgenty (Tconstr(path_code, [t1;t2], ref Mnil)) (* NNN *)
+ 
+ let ident_match_failure = Ident.create_predef_exn "Match_failure"
+ and ident_out_of_memory = Ident.create_predef_exn "Out_of_memory"
+@@ -160,6 +163,15 @@
+      type_private = Public;
+      type_manifest = None;
+      type_variance = [true, false, false]}
++ (* NNN added decl_code *)
++  and decl_code =
++    let (tvar1,tvar2) = (newgenvar(),newgenvar()) in
++    {type_params = [tvar1;tvar2];
++     type_arity = 2;
++     type_kind = Type_abstract;
++     type_private = Public;
++     type_manifest = None;
++     type_variance = [true, false, false; true, false, false]}
+   in
+ 
+   add_exception ident_match_failure
+@@ -181,6 +193,7 @@
+   add_type ident_int32 decl_abstr (
+   add_type ident_nativeint decl_abstr (
+   add_type ident_lazy_t decl_lazy_t (
++  add_type ident_code decl_code (     (* NNN *)
+   add_type ident_option decl_option (
+   add_type ident_format6 decl_format6 (
+   add_type ident_list decl_list (
+@@ -192,7 +205,7 @@
+   add_type ident_string decl_abstr (
+   add_type ident_char decl_abstr (
+   add_type ident_int decl_abstr (
+-    empty_env)))))))))))))))))))))))))))
++    empty_env))))))))))))))))))))))))))) )   (* extra parenthesis *)
+ 
+ let builtin_values =
+   List.map (fun id -> Ident.make_global id; (Ident.name id, id))
+Index: typing/typeclass.ml
+===================================================================
+--- typing/typeclass.ml	(revision 5522)
++++ typing/typeclass.ml	(working copy)
+@@ -195,11 +195,14 @@
+ (* Enter a value in the method environment only *)
+ let enter_met_env lab kind ty val_env met_env par_env =
+   let (id, val_env) =
+-    Env.enter_value lab {val_type = ty; val_kind = Val_unbound} val_env
++    Env.enter_value lab {val_type = ty;
++			 val_kind = Val_unbound} val_env
+   in
+   (id, val_env,
+-   Env.add_value id {val_type = ty; val_kind = kind} met_env,
+-   Env.add_value id {val_type = ty; val_kind = Val_unbound} par_env)
++   Env.add_value id {val_type = ty;
++		     val_kind = kind} met_env,
++   Env.add_value id {val_type = ty;
++		     val_kind = Val_unbound} par_env)
+ 
+ (* Enter an instance variable in the environment *)
+ let enter_val cl_num vars inh lab mut virt ty val_env met_env par_env loc =
+@@ -289,14 +292,14 @@
+   try Ctype.unify val_env ty ty' with Ctype.Unify trace ->
+     raise(Error(loc, Unconsistent_constraint trace))
+ 
+-let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
++let mkpat d = { ppat_desc = d; ppat_loc = Location.none; ppat_ext = None } (* NNN *)
+ let make_method cl_num expr =
+   { pexp_desc =
+       Pexp_function ("", None,
+                      [mkpat (Ppat_alias (mkpat(Ppat_var "self-*"),
+                                          "self-" ^ cl_num)),
+                       expr]);
+-    pexp_loc = expr.pexp_loc }
++    pexp_loc = expr.pexp_loc; pexp_ext = None }
+ 
+ (*******************************)
+ 
+@@ -571,7 +574,7 @@
+              let expr =
+                Typecore.type_exp val_env
+                  {pexp_desc = Pexp_ident (Longident.Lident (Ident.name id));
+-                  pexp_loc = Location.none}
++                  pexp_loc = Location.none; pexp_ext = None} (* NNN *)
+              in
+              let desc =
+                {val_type = expr.exp_type;
+@@ -761,22 +764,25 @@
+   | Pcl_fun (l, Some default, spat, sbody) ->
+       let loc = default.pexp_loc in
+       let scases =
+-        [{ppat_loc = loc; ppat_desc =
++        [{ppat_loc = loc; 
++	  ppat_ext = None;		(* NNN *)
++	  ppat_desc =
+           Ppat_construct(Longident.Lident"Some",
+-                         Some{ppat_loc = loc; ppat_desc = Ppat_var"*sth*"},
++                         Some{ppat_loc = loc; ppat_ext = None; (* NNN *)
++			      ppat_desc = Ppat_var"*sth*"},
+                          false)},
+-         {pexp_loc = loc; pexp_desc = Pexp_ident(Longident.Lident"*sth*")};
+-         {ppat_loc = loc; ppat_desc =
++         {pexp_loc = loc; pexp_ext = None; pexp_desc = Pexp_ident(Longident.Lident"*sth*")}; (* NNN *)
++         {ppat_loc = loc; ppat_ext = None; ppat_desc = (* NNN *)
+           Ppat_construct(Longident.Lident"None", None, false)},
+          default] in
+       let smatch =
+-        {pexp_loc = loc; pexp_desc =
+-         Pexp_match({pexp_loc = loc; pexp_desc =
++        {pexp_loc = loc; pexp_ext = None; pexp_desc = (* NNN *)
++         Pexp_match({pexp_loc = loc; pexp_ext = None; pexp_desc = (* NNN *)
+                      Pexp_ident(Longident.Lident"*opt*")},
+                     scases)} in
+       let sfun =
+         {pcl_loc = scl.pcl_loc; pcl_desc =
+-         Pcl_fun(l, None, {ppat_loc = loc; ppat_desc = Ppat_var"*opt*"},
++         Pcl_fun(l, None, {ppat_loc = loc; ppat_ext = None; ppat_desc = Ppat_var"*opt*"}, (* NNN *)
+                  {pcl_loc = scl.pcl_loc; pcl_desc =
+                   Pcl_let(Default, [spat, smatch], sbody)})}
+       in
+@@ -796,6 +802,7 @@
+             (id,
+              Typecore.type_exp val_env'
+                {pexp_desc = Pexp_ident (Longident.Lident (Ident.name id));
++		pexp_ext = None;	(* NNN *)
+                 pexp_loc = Location.none}))
+           pv
+       in
+@@ -922,12 +929,14 @@
+              let expr =
+                Typecore.type_exp val_env
+                  {pexp_desc = Pexp_ident (Longident.Lident (Ident.name id));
++		  pexp_ext = None;	(* NNN *)
+                   pexp_loc = Location.none}
+              in
+              Ctype.end_def ();
+              Ctype.generalize expr.exp_type;
+              let desc =
+-               {val_type = expr.exp_type; val_kind = Val_ivar (Immutable,
++               {val_type = expr.exp_type;
++		val_kind = Val_ivar (Immutable,
+                                                                cl_num)}
+              in
+              let id' = Ident.create (Ident.name id) in
+Index: typing/typedtree.mli
+===================================================================
+--- typing/typedtree.mli	(revision 5522)
++++ typing/typedtree.mli	(working copy)
+@@ -78,6 +78,11 @@
+   | Texp_assertfalse
+   | Texp_lazy of expression
+   | Texp_object of class_structure * class_signature * string list
++(* NNN through the rest of the definition of expression *)
++  | Texp_bracket of expression
++  | Texp_escape of expression
++  | Texp_run of expression
++  | Texp_cspval of Obj.t * Longident.t
+ 
+ and meth =
+     Tmeth_name of string
+Index: typing/predef.mli
+===================================================================
+--- typing/predef.mli	(revision 5522)
++++ typing/predef.mli	(working copy)
+@@ -30,6 +30,7 @@
+ val type_int32: type_expr
+ val type_int64: type_expr
+ val type_lazy_t: type_expr -> type_expr
++val type_code: type_expr ->  type_expr -> type_expr (* NNN *)
+ 
+ val path_int: Path.t
+ val path_char: Path.t
+@@ -46,6 +47,7 @@
+ val path_int32: Path.t
+ val path_int64: Path.t
+ val path_lazy_t: Path.t
++val path_code: Path.t  (* NNN *)
+ 
+ val path_match_failure: Path.t
+ val path_assert_failure : Path.t
+Index: typing/env.mli
+===================================================================
+--- typing/env.mli	(revision 5522)
++++ typing/env.mli	(working copy)
+@@ -22,6 +22,8 @@
+ val initial: t
+ val diff: t -> t -> Ident.t list
+ 
++type stage = type_expr list	(* NNN *)
++
+ (* Lookup by paths *)
+ 
+ val find_value: Path.t -> t -> value_description
+@@ -30,6 +32,7 @@
+ val find_modtype: Path.t -> t -> modtype_declaration
+ val find_class: Path.t -> t -> class_declaration
+ val find_cltype: Path.t -> t -> cltype_declaration
++val find_stage: Path.t -> t -> stage	(* NNN *)
+ 
+ val find_type_expansion: Path.t -> t -> type_expr list * type_expr
+ val find_type_expansion_opt: Path.t -> t -> type_expr list * type_expr
+@@ -48,6 +51,7 @@
+ val lookup_modtype: Longident.t -> t -> Path.t * modtype_declaration
+ val lookup_class: Longident.t -> t -> Path.t * class_declaration
+ val lookup_cltype: Longident.t -> t -> Path.t * cltype_declaration
++val lookup_stage: Longident.t -> t -> stage (* NNN *)
+ 
+ (* Insertion by identifier *)
+ 
+@@ -59,6 +63,7 @@
+ val add_modtype: Ident.t -> modtype_declaration -> t -> t
+ val add_class: Ident.t -> class_declaration -> t -> t
+ val add_cltype: Ident.t -> cltype_declaration -> t -> t
++val add_stage: Ident.t -> stage -> t -> t (* NNN *)
+ 
+ (* Insertion of all fields of a signature. *)
+ 
+@@ -123,6 +128,7 @@
+   | Env_class of summary * Ident.t * class_declaration
+   | Env_cltype of summary * Ident.t * cltype_declaration
+   | Env_open of summary * Path.t
++  | Env_stage of summary * Ident.t * stage (* NNN *)
+ 
+ val summary: t -> summary
+ 
+@@ -144,3 +150,8 @@
+ (* Forward declaration to break mutual recursion with Includemod. *)
+ val check_modtype_inclusion:
+       (t -> module_type -> Path.t -> module_type -> unit) ref
++
++val make_env_pure : t -> unit  (* NNN *)
++val get_ident_timestamp : t -> int (* NNN *)
++val update_ident_timestamp : t -> unit (* NNN *)
++val empty_with_timestamp: unit -> t (* NNN *)
+Index: typing/typecore.mli
+===================================================================
+--- typing/typecore.mli	(revision 5522)
++++ typing/typecore.mli	(working copy)
+@@ -100,6 +100,9 @@
+   | Not_a_variant_type of Longident.t
+   | Incoherent_label_order
+   | Less_general of string * (type_expr * type_expr) list
++  | Wrong_stage of (type_expr list) * (type_expr list)    (* NNN *)
++  | Run_occur_check of type_expr * type_expr		  (* NNN *)
++  | Run_alpha_not_generalizable of type_expr * type_expr  (* NNN *)
+ 
+ exception Error of Location.t * error
+ 
+Index: typing/ident.ml
+===================================================================
+--- typing/ident.ml	(revision 5522)
++++ typing/ident.ml	(working copy)
+@@ -182,3 +182,11 @@
+       keys_aux (l :: stack) (k.ident :: accu) r
+ 
+ let keys tbl = keys_aux [] [] tbl
++
++(* NNN the whole function *)
++let rec iter f tbl =
++  match tbl with
++  | Empty -> ()
++  | Node (t1,d,t2,_) -> f d.data; iter f t1; iter f t2
++
++
+Index: .depend
+===================================================================
+--- .depend	(revision 5522)
++++ .depend	(working copy)
+@@ -90,6 +90,8 @@
+     parsing/longident.cmi typing/ident.cmi 
+ typing/stypes.cmi: typing/typedtree.cmi parsing/location.cmi typing/annot.cmi 
+ typing/subst.cmi: typing/types.cmi typing/path.cmi typing/ident.cmi 
++typing/trx.cmi: typing/typedtree.cmi parsing/parsetree.cmi \
++    parsing/longident.cmi 
+ typing/typeclass.cmi: typing/types.cmi typing/typedtree.cmi \
+     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
+     typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi 
+@@ -100,7 +102,8 @@
+     parsing/longident.cmi parsing/location.cmi typing/ident.cmi \
+     typing/env.cmi 
+ typing/typedtree.cmi: typing/types.cmi typing/primitive.cmi typing/path.cmi \
+-    parsing/location.cmi typing/ident.cmi typing/env.cmi parsing/asttypes.cmi 
++    parsing/longident.cmi parsing/location.cmi typing/ident.cmi \
++    typing/env.cmi parsing/asttypes.cmi 
+ typing/typemod.cmi: typing/types.cmi typing/typedtree.cmi \
+     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
+     typing/includemod.cmi typing/ident.cmi typing/env.cmi 
+@@ -199,6 +202,18 @@
+     utils/misc.cmi typing/ident.cmi typing/btype.cmi typing/subst.cmi 
+ typing/subst.cmx: typing/types.cmx utils/tbl.cmx typing/path.cmx \
+     utils/misc.cmx typing/ident.cmx typing/btype.cmx typing/subst.cmi 
++typing/trx.cmo: typing/types.cmi typing/typedtree.cmi typing/typecore.cmi \
++    typing/subst.cmi typing/predef.cmi typing/path.cmi parsing/parsetree.cmi \
++    typing/parmatch.cmi utils/misc.cmi parsing/longident.cmi \
++    parsing/location.cmi parsing/linenum.cmi typing/ident.cmi typing/env.cmi \
++    typing/datarepr.cmi typing/ctype.cmi typing/btype.cmi \
++    parsing/asttypes.cmi typing/trx.cmi 
++typing/trx.cmx: typing/types.cmx typing/typedtree.cmx typing/typecore.cmx \
++    typing/subst.cmx typing/predef.cmx typing/path.cmx parsing/parsetree.cmi \
++    typing/parmatch.cmx utils/misc.cmx parsing/longident.cmx \
++    parsing/location.cmx parsing/linenum.cmx typing/ident.cmx typing/env.cmx \
++    typing/datarepr.cmx typing/ctype.cmx typing/btype.cmx \
++    parsing/asttypes.cmi typing/trx.cmi 
+ typing/typeclass.cmo: utils/warnings.cmi typing/typetexp.cmi typing/types.cmi \
+     typing/typedtree.cmi typing/typedecl.cmi typing/typecore.cmi \
+     typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi typing/predef.cmi \
+@@ -242,13 +257,13 @@
+     typing/env.cmx typing/ctype.cmx utils/config.cmx utils/clflags.cmx \
+     typing/btype.cmx parsing/asttypes.cmi typing/typedecl.cmi 
+ typing/typedtree.cmo: typing/types.cmi typing/primitive.cmi typing/path.cmi \
+-    utils/misc.cmi parsing/location.cmi typing/ident.cmi typing/env.cmi \
+-    parsing/asttypes.cmi typing/typedtree.cmi 
++    utils/misc.cmi parsing/longident.cmi parsing/location.cmi \
++    typing/ident.cmi typing/env.cmi parsing/asttypes.cmi typing/typedtree.cmi 
+ typing/typedtree.cmx: typing/types.cmx typing/primitive.cmx typing/path.cmx \
+-    utils/misc.cmx parsing/location.cmx typing/ident.cmx typing/env.cmx \
+-    parsing/asttypes.cmi typing/typedtree.cmi 
++    utils/misc.cmx parsing/longident.cmx parsing/location.cmx \
++    typing/ident.cmx typing/env.cmx parsing/asttypes.cmi typing/typedtree.cmi 
+ typing/typemod.cmo: typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
+-    typing/typecore.cmi typing/typeclass.cmi typing/subst.cmi \
++    typing/typecore.cmi typing/typeclass.cmi typing/trx.cmi typing/subst.cmi \
+     typing/stypes.cmi typing/printtyp.cmi typing/path.cmi \
+     parsing/parsetree.cmi typing/mtype.cmi utils/misc.cmi \
+     parsing/longident.cmi parsing/location.cmi typing/includemod.cmi \
+@@ -256,7 +271,7 @@
+     utils/clflags.cmi typing/btype.cmi parsing/asttypes.cmi typing/annot.cmi \
+     typing/typemod.cmi 
+ typing/typemod.cmx: typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx \
+-    typing/typecore.cmx typing/typeclass.cmx typing/subst.cmx \
++    typing/typecore.cmx typing/typeclass.cmx typing/trx.cmx typing/subst.cmx \
+     typing/stypes.cmx typing/printtyp.cmx typing/path.cmx \
+     parsing/parsetree.cmi typing/mtype.cmx utils/misc.cmx \
+     parsing/longident.cmx parsing/location.cmx typing/includemod.cmx \
+Index: Makefile
+===================================================================
+--- Makefile	(revision 5522)
++++ Makefile	(working copy)
+@@ -21,6 +21,9 @@
+ CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink
+ COMPFLAGS=-warn-error A $(INCLUDES)
+ LINKFLAGS=
++# For debugging
++# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
++# LINKFLAGS=-g #NNN
+ 
+ CAMLYACC=boot/ocamlyacc
+ YACCFLAGS=-v
+@@ -44,6 +47,7 @@
+   parsing/syntaxerr.cmo parsing/parser.cmo \
+   parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo
+ 
++# NNN (trx)
+ TYPING=typing/unused_var.cmo typing/ident.cmo typing/path.cmo \
+   typing/primitive.cmo typing/types.cmo \
+   typing/btype.cmo typing/oprint.cmo \
+@@ -55,6 +59,7 @@
+   typing/includemod.cmo typing/parmatch.cmo \
+   typing/typetexp.cmo typing/stypes.cmo typing/typecore.cmo \
+   typing/typedecl.cmo typing/typeclass.cmo \
++  typing/trx.cmo \
+   typing/typemod.cmo
+ 
+ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
+@@ -129,7 +134,9 @@
+ 
+ # Recompile the system using the bootstrap compiler
+ all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
+-  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
++  otherlibraries ocamldoc
++# NNN The rest is not tried or not yet supported
++#  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
+ 
+ # Compile everything the first time
+ world:
+@@ -285,6 +292,18 @@
+ 	cp toplevel/toplevellib.cma $(LIBDIR)/toplevellib.cma
+ 	cp expunge $(LIBDIR)/expunge$(EXE)
+ 	cp typing/outcometree.cmi typing/outcometree.mli $(LIBDIR)
++# NNN The following is needed for the sake of trx.ml (see the lazy
++# identifier resolution in that file)
++# We need to copy the following interfaces, or we can't compile
++# anything with brackets
++# If we get trx.ml to use predef, the copying below can be done at a later time
++	cp parsing/asttypes.cmi parsing/parsetree.cmi \
++	   parsing/location.cmi \
++           parsing/longident.cmi  \
++           typing/trx.cmi \
++           typing/trx.cmo \
++           typing/ident.cmi $(LIBDIR)
++# NNN end
+ 	cp toplevel/topstart.cmo $(LIBDIR)
+ 	cp toplevel/toploop.cmi toplevel/topdirs.cmi toplevel/topmain.cmi \
+ 	   $(LIBDIR)
+@@ -299,7 +318,7 @@
+ 	   else :; fi
+ 	cp config/Makefile $(LIBDIR)/Makefile.config
+ 	BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) PREFIX=$(PREFIX) \
+-	  ./build/partial-install.sh
++ 	  ./build/partial-install.sh
+ 
+ # Installation of the native-code compiler
+ installopt:
+Index: bytecomp/lambda.ml
+===================================================================
+--- bytecomp/lambda.ml	(revision 5522)
++++ bytecomp/lambda.ml	(working copy)
+@@ -114,6 +114,7 @@
+   | Const_block of int * structured_constant list
+   | Const_float_array of string list
+   | Const_immstring of string
++  | Const_csp_value of Obj.t                   (* NNN: immediate CSP *)
+ 
+ type function_kind = Curried | Tupled
+ 
+Index: bytecomp/symtable.ml
+===================================================================
+--- bytecomp/symtable.ml	(revision 5522)
++++ bytecomp/symtable.ml	(working copy)
+@@ -214,6 +214,7 @@
+       block
+   | Const_float_array fields ->
+       Obj.repr(Array.of_list(List.map (fun f -> float_of_string f) fields))
++  | Const_csp_value v -> v                                  (* NNN *)
+ 
+ (* Build the initial table of globals *)
+ 
+Index: bytecomp/printlambda.ml
+===================================================================
+--- bytecomp/printlambda.ml	(revision 5522)
++++ bytecomp/printlambda.ml	(working copy)
+@@ -41,6 +41,8 @@
+       let floats ppf fl =
+         List.iter (fun f -> fprintf ppf "@ %s" f) fl in
+       fprintf ppf "@[<1>[|@[%s%a@]|]@]" f1 floats fl
++  | Const_csp_value x ->      (* NNN *)
++      fprintf ppf "(CSP_value %a)" Trx.print_obj x (* NNN *)
+ 
+ let boxed_integer_name = function
+   | Pnativeint -> "nativeint"
+Index: bytecomp/translcore.ml
+===================================================================
+--- bytecomp/translcore.ml	(revision 5522)
++++ bytecomp/translcore.ml	(working copy)
+@@ -823,6 +823,9 @@
+           cl_loc = e.exp_loc;
+           cl_type = Tcty_signature cty;
+           cl_env = e.exp_env }
++  | Texp_cspval (v,_) ->  Lconst(Const_csp_value v)         (* NNN *)
++  | Texp_run _ | Texp_escape _  | Texp_bracket _ ->         (* NNN *)
++      fatal_error "Translcore.trans_exp with meta stuff"    (* NNN *)
+ 
+ and transl_list expr_list =
+   List.map transl_exp expr_list
+Index: bytecomp/lambda.mli
+===================================================================
+--- bytecomp/lambda.mli	(revision 5522)
++++ bytecomp/lambda.mli	(working copy)
+@@ -114,6 +114,7 @@
+   | Const_block of int * structured_constant list
+   | Const_float_array of string list
+   | Const_immstring of string
++  | Const_csp_value of Obj.t                   (* NNN: immediate CSP *)
+ 
+ type function_kind = Curried | Tupled
+ 
+Index: parsing/parser.mly
+===================================================================
+--- parsing/parser.mly	(revision 5522)
++++ parsing/parser.mly	(working copy)
+@@ -23,9 +23,9 @@
+ let mktyp d =
+   { ptyp_desc = d; ptyp_loc = symbol_rloc() }
+ let mkpat d =
+-  { ppat_desc = d; ppat_loc = symbol_rloc() }
++  { ppat_desc = d; ppat_loc = symbol_rloc(); ppat_ext = None } (* NNN *)
+ let mkexp d =
+-  { pexp_desc = d; pexp_loc = symbol_rloc() }
++  { pexp_desc = d; pexp_loc = symbol_rloc(); pexp_ext = None } (* NNN *)
+ let mkmty d =
+   { pmty_desc = d; pmty_loc = symbol_rloc() }
+ let mksig d =
+@@ -45,7 +45,8 @@
+ let reloc_exp x = { x with pexp_loc = symbol_rloc () };;
+ 
+ let mkoperator name pos =
+-  { pexp_desc = Pexp_ident(Lident name); pexp_loc = rhs_loc pos }
++  { pexp_desc = Pexp_ident(Lident name); pexp_loc = rhs_loc pos; 
++    pexp_ext = None } (* NNN *)
+ 
+ (*
+   Ghost expressions and patterns:
+@@ -64,8 +65,8 @@
+   AST node, then the location must be real; in all other cases,
+   it must be ghost.
+ *)
+-let ghexp d = { pexp_desc = d; pexp_loc = symbol_gloc () };;
+-let ghpat d = { ppat_desc = d; ppat_loc = symbol_gloc () };;
++let ghexp d = { pexp_desc = d; pexp_loc = symbol_gloc (); pexp_ext = None };; (* NNN *)
++let ghpat d = { ppat_desc = d; ppat_loc = symbol_gloc (); ppat_ext = None };; (* NNN *)
+ let ghtyp d = { ptyp_desc = d; ptyp_loc = symbol_gloc () };;
+ 
+ let mkassert e =
+@@ -107,8 +108,10 @@
+                loc_end = exp_el.pexp_loc.loc_end;
+                loc_ghost = true}
+       in
+-      let arg = {pexp_desc = Pexp_tuple [e1; exp_el]; pexp_loc = l} in
+-      {pexp_desc = Pexp_construct(Lident "::", Some arg, false); pexp_loc = l}
++      let arg = {pexp_desc = Pexp_tuple [e1; exp_el]; 
++		 pexp_loc = l; pexp_ext = None} in  (* NNN *)
++      {pexp_desc = Pexp_construct(Lident "::", Some arg, false); 
++       pexp_loc = l; pexp_ext = None}               (* NNN *)
+ 
+ let rec mktailpat = function
+     [] ->
+@@ -119,8 +122,10 @@
+                loc_end = pat_pl.ppat_loc.loc_end;
+                loc_ghost = true}
+       in
+-      let arg = {ppat_desc = Ppat_tuple [p1; pat_pl]; ppat_loc = l} in
+-      {ppat_desc = Ppat_construct(Lident "::", Some arg, false); ppat_loc = l}
++      let arg = {ppat_desc = Ppat_tuple [p1; pat_pl]; 
++		 ppat_loc = l; ppat_ext = None} in    (* NNN *)
++      {ppat_desc = Ppat_construct(Lident "::", Some arg, false); 
++       ppat_loc = l; ppat_ext = None}                 (* NNN *)
+ 
+ let ghstrexp e =
+   { pstr_desc = Pstr_eval e; pstr_loc = {e.pexp_loc with loc_ghost = true} }
+@@ -185,10 +190,24 @@
+                        ["", arr;
+                         "", ghexp(Pexp_array coords);
+                         "", newval]))
++
++let let_operator op bindings cont =
++  let pat, expr =
++    match List.rev bindings with
++    | [] -> assert false
++    | [x] -> x
++    | l ->
++        let pats, exprs = List.split l in
++        ghpat (Ppat_tuple pats), ghexp (Pexp_tuple exprs)
++    in
++      mkexp(Pexp_apply(op, ["", expr; "", ghexp(Pexp_function("", None, [pat, cont]))]))
+ %}
+ 
+ /* Tokens */
+-
++%token DOTLESS     /* NNN */
++%token GREATERDOT  /* NNN */
++%token DOTTILDE    /* NNN */
++%token DOTBANG     /* NNN */
+ %token AMPERAMPER
+ %token AMPERSAND
+ %token AND
+@@ -251,6 +270,7 @@
+ %token LESS
+ %token LESSMINUS
+ %token LET
++%token <string> LETOP /* NNN */
+ %token <string> LIDENT
+ %token LPAREN
+ %token MATCH
+@@ -326,6 +346,7 @@
+ %nonassoc below_SEMI
+ %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
+ %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
++%nonassoc LETOP           /* NNN */
+ %nonassoc below_WITH
+ %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
+ %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
+@@ -350,6 +371,7 @@
+ %nonassoc prec_unary_minus              /* unary - */
+ %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
+ %nonassoc prec_constr_appl              /* above AS BAR COLONCOLON COMMA */
++%left	  prec_escape    /* NNN */
+ %nonassoc below_SHARP
+ %nonassoc SHARP                         /* simple_expr/toplevel_directive */
+ %nonassoc below_DOT
+@@ -811,6 +833,8 @@
+       { mkexp(Pexp_apply($1, List.rev $2)) }
+   | LET rec_flag let_bindings IN seq_expr
+       { mkexp(Pexp_let($2, List.rev $3, $5)) }
++  | let_operator let_bindings IN seq_expr
++      { let_operator $1 $2 $4 }
+   | LET MODULE UIDENT module_binding IN seq_expr
+       { mkexp(Pexp_letmodule($3, $4, $6)) }
+   | FUNCTION opt_bar match_cases
+@@ -915,6 +939,12 @@
+       { reloc_exp $2 }
+   | LPAREN seq_expr error
+       { unclosed "(" 1 ")" 3 }
++  | DOTLESS expr GREATERDOT                 /* NNN */
++      { mkexp(Pexp_bracket $2) }            /* NNN */
++  | DOTTILDE simple_expr %prec prec_escape  /* NNN */
++      { mkexp(Pexp_escape $2) }             /* NNN */
++  | DOTBANG expr %prec prec_escape          /* NNN */
++      { mkexp(Pexp_run $2) }                /* NNN */
+   | BEGIN seq_expr END
+       { reloc_exp $2 }
+   | BEGIN END
+@@ -997,7 +1027,7 @@
+ ;
+ let_binding:
+     val_ident fun_binding
+-      { ({ppat_desc = Ppat_var $1; ppat_loc = rhs_loc 1}, $2) }
++      { ({ppat_desc = Ppat_var $1; ppat_loc = rhs_loc 1; ppat_ext = None}, $2) } /* NNN */
+   | pattern EQUAL seq_expr
+       { ($1, $3) }
+ ;
+@@ -1427,6 +1457,7 @@
+   | INFIXOP2                                    { $1 }
+   | INFIXOP3                                    { $1 }
+   | INFIXOP4                                    { $1 }
++  | LETOP                                       { $1 }
+   | PLUS                                        { "+" }
+   | MINUS                                       { "-" }
+   | MINUSDOT                                    { "-." }
+@@ -1440,6 +1471,10 @@
+   | AMPERAMPER                                  { "&&" }
+   | COLONEQUAL                                  { ":=" }
+ ;
++let_operator:
++    LETOP                                   { mkexp (Pexp_ident(Lident $1)) }
++  | mod_longident DOT LETOP                 { mkexp (Pexp_ident(Ldot($1,$3))) }
++
+ constr_ident:
+     UIDENT                                      { $1 }
+ /*  | LBRACKET RBRACKET                           { "[]" } */
+Index: parsing/lexer.mll
+===================================================================
+--- parsing/lexer.mll	(revision 5522)
++++ parsing/lexer.mll	(working copy)
+@@ -215,6 +215,8 @@
+   ['A'-'Z' 'a'-'z' '_' '\192'-'\214' '\216'-'\246' '\248'-'\255' '\'' '0'-'9']
+ let symbolchar =
+   ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
++let symbolcharnodot =                                                  (* NNN *)
++ ['!' '$' '%' '&' '*' '+' '-' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~'] (* NNN *)
+ let decimal_literal =
+   ['0'-'9'] ['0'-'9' '_']*
+ let hex_literal =
+@@ -237,6 +239,10 @@
+       }
+   | blank +
+       { token lexbuf }
++  | ".<" { DOTLESS }     (* NNN *)
++  | ">." { GREATERDOT }  (* NNN *)
++  | ".~" { DOTTILDE }    (* NNN *)
++  | ".!" { DOTBANG }     (* NNN *)
+   | "_"
+       { UNDERSCORE }
+   | "~"  { TILDE }
+@@ -382,8 +388,10 @@
+             { PREFIXOP(Lexing.lexeme lexbuf) }
+   | ['~' '?'] symbolchar +
+             { PREFIXOP(Lexing.lexeme lexbuf) }
+-  | ['=' '<' '>' '|' '&' '$'] symbolchar *
++  | ['=' '<' '|' '&' '$'] symbolchar *	         (* NNN: ">." is not INFIXOP0 *)
+             { INFIXOP0(Lexing.lexeme lexbuf) }
++  | ['>'] symbolcharnodot symbolchar *           (* NNN exclude ">." case *)
++            { INFIXOP0(Lexing.lexeme lexbuf) }   (* NNN *)
+   | ['@' '^'] symbolchar *
+             { INFIXOP1(Lexing.lexeme lexbuf) }
+   | ['+' '-'] symbolchar *
+@@ -392,6 +400,8 @@
+             { INFIXOP4(Lexing.lexeme lexbuf) }
+   | ['*' '/' '%'] symbolchar *
+             { INFIXOP3(Lexing.lexeme lexbuf) }
++  | "let" symbolchar*
++            { LETOP(Lexing.lexeme lexbuf) }
+   | eof { EOF }
+   | _
+       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
+Index: parsing/parsetree.mli
+===================================================================
+--- parsing/parsetree.mli	(revision 5522)
++++ parsing/parsetree.mli	(working copy)
+@@ -60,7 +60,8 @@
+ 
+ type pattern =
+   { ppat_desc: pattern_desc;
+-    ppat_loc: Location.t }
++    ppat_loc: Location.t;
++    ppat_ext: Obj.t option }    (* NNN: hacked-on typing info *)
+ 
+ and pattern_desc =
+     Ppat_any
+@@ -79,7 +80,8 @@
+ 
+ type expression =
+   { pexp_desc: expression_desc;
+-    pexp_loc: Location.t }
++    pexp_loc: Location.t;
++    pexp_ext: Obj.t option }     (* NNN: hacked-on typing info *)
+ 
+ and expression_desc =
+     Pexp_ident of Longident.t
+@@ -112,6 +114,10 @@
+   | Pexp_lazy of expression
+   | Pexp_poly of expression * core_type option
+   | Pexp_object of class_structure
++  | Pexp_bracket of expression (* NNN *)
++  | Pexp_escape of expression  (* NNN *)
++  | Pexp_run of expression     (* NNN *)
++  | Pexp_cspval of Obj.t * Longident.t (* NNN *)
+ 
+ (* Value descriptions *)
+ 
+Index: parsing/printast.ml
+===================================================================
+--- parsing/printast.ml	(revision 5522)
++++ parsing/printast.ml	(working copy)
+@@ -305,6 +305,18 @@
+   | Pexp_object s ->
+       line i ppf "Pexp_object";
+       class_structure i ppf s
++(* NNN through the end of the case *)
++  | Pexp_bracket (e) ->
++      line i ppf "Pexp_bracket\n";
++      expression i ppf e;
++  | Pexp_escape (e) ->
++      line i ppf "Pexp_escape\n";
++      expression i ppf e;
++  | Pexp_run (e) ->
++      line i ppf "Pexp_run\n";
++      expression i ppf e;
++  | Pexp_cspval (v,li) ->
++      line i ppf "Pexp_cspval <compiled_code> (as id: %a)" fmt_longident li
+ 
+ and value_description i ppf x =
+   line i ppf "value_description\n";
+Index: ocamldoc/Makefile
+===================================================================
+--- ocamldoc/Makefile	(revision 5522)
++++ ocamldoc/Makefile	(working copy)
+@@ -169,6 +169,7 @@
+ 	$(OCAMLSRCDIR)/typing/typeclass.cmo \
+ 	$(OCAMLSRCDIR)/typing/mtype.cmo \
+ 	$(OCAMLSRCDIR)/typing/includemod.cmo \
++	$(OCAMLSRCDIR)/typing/trx.cmo \
+ 	$(OCAMLSRCDIR)/typing/typemod.cmo \
+ 	$(OCAMLSRCDIR)/bytecomp/lambda.cmo \
+ 	$(OCAMLSRCDIR)/bytecomp/typeopt.cmo \
