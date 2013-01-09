@@ -505,6 +505,13 @@ end = struct
             Texp_object (map_class_structure cl, string_list)
           | Texp_pack (mexpr) ->
             Texp_pack (map_module_expr mexpr)
+          | Texp_bracket exp ->         (* NNN through the rest of the clause *)
+              Texp_bracket (map_expression exp)
+          | Texp_escape exp ->
+              Texp_escape (map_expression exp)
+          | Texp_run exp ->
+              Texp_run (map_expression exp)
+          | Texp_cspval (_, _, _) -> exp.exp_desc (* NNN end *)
       in
       let exp_extra = List.map map_exp_extra exp.exp_extra in
       Map.leave_expression {
