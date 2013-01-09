@@ -24,22 +24,26 @@ done	./typing/typedtree.ml
 done	./typing/predef.ml
 done	./typing/predef.mli
 
-done    ./typing/printtyped.ml    did not exist before, due to typedtree changes
+done    ./typing/printtyped.ml    did not exist before, trivial changes
+done    ./typing/cmt_format.ml    did not exist before, trivial changes
 
-		./typing/unused_var.ml
-		./typing/ident.ml
-		./typing/ident.mli
-		./typing/env.ml
-		./typing/env.mli
+done	./typing/env.mli
+done	./typing/env.ml
+
 		./typing/typecore.mli
 		./typing/typecore.ml
-		./typing/typeclass.ml
 		./typing/typemod.ml   Newly changed
 
 		./typing/trx.mli
 		./typing/trx.ml 
 
 
+		./typing/ident.ml
+		./typing/ident.mli
+
+		./typing/typeclass.ml   No longer changed
+
+./typing/unused_var.ml  No longer present
 
 
 ./asmcomp/cmmgen.ml	Not changed; Const_csp_value will cause fatal error

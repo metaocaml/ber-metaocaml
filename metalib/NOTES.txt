@@ -28,6 +28,17 @@
 -- All modified lines in the OCaml code are marked by (* NNN *)
 
 
+OCaml Core type checker was changed to use type_expect. This generates
+better error messages. Therefore, the type checking of brackets,
+escape, run and CSP was changed accordingly, to propagate expectations
+down. For example, <e> is expected to have the type of
+(clsfier, ty) code where e has is expected to have the type ty.
+
+# What can be moved to OCaml proper?
+Const_csp_value has some merit for bytecode: consider a constant
+that refers to a big array, or even array in ancient. Writing
+it as a literal is ungainly. It could also help syntactic extensions,
+
 
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
 -no-camlp4 -no-graph
