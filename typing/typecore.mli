@@ -103,6 +103,9 @@ type error =
   | Not_a_packed_module of type_expr
   | Recursive_local_constraint of (type_expr * type_expr) list
   | Unexpected_existential
+  | Wrong_stage of (type_expr list) * (type_expr list)    (* NNN *)
+  | Run_occur_check of type_expr * type_expr		  (* NNN *)
+  | Run_alpha_not_generalizable of type_expr * type_expr  (* NNN *)
 
 exception Error of Location.t * error
 
