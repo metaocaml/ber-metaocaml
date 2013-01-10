@@ -106,7 +106,7 @@ and expression_desc =
   | Texp_bracket of expression
   | Texp_escape of expression
   | Texp_run of expression
-  | Texp_cspval of Obj.t * Path.t * Longident.t loc
+  | Texp_cspval of Obj.t * Longident.t loc
 
 and meth =
     Tmeth_name of string

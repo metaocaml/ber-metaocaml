@@ -511,7 +511,7 @@ end = struct
               Texp_escape (map_expression exp)
           | Texp_run exp ->
               Texp_run (map_expression exp)
-          | Texp_cspval (_, _, _) -> exp.exp_desc (* NNN end *)
+          | Texp_cspval (_, _) -> exp.exp_desc (* NNN end *)
       in
       let exp_extra = List.map map_exp_extra exp.exp_extra in
       Map.leave_expression {

@@ -365,8 +365,8 @@ and expression i ppf x =
   | Texp_run e ->
       line i ppf "Pexp_run";
       expression i ppf e;
-  | Texp_cspval (_, li, _) ->
-      line i ppf "Pexp_cspval %a\n" fmt_path li
+  | Texp_cspval (_, li) ->
+      line i ppf "Pexp_cspval %a\n" fmt_longident li
 
 and value_description i ppf x =
   line i ppf "value_description\n";

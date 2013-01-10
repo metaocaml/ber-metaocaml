@@ -206,6 +206,8 @@ let iter_expression f e =
     | Pexp_letmodule (_, me, e) -> expr e; module_expr me
     | Pexp_object { pcstr_fields = fs } -> List.iter class_field fs
     | Pexp_pack me -> module_expr me
+    | Pexp_bracket e | Pexp_escape e | Pexp_run e -> expr e (* NNN *)
+    | Pexp_cspval (_, _) -> ()                              (* NNN *)
 
   and module_expr me =
     match me.pmod_desc with
@@ -1565,8 +1567,8 @@ and type_expect ?in_function env sexp ty_expected =
           with _ -> ()
         end;
         let (path, desc) = Typetexp.find_value env loc lid.txt in
-        let (_, stage) =				(* NNN begin *)
-              try Env.lookup_stage lid.txt env 
+        let stage =				(* NNN begin *)
+              try snd (Env.lookup_stage lid.txt env)
               with Not_found ->
                 [] in
 	unify_stage env stage !global_stage;		(* NNN end *)
@@ -1758,12 +1760,12 @@ and type_expect ?in_function env sexp ty_expected =
         exp_env = env }
 
        (* NNN:  Typechecking bracket *)
-       (* follow Pexp_array as a template *)
+       (* follow Pexp_array or Pexp_lazy as a template *)
        (* Expected type: (clsfier,ty) code where ty is the type
            of the expression within brackets.
         *)
   | Pexp_bracket(sexp) ->   
-      let clsfier = newvar "cl" () in        (* NNN newgenvar? *)
+      let clsfier = newvar ?name:(Some "cl") () in   (* it will be generalized later *)
       let ty = newgenvar() in
       let to_unify = Predef.type_code clsfier ty in
       unify_exp_types loc env to_unify ty_expected;
@@ -1794,7 +1796,7 @@ and type_expect ?in_function env sexp ty_expected =
         *)
   | Pexp_run(sexp) ->
       begin_def();    (* save level and increment, for generalization *)
-      let clsfier = newvar "cl" () in
+      let clsfier = newvar ?name:(Some "cl") () in
       let codety  = Predef.type_code clsfier ty_expected in
       let exp = type_expect env sexp codety in
       end_def ();
@@ -1809,12 +1811,19 @@ and type_expect ?in_function env sexp ty_expected =
         exp_type = instance env ty_expected;
         exp_env = env }
        (* NNN Typechecking for CSPVAL. *)
-  | Pexp_cspval(obj,li) ->              (* XXX just make exp_type to be expected tp,or instance *)
-     let ty = instance (newvar ()) in   
+       (* The rule says that CSP can have any desired type.
+          Pexp_cspval nodes are added only by the builder of
+          code expressions, by the builder of AST in trx.ml
+         At that time we know that the expression that gave
+         rise to CSP had the correct type. Therefore, we trust
+         that the type was correct the first time around.
+         The second argument, li, is used for identification only.
+        *)
+  | Pexp_cspval(obj,li) ->
      re { 
         exp_desc = Texp_cspval(obj,li);
         exp_loc = loc; exp_extra = [];
-        exp_type = ty;
+        exp_type = instance env ty_expected;
         exp_env = env }
        (* NNN end *)
   | Pexp_match(sarg, caselist) ->
