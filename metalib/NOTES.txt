@@ -3,7 +3,7 @@
 # NNNXXX Use compilerlibs as much as possible
 
 
-* Main differences from the original MetaOCaml
+  * Main differences from the original MetaOCaml
 
 -- Added metalib (aka ber-metaocaml) directory: the MetaOCaml library, 
    for the `user-level' MetaOCaml code (as contrasted with the 
@@ -42,6 +42,17 @@ it as a literal is ungainly. It could also help syntactic extensions,
 
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
 -no-camlp4 -no-graph
+
+Type-checking of run  (in typing/typecore.ml) can be done differently,
+using polymorphic/universally quantified variables (Tpoly/Tunivar)
+
+One may think that we can pre-process the ParseTree before we hand it
+over to the type-checker, replacing Pexp_constant that occurs within
+the brackets with a node Pexp_apply "mk_constant", etc. However, we
+have problems with generalizing second-stage let. Since the let-form
+will be replaced with a function call, generalization won't be
+performed!
+
 
 * Installation notes
 When linking the first time, beware!
