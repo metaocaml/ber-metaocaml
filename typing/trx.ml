@@ -12,9 +12,21 @@ open Env
 open Typecore
 
 (* BER MetaOCaml version string *)
-let meta_version  = "N 004"
+let meta_version  = "N 100"
 
 exception TypeCheckingError
+
+(* Checks to see if a path refers to an identifier, exception,
+   constructor available from an external module. That is, the run-time
+   compiler invoked by run can get the definition for the identifier from
+   a .cmi file. The value of an external identifier can be obtained from
+   a .cmo file.
+*)
+let is_external = function
+  | Path.Pident _ -> false              (* not qualified *)
+  | Path.Papply _ -> false
+  | Path.Pdot(Path.Pident id, _,_) -> Ident.persistent id
+
 
 (* Test if we should refer to a CSP value by name rather than by
    value
@@ -24,6 +36,8 @@ exception TypeCheckingError
    dynamic linking of the run-time generated code.
    Basically we can assume the standard library.
 *)
+
+(* 
 let pervasive_idents =
   List.map Ident.create_persistent 
   ["Pervasives"; "Array"; "Printf"; "List"; "String"]
@@ -32,6 +46,9 @@ let ident_can_be_quoted = function
   | Path.Pdot(Path.Pident id, _,_) ->
       List.exists (Ident.same id) pervasive_idents
   | _ -> false
+*)
+
+let ident_can_be_quoted = is_external   (* Perhaps a better version *)
 
 (* Convert the path to an identifier. Since the path is assumed to be
    `global', time stamps don't matter and we can use just strings.
@@ -42,6 +59,7 @@ let rec path_to_lid path =
   | Path.Pdot (p,s,_) -> Longident.Ldot (path_to_lid p, s)
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
+
 
 (* based on code taken from typing/parmatch.ml *)
 
@@ -192,6 +210,9 @@ let map_pi1 f p =
 let add_ifnew x l =
   if List.exists (fun y -> y=x) l then l else x::l
 
+(* Unqualified indetifiers are looked up in the initial
+   environment. Qualified identifiers are looked into (external)
+   modules, which are loaded by demand, in Env.find *)
 let env0 = Env.initial
 
 let find_type name =
@@ -226,11 +247,26 @@ done outside of lazy. Further, we are looking for identifiers in
 the same initial env. Should we just refer to the predefined env?
 Especially the types like string and list and their cosntructors.
 Predefined env has all this information, and it stays the same.
+
+I guess the point of lazy is to memoize repeated searches, and avoid
+searches for infrequent things.
+Since things like int, bool and string are going to be used all the time,
+we should just look them up eagerly.
+Further, should we use Predef.path_int, etc?
+
+let type_constant = function
+    Const_int _ -> instance_def Predef.type_int
+  | Const_char _ -> instance_def Predef.type_char
+  | Const_string _ -> instance_def Predef.type_string
+  | Const_float _ -> instance_def Predef.type_float
+  | Const_int32 _ -> instance_def Predef.type_int32
+  | Const_int64 _ -> instance_def Predef.type_int64
+  | Const_nativeint _ -> instance_def Predef.type_nativeint
+
 *)
 
 let type_string = lazy (find_type "string")
 let type_bool = lazy (find_type "bool")
-let type_int = lazy (find_type "int")
 let type_location = lazy (find_type "Location.t")
 let pathval_location_none = lazy (find_value "Location.none")
 let type_constant = lazy (find_type "Asttypes.constant")
@@ -379,12 +415,12 @@ let trx_mkcsp exp =
 
 let mkString exp s =
   { exp with 
-    exp_type = Lazy.force type_string;
+    exp_type = instance_def Predef.type_string;
     exp_desc = Texp_constant(Const_string (s)) }
 
 let mkInt exp i =
   { exp with
-    exp_type = Lazy.force type_int;
+    exp_type = instance_def Predef.type_int;
     exp_desc = Texp_constant(Const_int (i))}
 
 let quote_constant exp cst =
@@ -710,7 +746,7 @@ let rec mkPattern exp p =
       (Texp_ident (Path.Pident id,
                    {val_type = Lazy.force type_longident_t;
                     val_kind = Val_reg}))
-  in let strexp id = mkExp exp type_string
+  in let strexp id = mkExp exp (instance_def Predef.type_string)
       (Texp_apply (trx_longidenttostring exp, [(Some (idexp id),
                                                 Required)]))
   in match p.pat_desc with 
@@ -1221,7 +1257,7 @@ let rec trx_e n exp =
                           val_kind = Val_reg}))
         in let strexp id =
           mkExp exp
-            type_string
+            (instance_def Predef.type_string)
             (Texp_apply (trx_longidenttostring exp, [(Some (idexp id),
                                                       Required)]))
         in let transfor =
