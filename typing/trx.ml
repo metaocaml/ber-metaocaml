@@ -38,8 +38,6 @@ We transform x if it was written Pexp_ident li, or
 in tree terms
 Texp_construct ("Pexp_ident", [
 
-XXX if desc is mutable now, I can use Texp_tree traversal...
-
 *)
 
 
@@ -48,8 +46,21 @@ let meta_version  = "N 100"
 
 exception TrxError of string
 
+(* Path utilities *)
+(* We always use path when available, and convert it to Longident
+   when needed -- even if the Typedtree already carries the longident.
+   The path is preferred because it is fully qualified for
+   external identifiers and it is unambiguous.
+   If we open a module, its components can be referred to without
+   qualification -- but the path will be qualified.
+   When we build a Parsetree representing the generated code,
+   we have to use fully qualified identifiers since the open statement
+   in the original code won't be represented in the generated
+   Parsetree.
+*)
+
 (* Check to see if a path refers to an identifier, exception, or
-   constructor available from an external module. If so, the run-time
+   constructor that is available from an external module. If so, the run-time
    compiler invoked by .! can get the definition for the identifier from
    a .cmi file. The value of an external identifier can be obtained from
    a .cmo file.
@@ -58,17 +69,18 @@ let is_external = function
   | Path.Pident _ -> false              (* not qualified *)
   | Path.Papply _ -> false
   | Path.Pdot(Path.Pident id, _,_) -> Ident.persistent id
+  | _             -> false
 
 
 (* Check to make sure a constructor, label, exception, etc.
    have the name that we can put into AST.
    Local names can't be put into AST since the type env in which
-   they are declared is not present.
+   they are declared is not represented in the AST.
 *)
 let check_path_quotable msg path =
   if not (is_external path) then
     raise (TrxError (msg ^ 
-     " cannot be used within brackets. Put into a separate file"))
+     " cannot be used within brackets. Put into a separate file."))
 
 (* Test if we should refer to a CSP value by name rather than by
    value
@@ -95,14 +107,13 @@ let ident_can_be_quoted = is_external   (* Perhaps this is a better version *)
 (* Convert the path to an identifier. Since the path is assumed to be
    `global', time stamps don't matter and we can use just strings.
 *)
-let rec path_to_lid path =
-  match path with
-    Path.Pident i -> Longident.Lident (Ident.name i)
-  | Path.Pdot (p,s,_) -> Longident.Ldot (path_to_lid p, s)
+let rec path_to_lid : Path.t -> Longident.t = function
+  | Path.Pident i       -> Longident.Lident (Ident.name i)
+  | Path.Pdot (p,s,_)   -> Longident.Ldot (path_to_lid p, s)
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
-
+(*
 (* based on code taken from typing/parmatch.ml *)
 
 let clean_copy ty =
@@ -1286,20 +1297,6 @@ let rec trx_e n exp =
         call_trx_mkcsp exp None li
   end
 
-and trx_me me = match me.mod_desc with
-| Tmod_ident i -> me
-| Tmod_structure str ->
-    {me with mod_desc =
-     Tmod_structure (trx_structure str)}
-| Tmod_functor (i,t,me1) ->
-    {me with mod_desc =
-     Tmod_functor (i,t, trx_me me1)}
-| Tmod_apply (me1,me2,mc) ->
-    {me with mod_desc =
-     Tmod_apply (trx_me me1, trx_me me2, mc)}
-| Tmod_constraint (me,mt,mc) ->
-    {me with mod_desc =
-     Tmod_constraint (trx_me me, mt, mc)}
 
 
 and trx_ce ce = match ce.cl_desc with
@@ -1341,84 +1338,83 @@ and trx_cf = function
       in Cf_let(rf, pel', iel')
   | Cf_init e -> Cf_init (trx_e 0 e)
         
-(* propagate trx_e 0 - to structures *)
-and trx_structure_item si = match si with
-  Tstr_eval e -> Tstr_eval (trx_e 0 e)
-| Tstr_value (rf,pel) ->
-    Tstr_value(rf, List.map (fun (p,e) -> (p, trx_e 0 e)) pel)
-| Tstr_primitive (i,vd) -> si
-| Tstr_type idl -> si
-| Tstr_exception (i,ed) -> si
-| Tstr_exn_rebind (i,p) -> si
-| Tstr_module (i,me) ->
-    Tstr_module (i, trx_me me)
-| Tstr_modtype (i,mt) -> si
-| Tstr_open p -> si
-| Tstr_class l ->
-    Tstr_class (List.map (fun (i,n,sl,ce,vf) -> (i,n,sl, trx_ce ce,vf)) l)
-| Tstr_cltype idl -> si
-| Tstr_include (me,il) -> Tstr_include (trx_me me, il)
-| Tstr_recmodule imel ->
-    let f (i,me) = (i, trx_me me)
-    in Tstr_recmodule (List.map f imel)
-
-
-and trx_structure str =
-  List.map trx_structure_item str
-
-
-(* print_obj is taken from tools/dumpobj.ml,
-  replacing printf with fprintf 
 *)
-open Format
-let same_custom x y =
-  Obj.field x 0 = Obj.field (Obj.repr y) 0
 
-let print_obj =
- let rec loop depthlim ppf x =
-  if Obj.is_block x then begin
-    let tag = Obj.tag x in
-    if tag = Obj.string_tag then
-        fprintf ppf "%S" (Obj.magic x : string)
-    else if tag = Obj.double_tag then
-        fprintf ppf "%.12g" (Obj.magic x : float)
-    else if tag = Obj.double_array_tag then begin
-        let a = (Obj.magic x : float array) in
-        fprintf ppf "[|";
-        for i = 0 to Array.length a - 1 do
-          if i > 0 then fprintf ppf ", ";
-          fprintf ppf "%.12g" a.(i)
-        done;
-        fprintf ppf "|]"
-    end else if tag = Obj.custom_tag && same_custom x 0l then
-        fprintf ppf "%ldl" (Obj.magic x : int32)
-    else if tag = Obj.custom_tag && same_custom x 0n then
-        fprintf ppf "%ndn" (Obj.magic x : nativeint)
-    else if tag = Obj.custom_tag && same_custom x 0L then
-        fprintf ppf "%LdL" (Obj.magic x : int64)
-    else if tag < Obj.no_scan_tag then begin
-        fprintf ppf "<%d>" (Obj.tag x);
-        let looprec =
-	  if depthlim = 0 then
-	    fun ppf x -> fprintf ppf "..."
-	  else loop (pred depthlim) in
-        match Obj.size x with
-          0 -> ()
-        | 1 ->
-            fprintf ppf "(%a)" looprec (Obj.field x 0)
-        | n ->
-            fprintf ppf "(%a" looprec (Obj.field x 0);
-            for i = 1 to n - 1 do
-              fprintf ppf ", %a" looprec (Obj.field x i)
-            done;
-            fprintf ppf ")"
-    end else
-        fprintf ppf "<tag %d>" tag
-  end else
-    fprintf ppf "%d" (Obj.magic x : int)
- in loop 3
+(* Functions to help the traversal and mapping of a tree.
+   We assume that every tree mapping function of the type 'a -> 'a
+   throws the exception Not_modified if the tree has not been
+   modified.
+   This protocol helps minimize garbage and prevent useless tree
+   duplication.
+*)
 
+exception Not_modified
 
+let replace_list : ('a -> 'a) -> 'a list -> 'a list = fun f l ->
+  let rec loop mdf = function
+  | [] -> if mdf then [] else raise Not_modified
+  | h::t -> match (try Some (f h) with Not_modified -> None) with
+             | Some h -> h :: loop true t
+             | None   -> h :: loop mdf  t
+  in loop false l
+
+let replace_pair : ('a -> 'a) -> ('b -> 'b) -> 'a *'b -> 'a * 'b =
+  fun f g (x,y) ->
+  match ((try Some (f x) with Not_modified -> None),
+         (try Some (g y) with Not_modified -> None)) with
+  | (None,None)      -> raise Not_modified
+  | (Some x, None)   -> (x,y)
+  | (None, Some y)   -> (x,y)
+  | (Some x, Some y) -> (x,y)
+
+(* The main function to scan the typed tree at the 0 level and
+   detect brackets 
+*)
+
+let rec trx_structure str =
+  {str with str_items = 
+  replace_list (fun si -> {si with str_desc = trx_structure_item si.str_desc})
+           str.str_items}
+
+and trx_structure_item = function
+| Tstr_eval e -> Tstr_eval (trx_expression e)
+| Tstr_value (rf,pel) ->
+    Tstr_value(rf, replace_list (fun (p,e) -> (p, trx_expression e)) pel)
+| Tstr_primitive (_,_,_) 
+| Tstr_type _
+| Tstr_exception (_,_,_)
+| Tstr_exn_rebind (_,_,_,_) -> raise Not_modified
+| Tstr_module (i,l,me) -> Tstr_module (i, l, trx_me me)
+| Tstr_recmodule l ->
+  Tstr_recmodule (replace_list (fun (i,l,mt,me) -> (i,l,mt,trx_me me)) l)
+| Tstr_modtype (_,_,_)
+| Tstr_open (_,_) -> raise Not_modified
+| Tstr_class l ->
+    Tstr_class (replace_list (fun (dcl,sl,vf) -> (trx_ce dcl,sl,vf)) l)
+| Tstr_class_type _ -> raise Not_modified
+| Tstr_include (me,il) -> Tstr_include (trx_me me, il)
+
+and trx_me me = 
+  {me with mod_desc = trx_me_desc me.mod_desc} 
+
+and trx_me_desc = function
+| Tmod_ident _ -> raise Not_modified
+| Tmod_structure str -> Tmod_structure (trx_structure str)
+| Tmod_functor (i,l,t,me) -> Tmod_functor (i,l,t, trx_me me)
+| Tmod_apply (me1,me2,mc) ->
+  let (me1,me2) = replace_pair trx_me trx_me (me1,me2) in
+  Tmod_apply (me1, me2, mc)
+| Tmod_constraint (me,mt,mtc,mc) -> Tmod_constraint (trx_me me, mt, mtc, mc)
+| Tmod_unpack (e,mt) -> Tmod_unpack (trx_expression e,mt)
+
+and trx_expression x = failwith "na"
+and trx_ce x = failwith "na"
+
+(* Override the recursive function: public interface *)
+let trx_structure str = 
+  try trx_structure str with Not_modified -> str
+
+  
 (* Obsolete: we never quite handled modules within the code
 
 and quote_me n exp me = match me.mod_desc waith
