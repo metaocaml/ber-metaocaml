@@ -1,17 +1,3 @@
-open Parsetree
-open Asttypes
-open Misc
-open Typedtree
-open Ctype
-open Types
-(*
-open Parmatch
-open Path
-open Ident
-open Env
-open Typecore
-*)
-
 (*
   The goal of this file is to post-process the Typedtree
   after the type checking and before the code generation to
@@ -40,7 +26,25 @@ We transform x if it was written Pexp_ident li, or
 in tree terms
 Texp_construct ("Pexp_ident", [
 
+This file is based on trx.ml from the original MetaOCaml,
+but it is almost completely re-written.
+
 *)
+
+open Parsetree
+open Asttypes
+open Misc
+open Typedtree
+open Ctype
+open Types
+(*
+open Parmatch
+open Path
+open Ident
+open Env
+open Typecore
+*)
+
 
 
 (* BER MetaOCaml version string *)
@@ -827,7 +831,7 @@ let rec trx_e n exp =
 	      (Warnings.Camlp4 ("Stage for var is set to implicit 0:" ^ 
 	       Path.name i ^ "\n")));
 	    [] in
-        if stage = [] then
+        if stage = [] then              (* or stage < n? We would typecheck again*)
             let _ = Env.make_env_pure exp.exp_env in
             let _ = Env.update_ident_timestamp exp.exp_env in
             let v = (Some {exp with exp_type = instance vd.val_type})
@@ -1340,7 +1344,7 @@ and trx_cf = function
 and trx_exp exp =
   {exp with exp_desc = trx_expression exp.exp_desc}
 
-and trx_pelist = replace_list (fun (p,e) -> (p,trx_exp e))
+and trx_pelist l = replace_list (fun (p,e) -> (p,trx_exp e)) l
 and trx_expression = function
 | Texp_ident (_,_,_)
 | Texp_constant _ -> raise Not_modified

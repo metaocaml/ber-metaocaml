@@ -12,6 +12,7 @@ val meta_version : string
 *)
 val trx_structure: Typedtree.structure -> Typedtree.structure
 
+(*
 val longidenttostring : Longident.t -> string
 val gensymlongident : Longident.t -> Longident.t
 val reset_gensymstring_counter : unit -> unit
@@ -19,3 +20,4 @@ val reset_gensymstring_counter : unit -> unit
 val mkcsp : Obj.t -> 
   Typedtree.expression option  -> Longident.t -> Parsetree.expression
 
+*)
