@@ -1,3 +1,7 @@
+January 7-12, 2013
+	Beginning the port to OCaml 4.00.1. The basic changes to OCaml
+	are done. Started work on re-writing trx.ml
+
 December 28, 2012
 	Version N004 released
 

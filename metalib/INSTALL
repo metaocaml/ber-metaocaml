@@ -27,7 +27,8 @@ among other places.
    make patch
 
 
-3. Bootstrap the patched OCaml
+3. Build the patched OCaml as usual: make all
+
    In the OCaml distribution directory, do
 
     make core

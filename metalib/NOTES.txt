@@ -3,6 +3,23 @@
 # NNNXXX Use compilerlibs as much as possible
 
 
+   How to minimize changes:
+   Strictly speaking, we don't need to change typedtree or
+   parsetree. We can just add functions with distinguished names.
+   And add printers and add to the type checker. It helps
+   if OCaml added one node to parsetree Pexp_extension
+   and a similar node to typed tree. The user may register
+   extensions, invoked by the type checker, printer, etc.
+   to type check the node, etc.
+
+   Can I get rid of run as a special form? Just use first-class
+   polymorphism and check generalization.
+
+trx.ml -- the traversal of the entire Typedtree looking for brackets
+to replace is completely re-written. Now we maintain sharing as much
+as possible. If the tree has no brackets, it is retured as it was.
+Previously, it was copied.
+
   * Main differences from the original MetaOCaml
 
 -- Added metalib (aka ber-metaocaml) directory: the MetaOCaml library, 
@@ -39,6 +56,10 @@ Const_csp_value has some merit for bytecode: consider a constant
 that refers to a big array, or even array in ancient. Writing
 it as a literal is ungainly. It could also help syntactic extensions,
 
+   unify printing functions for various trees and make them
+   prettier. fmt_longident_aux occurs at least twice.
+   (And so does format_path?) Add them to longident and path
+   modules.
 
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
 -no-camlp4 -no-graph

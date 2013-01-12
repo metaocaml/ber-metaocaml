@@ -30,9 +30,13 @@ done    ./typing/cmt_format.ml    did not exist before, trivial changes
 done	./typing/env.mli
 done	./typing/env.ml
 
-		./typing/typecore.mli
-		./typing/typecore.ml
-		./typing/typemod.ml   Newly changed
+done	./typing/typecore.mli
+done	./typing/typecore.ml
+done	./typing/typemod.ml 
+
+done    ./tools/untypeast.ml     did not exist before, trivial changes
+done    ./tools/typedtreeIter.ml did not exist before, trivial changes
+
 
 		./typing/trx.mli
 		./typing/trx.ml 
@@ -40,7 +44,6 @@ done	./typing/env.ml
 
 		./typing/ident.ml
 		./typing/ident.mli
-
 		./typing/typeclass.ml   No longer changed
 
 ./typing/unused_var.ml  No longer present
