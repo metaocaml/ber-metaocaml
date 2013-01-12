@@ -1,14 +1,16 @@
 open Parsetree
-open Misc
 open Asttypes
+open Misc
+open Typedtree
 open Ctype
 open Types
-open Typedtree
+(*
 open Parmatch
 open Path
 open Ident
 open Env
 open Typecore
+*)
 
 (*
   The goal of this file is to post-process the Typedtree
@@ -112,6 +114,25 @@ let rec path_to_lid : Path.t -> Longident.t = function
   | Path.Pdot (p,s,_)   -> Longident.Ldot (path_to_lid p, s)
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
+
+(* Building Texp nodes *)
+(* Env.initial is used for all look-ups. Unqualified identifiers
+   must be found there. For qualified identifiers, Env.lookup
+   functions look things up in the persistent structures, loading them
+   up as needed.
+*)
+
+(* Should we add memoization? *)
+
+(* Building a node for an identifier with a given name *)
+let texp_ident : string -> expression = fun name ->
+  let lid     = Longident.parse name in
+  let (p, vd) = try Env.lookup_value lid Env.initial 
+                with Not_found -> fatal_error ("Trx.find_value: " ^ name) in
+  { exp_desc = Texp_ident (p,mknoloc lid, vd);
+    exp_loc  = Location.none; exp_extra = [];
+    exp_type = instance Env.initial vd.val_type;
+    exp_env  = Env.initial }
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -796,113 +817,6 @@ let call_trx_mkcsp exp v li =
 
 (* Postprocessing expressions at level n *)
 let rec trx_e n exp =
-  if n = 0 then begin               (*  level 0  *)
-    match exp.exp_desc with
-      Texp_ident _ -> exp
-    | Texp_constant _ -> exp
-    | Texp_let (f,pel,e) ->
-        { exp with exp_desc =
-          Texp_let (f,
-                    List.map (map_pi2 (trx_e n)) pel, 
-                    trx_e n e) }
-    | Texp_function (pel, partial) ->
-        { exp with exp_desc =
-          Texp_function (List.map (map_pi2 (trx_e n)) pel, partial) }
-    | Texp_apply (e,eool) ->
-        { exp with exp_desc =
-          Texp_apply (trx_e n e,
-                      List.map (map_pi1 (map_option (trx_e n))) eool) }
-    | Texp_match (e,pel,partial) ->
-        { exp with exp_desc =
-          Texp_match(trx_e n e,
-                     List.map (map_pi2 (trx_e n)) pel,
-                     partial) }
-    | Texp_try (e,pel) ->
-        { exp with exp_desc =
-          Texp_try(trx_e n e,
-                   List.map (map_pi2 (trx_e n)) pel) }
-    | Texp_tuple el ->
-        { exp with exp_desc =
-          Texp_tuple (List.map (trx_e n) el)}
-    | Texp_construct (cd,el) ->
-        { exp with exp_desc = 
-          Texp_construct (cd, List.map (trx_e n) el)}
-    | Texp_variant (label, eo) ->
-        { exp with exp_desc =
-          Texp_variant (label, map_option (trx_e n) eo) }
-    | Texp_record (del, eo) ->
-        { exp with exp_desc =
-          Texp_record (List.map (map_pi2 (trx_e n)) del,
-                       map_option (trx_e n) eo) }
-    | Texp_field (e,ld) ->
-        { exp with exp_desc =
-          Texp_field(trx_e n e, ld)}
-    | Texp_setfield (e1,ld,e2) ->
-        { exp with exp_desc =
-          Texp_setfield(trx_e n e1, ld, trx_e n e2) }
-    | Texp_array el ->
-        { exp with exp_desc =
-          Texp_array (List.map (trx_e n) el) }
-    | Texp_ifthenelse (e1,e2,eo) ->
-        { exp with exp_desc =
-          Texp_ifthenelse (trx_e n e1,
-                           trx_e n e2,
-                           map_option (trx_e n) eo) }
-    | Texp_sequence (e1,e2) ->
-        { exp with exp_desc =
-          Texp_sequence(trx_e n e1, trx_e n e2) }
-    | Texp_while (e1,e2) ->
-        { exp with exp_desc =
-          Texp_while(trx_e n e1, trx_e n e2) }
-    | Texp_for (id,e1,e2,df,e3) ->
-        { exp with exp_desc = 
-          Texp_for (id,
-                    trx_e n e1,
-                    trx_e n e2,
-                    df,
-                    trx_e n e3) }
-    | Texp_when (e1,e2) ->
-        { exp with exp_desc =
-          Texp_when(trx_e n e1, trx_e n e2) }
-    | Texp_send (e,m) ->
-        { exp with exp_desc =
-          Texp_send (trx_e n e, m)
-        }
-    | Texp_new (p,d) -> exp
-    | Texp_instvar (p1,p2) -> exp
-    | Texp_setinstvar (p1,p2,e) ->
-        { exp with exp_desc =
-          Texp_setinstvar(p1,p2, trx_e n e)
-        }
-    | Texp_override (p,pel) ->
-        { exp with exp_desc =
-          Texp_override(p, List.map (fun (p,e) -> (p, trx_e n e)) pel)
-        }
-    | Texp_letmodule (i,me,e) ->
-        { exp with exp_desc =
-          Texp_letmodule(i, trx_me me, trx_e n e) }
-    | Texp_assert e ->
-        {exp with exp_desc = Texp_assert (trx_e n e)}
-    | Texp_assertfalse -> exp
-    | Texp_lazy e ->
-        {exp with exp_desc = Texp_lazy (trx_e n e)}
-    | Texp_object ({ cl_field = cfl; cl_meths = ms },csig,sl) ->
-        let cs = { cl_field = List.map trx_cf cfl; cl_meths = ms }
-        in {exp with exp_desc =  Texp_object (cs,csig,sl)}
-    | Texp_bracket e -> 
-        let e' = trx_e (n+1) e
-        in {exp with exp_desc = e'.exp_desc} 
-    | Texp_escape e -> assert false
-    | Texp_run e ->
-        let exec = 
-	  run_expression in
-        {exp with
-         exp_desc = Texp_apply(exec exp,
-                               [(Some (trx_e n e), Required)])}
-    | Texp_cspval (v,li) -> exp		(* code generator will deal with that *)
-(*  | _ -> fatal_error ("Trx.trx_e level 0: case not implemented yet") *)
-
-  end else begin                           (* level n+1 *)
     match exp.exp_desc with
       (* function is called at run time,so it gets compiled, if we can keep the information at this point *)
       Texp_ident (i,vd) ->
@@ -1296,49 +1210,16 @@ let rec trx_e n exp =
     | Texp_cspval (m,li) ->
         call_trx_mkcsp exp None li
   end
-
-
-
-and trx_ce ce = match ce.cl_desc with
-| Tclass_ident p -> ce
-| Tclass_structure { cl_field = cfl; cl_meths = ms } ->
-    {ce with cl_desc =
-     Tclass_structure { cl_field = List.map trx_cf cfl;
-                        cl_meths = ms }
-   }
-| Tclass_fun (p,iel,ce,pt) ->
-    {ce with cl_desc =
-     Tclass_fun (p,iel, trx_ce ce, pt)
-   }
-| Tclass_apply (ce,eool) ->
-    {ce with cl_desc =
-     Tclass_apply (trx_ce ce,
-                   List.map (fun (eo,o) -> (map_option (fun e -> trx_e 0 e) eo, o)) eool)
-   }
-| Tclass_let (rf,pel,iel,ce) ->
-    let pel' = List.map (fun (p,e) -> (p, trx_e 0 e)) pel in
-    let iel' = List.map (fun (i,e) -> (i, trx_e 0 e)) iel in
-    let ce' = trx_ce ce in
-    {ce with cl_desc = 
-     Tclass_let (rf,pel',iel',ce')
-   }
-| Tclass_constraint (ce,sl1,sl2,c) ->
-    {ce with cl_desc = 
-     Tclass_constraint (trx_ce ce, sl1, sl2, c)
-   }
-
-and trx_cf = function
-  | Cf_inher (ce,sil1,sil2) -> Cf_inher(trx_ce ce, sil1, sil2)
-  | Cf_val (s,i,None,o) -> Cf_val(s,i,None,o)
-  | Cf_val (s,i,Some e,o) -> Cf_val(s,i, Some (trx_e 0 e),o)
-  | Cf_meth (s,e) -> Cf_meth(s, trx_e 0 e)
-  | Cf_let (rf,pel,iel) ->
-      let pel' = List.map (fun (p,e) -> (p, trx_e 0 e)) pel in
-      let iel' = List.map (fun (i,e) -> (i, trx_e 0 e)) iel
-      in Cf_let(rf, pel', iel')
-  | Cf_init e -> Cf_init (trx_e 0 e)
-        
 *)
+
+(* The main function to translate away brackets. It receives
+   an expression at the level n > 0.
+*)
+
+let rec trx_bracket : 
+  (expression -> expression) -> (* 0-level traversal *)
+  int -> (expression -> expression_desc) = fun trx_exp n -> function
+  | _ -> failwith "na"
 
 (* Functions to help the traversal and mapping of a tree.
    We assume that every tree mapping function of the type 'a -> 'a
@@ -1358,7 +1239,7 @@ let replace_list : ('a -> 'a) -> 'a list -> 'a list = fun f l ->
              | None   -> h :: loop mdf  t
   in loop false l
 
-let replace_pair : ('a -> 'a) -> ('b -> 'b) -> 'a *'b -> 'a * 'b =
+let replace_pair : ('a -> 'a) -> ('b -> 'b) -> 'a * 'b -> 'a * 'b =
   fun f g (x,y) ->
   match ((try Some (f x) with Not_modified -> None),
          (try Some (g y) with Not_modified -> None)) with
@@ -1367,19 +1248,23 @@ let replace_pair : ('a -> 'a) -> ('b -> 'b) -> 'a *'b -> 'a * 'b =
   | (None, Some y)   -> (x,y)
   | (Some x, Some y) -> (x,y)
 
+let replace_opt : ('a -> 'a) -> 'a option -> 'a option = fun f -> function
+  | Some e -> Some (f e)
+  | None   -> raise Not_modified
+
 (* The main function to scan the typed tree at the 0 level and
    detect brackets 
 *)
 
-let rec trx_structure str =
+let rec trx_struct str =
   {str with str_items = 
-  replace_list (fun si -> {si with str_desc = trx_structure_item si.str_desc})
+  replace_list (fun si -> {si with str_desc = trx_struct_item si.str_desc})
            str.str_items}
 
-and trx_structure_item = function
-| Tstr_eval e -> Tstr_eval (trx_expression e)
+and trx_struct_item = function
+| Tstr_eval e -> Tstr_eval (trx_exp e)
 | Tstr_value (rf,pel) ->
-    Tstr_value(rf, replace_list (fun (p,e) -> (p, trx_expression e)) pel)
+    Tstr_value(rf, replace_list (fun (p,e) -> (p, trx_exp e)) pel)
 | Tstr_primitive (_,_,_) 
 | Tstr_type _
 | Tstr_exception (_,_,_)
@@ -1390,7 +1275,7 @@ and trx_structure_item = function
 | Tstr_modtype (_,_,_)
 | Tstr_open (_,_) -> raise Not_modified
 | Tstr_class l ->
-    Tstr_class (replace_list (fun (dcl,sl,vf) -> (trx_ce dcl,sl,vf)) l)
+    Tstr_class (replace_list (fun (dcl,sl,vf) -> (trx_cdcl dcl,sl,vf)) l)
 | Tstr_class_type _ -> raise Not_modified
 | Tstr_include (me,il) -> Tstr_include (trx_me me, il)
 
@@ -1399,20 +1284,140 @@ and trx_me me =
 
 and trx_me_desc = function
 | Tmod_ident _ -> raise Not_modified
-| Tmod_structure str -> Tmod_structure (trx_structure str)
+| Tmod_structure str -> Tmod_structure (trx_struct str)
 | Tmod_functor (i,l,t,me) -> Tmod_functor (i,l,t, trx_me me)
 | Tmod_apply (me1,me2,mc) ->
   let (me1,me2) = replace_pair trx_me trx_me (me1,me2) in
   Tmod_apply (me1, me2, mc)
 | Tmod_constraint (me,mt,mtc,mc) -> Tmod_constraint (trx_me me, mt, mtc, mc)
-| Tmod_unpack (e,mt) -> Tmod_unpack (trx_expression e,mt)
+| Tmod_unpack (e,mt) -> Tmod_unpack (trx_exp e,mt)
 
-and trx_expression x = failwith "na"
-and trx_ce x = failwith "na"
+and trx_cdcl class_decl =
+  {class_decl with ci_expr = trx_ce class_decl.ci_expr}
 
-(* Override the recursive function: public interface *)
+and trx_ce class_expr =
+  {class_expr with cl_desc = trx_ce_desc class_expr.cl_desc}
+
+and trx_cl_struct cs =
+  {cs with cstr_fields = 
+     replace_list (fun cf -> {cf with cf_desc = trx_cf cf.cf_desc})
+                  cs.cstr_fields}
+
+and trx_ce_desc = function
+| Tcl_ident (_,_,_) -> raise Not_modified
+| Tcl_structure cs ->
+  Tcl_structure (trx_cl_struct cs)
+| Tcl_fun (l,p,el,ce,pa) ->
+  let (el,ce) = 
+        replace_pair (replace_list (fun (i,l,e) -> (i,l,trx_exp e)))
+                     trx_ce (el,ce) in
+  Tcl_fun (l,p,el,ce,pa)
+| Tcl_apply (ce,el) ->
+  let repel (l,eo,o) = (l,replace_opt trx_exp eo,o) in
+  let (ce,el) = replace_pair trx_ce (replace_list repel) (ce,el) in
+  Tcl_apply (ce,el)
+| Tcl_let (rf,el1,el2,ce) ->
+  let repel1 = replace_list (fun (p,e) -> (p,trx_exp e)) in
+  let repel2 = replace_list (fun (i,l,e) -> (i,l,trx_exp e)) in
+  let ((el1,el2),ce) = replace_pair (replace_pair repel1 repel2) trx_ce
+                        ((el1,el2),ce)
+  in Tcl_let (rf,el1,el2,ce)
+| Tcl_constraint (ce,ct,sl1,sl2,cty) ->
+  Tcl_constraint (trx_ce ce,ct,sl1,sl2,cty)
+
+and trx_cf = function
+| Tcf_inher (ofl,ce,so,sl1,sl2) ->
+  Tcf_inher (ofl,trx_ce ce,so,sl1,sl2)
+| Tcf_val (_,_,_,_,Tcfk_virtual _,_) -> raise Not_modified
+| Tcf_val (s,l,mf,i,Tcfk_concrete e,b) ->
+  Tcf_val (s,l,mf,i,Tcfk_concrete (trx_exp e),b)
+| Tcf_meth (s,l,pf,Tcfk_virtual _,_) -> raise Not_modified
+| Tcf_meth (s,l,pf,Tcfk_concrete e,b) ->
+  Tcf_meth (s,l,pf,Tcfk_concrete (trx_exp e),b)
+| Tcf_constr (_,_) -> raise Not_modified
+| Tcf_init e -> Tcf_init (trx_exp e)
+
+and trx_exp exp =
+  {exp with exp_desc = trx_expression exp.exp_desc}
+
+and trx_pelist = replace_list (fun (p,e) -> (p,trx_exp e))
+and trx_expression = function
+| Texp_ident (_,_,_)
+| Texp_constant _ -> raise Not_modified
+| Texp_let (rf, el, e) ->
+  let (el,e) = replace_pair trx_pelist trx_exp (el,e)
+  in Texp_let (rf, el, e)
+| Texp_function (l,el,p) ->
+  Texp_function (l,trx_pelist el,p)
+| Texp_apply (e,el) ->
+  let repl (l,eo,op) = (l,replace_opt trx_exp eo,op) in
+  let (e,el) = replace_pair trx_exp (replace_list repl) (e,el)
+  in Texp_apply (e,el)
+| Texp_match (e,el,p) ->
+  let (e,el) = replace_pair trx_exp trx_pelist (e,el)
+  in Texp_match (e,el,p)
+| Texp_try (e,el) ->
+  let (e,el) = replace_pair trx_exp trx_pelist (e,el)
+  in Texp_try (e,el)
+| Texp_tuple l -> Texp_tuple (replace_list trx_exp l)
+| Texp_construct (p,l,cd,el,b) ->
+  Texp_construct (p,l,cd,replace_list trx_exp el,b)
+| Texp_variant (l,eo) -> Texp_variant (l,replace_opt trx_exp eo)
+| Texp_record (ll,eo) ->
+  let repll (p,l,ld,e) = (p,l,ld,trx_exp e) in
+  let (ll,eo) = replace_pair (replace_list repll) (replace_opt trx_exp) (ll,eo)
+  in Texp_record (ll,eo)
+| Texp_field (e,p,l,ld) -> Texp_field (trx_exp e,p,l,ld)
+| Texp_setfield (e1,p,l,ld,e2) ->
+  let (e1,e2) = replace_pair trx_exp trx_exp (e1,e2)
+  in Texp_setfield (e1,p,l,ld,e2)
+| Texp_array el -> Texp_array (replace_list trx_exp el)
+| Texp_ifthenelse (e1,e2,eo) ->
+  let ((e1,e2),eo) = replace_pair (replace_pair trx_exp trx_exp) 
+                                  (replace_opt trx_exp) ((e1,e2),eo)
+  in Texp_ifthenelse (e1,e2,eo)
+| Texp_sequence (e1,e2) -> 
+  let (e1,e2) = replace_pair trx_exp trx_exp (e1,e2)
+  in Texp_sequence (e1,e2)
+| Texp_while (e1,e2) ->
+  let (e1,e2) = replace_pair trx_exp trx_exp (e1,e2)
+  in Texp_while (e1,e2)
+| Texp_for (i,l,e1,e2,df,e3) ->
+  let ((e1,e2),e3) = replace_pair (replace_pair trx_exp trx_exp) 
+                                  trx_exp ((e1,e2),e3)
+  in Texp_for (i,l,e1,e2,df,e3)
+| Texp_when (e1,e2) ->
+  let (e1,e2) = replace_pair trx_exp trx_exp (e1,e2)
+  in Texp_when (e1,e2)
+| Texp_send (e1,m,eo) ->
+  let (e1,eo) = replace_pair trx_exp (replace_opt trx_exp) (e1,eo)
+  in Texp_send (e1,m,eo)
+| Texp_new (_,_,_)
+| Texp_instvar (_,_,_) -> raise Not_modified
+| Texp_setinstvar (p1,p2,l,e) -> Texp_setinstvar (p1,p2,l,trx_exp e)
+| Texp_override (p, el) ->
+  Texp_override (p, replace_list (fun (p,l,e) -> (p,l,trx_exp e)) el)
+| Texp_letmodule (i,l,me,e) ->
+  let (me,e) = replace_pair trx_me trx_exp (me,e)
+  in Texp_letmodule (i,l,me,e)
+| Texp_assert e -> Texp_assert (trx_exp e)
+| Texp_assertfalse -> raise Not_modified
+| Texp_lazy e -> Texp_lazy (trx_exp e)
+| Texp_object (cs,sl) -> Texp_object (trx_cl_struct cs,sl)
+| Texp_pack me -> Texp_pack (trx_me me)
+
+| Texp_bracket e -> trx_bracket trx_exp 1 e
+
+| Texp_escape _ -> assert false         (* Not possible in well-typed code *)
+| Texp_run e -> 
+  Texp_apply(texp_ident "Runcode.run'",
+             [("",Some (trx_exp e), Required)])
+| Texp_cspval (_,_) -> raise Not_modified
+
+
+(* public interface *)
 let trx_structure str = 
-  try trx_structure str with Not_modified -> str
+  try trx_struct str with Not_modified -> str
 
   
 (* Obsolete: we never quite handled modules within the code
