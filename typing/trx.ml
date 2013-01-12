@@ -7,18 +7,50 @@ open Typedtree
 open Parmatch
 open Path
 open Ident
-open Linenum
 open Env
 open Typecore
+
+(*
+  The goal of this file is to post-process the Typedtree
+  after the type checking and before the code generation to
+  get rid of bracket, esc and run. The main function is
+  trx_structure, which initiates the traversal and
+  transforms every found expression with trx_e. The real
+  transformation is done by trx_e.
+
+  For example,
+  <succ 1> gets transformed to mkApp <succ> <1> and eventually to
+  mkApp (mkIdent "succ") (mkConst 1)
+  (one may say that we `push brackets inside')
+
+  So we replace bracket with calls to functions thayt construct
+  Parsetree, which is the representation of code type.
+
+  In terms of trees:
+  After the type checking, <1> is represented as
+  Texp_bracket (Texp_constant (Constant_int 1))
+  We transform it to
+  Texp_apply (Texp_ident "mkConstant") []
+
+Future-stage identifier x was represented in tree as 
+Texp_ident (ident,vd)
+We transform x if it was written Pexp_ident li, or
+in tree terms
+Texp_construct ("Pexp_ident", [
+
+XXX if desc is mutable now, I can use Texp_tree traversal...
+
+*)
+
 
 (* BER MetaOCaml version string *)
 let meta_version  = "N 100"
 
-exception TypeCheckingError
+exception TrxError of string
 
-(* Checks to see if a path refers to an identifier, exception,
-   constructor available from an external module. That is, the run-time
-   compiler invoked by run can get the definition for the identifier from
+(* Check to see if a path refers to an identifier, exception, or
+   constructor available from an external module. If so, the run-time
+   compiler invoked by .! can get the definition for the identifier from
    a .cmi file. The value of an external identifier can be obtained from
    a .cmo file.
 *)
@@ -27,6 +59,16 @@ let is_external = function
   | Path.Papply _ -> false
   | Path.Pdot(Path.Pident id, _,_) -> Ident.persistent id
 
+
+(* Check to make sure a constructor, label, exception, etc.
+   have the name that we can put into AST.
+   Local names can't be put into AST since the type env in which
+   they are declared is not present.
+*)
+let check_path_quotable msg path =
+  if not (is_external path) then
+    raise (TrxError (msg ^ 
+     " cannot be used within brackets. Put into a separate file"))
 
 (* Test if we should refer to a CSP value by name rather than by
    value
@@ -48,7 +90,7 @@ let ident_can_be_quoted = function
   | _ -> false
 *)
 
-let ident_can_be_quoted = is_external   (* Perhaps a better version *)
+let ident_can_be_quoted = is_external   (* Perhaps this is a better version *)
 
 (* Convert the path to an identifier. Since the path is assumed to be
    `global', time stamps don't matter and we can use just strings.
@@ -118,12 +160,17 @@ let update_lid lid name =
    For example, Parsetree.Ppat_any is reconstructed from
    type: Parsetree.pattern_desc
    name: Ppat_any                                *)
+
+XXX use:	check_path_quotable p;
+
 let get_constr_lid tag ty tenv = 
  match tag with
  | Cstr_exception path -> path_to_lid path
  | _ -> let name = get_constr_name tag ty tenv
         and type_path = get_type_path ty tenv
         in update_lid (path_to_lid type_path) name
+
+XXX use: 	check_path_quotable p;
 
 let get_record_lids ty tenv =
   let lbls = get_record_labels ty tenv in
@@ -184,8 +231,7 @@ let mkcsp v eo li =
           Pexp_ident (path_to_lid i)
 	| _ -> deflt)
   in {pexp_desc = rdesc;
-      pexp_loc = Location.none;
-      pexp_ext = None}			(* Only used for records, fields, etc*)
+      pexp_loc = Location.none}
 
 
 let map_option f o =
@@ -208,7 +254,7 @@ let map_pi1 f p =
     (x,y) -> (f x, y)
 
 let add_ifnew x l =
-  if List.exists (fun y -> y=x) l then l else x::l
+  if List.mem x l then l else x::l
 
 (* Unqualified indetifiers are looked up in the initial
    environment. Qualified identifiers are looked into (external)
@@ -265,7 +311,6 @@ let type_constant = function
 
 *)
 
-let type_string = lazy (find_type "string")
 let type_bool = lazy (find_type "bool")
 let type_location = lazy (find_type "Location.t")
 let pathval_location_none = lazy (find_value "Location.none")
@@ -293,20 +338,11 @@ let type_longident_t = lazy (find_type "Longident.t")
 let type_parsetree_expression = lazy (find_type "Parsetree.expression")
 let type_parsetree_pattern = lazy (find_type "Parsetree.pattern")
 let type_parsetree_structure_item = lazy (find_type "Parsetree.structure_item")
-let type_parsetree_module_expr = lazy (find_type "Parsetree.module_expr")
 let type_parsetree_core_type = lazy (find_type "Parsetree.core_type")
 let label_pexp_desc = lazy (find_label "Parsetree.pexp_desc")
 let label_pexp_loc  = lazy (find_label "Parsetree.pexp_loc")
-let label_pexp_ext  = lazy (find_label "Parsetree.pexp_ext")
 let label_ppat_desc = lazy (find_label "Parsetree.ppat_desc")
 let label_ppat_loc  = lazy (find_label "Parsetree.ppat_loc")
-let label_ppat_ext  = lazy (find_label "Parsetree.ppat_ext")
-let label_ptyp_desc = lazy (find_label "Parsetree.ptyp_desc")
-let label_ptyp_loc  = lazy (find_label "Parsetree.ptyp_loc")
-let label_pstr_desc = lazy (find_label "Parsetree.pstr_desc")
-let label_pstr_loc  = lazy (find_label "Parsetree.pstr_loc")
-let label_pmod_desc = lazy (find_label "Parsetree.pmod_desc")
-let label_pmod_loc  = lazy (find_label "Parsetree.pmod_loc")
 let label_loc_start = lazy (find_label "Location.loc_start")
 let label_loc_end   = lazy (find_label "Location.loc_end")
 let label_loc_ghost = lazy (find_label "Location.loc_ghost")
@@ -317,7 +353,6 @@ let label_pos_cnum = lazy (find_label "Lexing.pos_cnum")
 let type_parsetree_expression_desc = lazy (find_type "Parsetree.expression_desc")
 let type_parsetree_pattern_desc = lazy (find_type "Parsetree.pattern_desc")
 let type_parsetree_structure_item_desc = lazy (find_type "Parsetree.structure_item_desc")
-let type_parsetree_module_expr_desc = lazy (find_type "Parsetree.module_expr_desc")
 let type_core_type_desc = lazy (find_type "Parsetree.core_type_desc")
 let type_list       = lazy (find_type "int")  (* XXO bad hack.  Walid. *)
 let type_exp_option = lazy (find_type "int")  (* XXO bad hack.  Walid. *)
@@ -367,18 +402,6 @@ let constr_ppat_tuple         = lazy (find_constr "Parsetree.Ppat_tuple")
 let constr_longident_lident   = lazy (find_constr "Longident.Lident")
 let constr_longident_ldot     = lazy (find_constr "Longident.Ldot")
 let constr_longident_lapply   = lazy (find_constr "Longident.Lapply")
-let constr_ptyp_constr        = lazy (find_constr "Parsetree.Ptyp_constr")
-let constr_ptyp_arrow         = lazy (find_constr "Parsetree.Ptyp_arrow")
-let constr_ptyp_tuple         = lazy (find_constr "Parsetree.Ptyp_tuple")
-let constr_ptyp_subst         = lazy (find_constr "Parsetree.Ptyp_subst")
-let constr_ptyp_object        = lazy (find_constr "Parsetree.Ptyp_object")
-let constr_ptyp_class         = lazy (find_constr "Parsetree.Ptyp_class")
-let constr_ptyp_alias         = lazy (find_constr "Parsetree.Ptyp_alias")
-let constr_ptyp_variant       = lazy (find_constr "Parsetree.Ptyp_variant")
-let constr_ptyp_pvar          = lazy (find_constr "Parsetree.Ptyp_var")
-let constr_ptyp_any           = lazy (find_constr "Parsetree.Ptyp_any")
-let constr_pstr_value         = lazy (find_constr "Parsetree.Pstr_value")
-let constr_pmod_structure     = lazy (find_constr "Parsetree.Pmod_structure")
 
 let pathval_run_expression = lazy (find_value "Runcode.run'")
 let pathval_trx_longidenttostring = lazy (find_value "Trx.longidenttostring")
@@ -390,12 +413,6 @@ let run_expression exp =
   { exp with exp_type = instance v.val_type;
     exp_desc = Texp_ident(p, v) }
 
-(* ZZZ
-let trx_execute_expression exp =
-  let (p, v) = Lazy.force pathval_trx_execute_expression in
-  { exp with exp_type = instance v.val_type;
-    exp_desc = Texp_ident(p, v) }
-*)
   
 let trx_longidenttostring exp =
   let (p, v) = Lazy.force pathval_trx_longidenttostring in
@@ -576,92 +593,23 @@ let rec quote_ident exp path =
                         [quote_ident exp path1;
                          quote_ident exp path2]))
 
-(* support for native code *)
-let native_mode = ref false (* ZZZ
-  Should be a better way to detect native mode,
-  e.g., by the presence of some modules in asmcomp *)
 
-let remove_texp_cspval exp =
-  if !native_mode = false then exp else
-  failwith "native mode CSP are not impemented yet"
-(*
- ZZZ
-  match exp.exp_desc with
-  | Texp_cspval (v,l) ->
-      let i = add_csp_value (v,l) in
-      let exp' = {exp with exp_desc = Texp_constant (Const_int i)} in
-      let desc = if !initial_native_compilation
-        then (Texp_apply (trx_array_get exp, [(Some !local_csp_arr_texp, Required);(Some exp', Required)]))
-	else (Texp_apply (trx_get_csp_value exp, [(Some exp', Required)])) in
-      {exp with exp_desc = desc}
-  | _ -> assert false
-*)
-
-let mkParseTree_ext vo exp d =
-  let eo = match vo with
-  | None -> None
-  | Some exp' ->
-      Env.make_env_pure exp'.exp_env;
-      Env.update_ident_timestamp exp'.exp_env;
-      Some (remove_texp_cspval {exp with exp_desc = Texp_cspval (Obj.magic exp', Longident.parse "")})
-  in
+let mkParseTree exp d =
   {exp with
    exp_desc =
    Texp_record([Lazy.force label_pexp_desc,
                 mkExp exp type_parsetree_expression_desc d;
                 Lazy.force label_pexp_loc,
-                quote_location exp;
-                Lazy.force label_pexp_ext,
-                mkPexpOption exp eo],
+                quote_location exp],
                None) }
 
-
-let emtyexp_with_timestamp =
-  let e = { exp_desc = Texp_assertfalse;  (* dummy exp filled with random values *)
-            exp_loc = Location.none;
-            exp_type = Btype.newgenvar ();
-            exp_env = Env.empty }
-  in fun () -> {e with exp_env = Env.empty_with_timestamp () }
-
-let mkParseTree exp d =
-  mkParseTree_ext (Some (emtyexp_with_timestamp ())) exp d
-
-let mkParsePattern_ext vo exp d =
-  let eo = match vo with
-  | None -> None
-  | Some p ->
-      Env.make_env_pure p.pat_env;
-      Env.update_ident_timestamp p.pat_env;
-      Some (remove_texp_cspval {exp with exp_desc = Texp_cspval (Obj.magic p, Longident.parse "")})
-  in
+let mkParsePattern exp d =
   mkExp exp
     type_parsetree_pattern
     (Texp_record([Lazy.force label_ppat_desc, mkExp exp type_parsetree_pattern_desc d;
-                  Lazy.force label_ppat_loc, quote_location exp;
-                  Lazy.force label_ppat_ext, mkPexpOption exp eo],
+                  Lazy.force label_ppat_loc, quote_location exp],
                  None))
     
-let mkParsePattern exp d = 
-  mkParsePattern_ext None exp d
-
-
-(* @@@@@ *)
-let mkParseStructureItem exp d =
-  mkExp exp
-    type_parsetree_structure_item
-    (Texp_record([Lazy.force label_pstr_desc,
-                  mkExp exp type_parsetree_structure_item_desc d;
-                  Lazy.force label_pstr_loc, quote_location exp],
-                 None))
-
-let mkParseModuleExpr exp d =
-  mkExp exp
-    type_parsetree_module_expr
-    (Texp_record([Lazy.force label_pmod_desc,
-                  mkExp exp type_parsetree_module_expr_desc d;
-                  Lazy.force label_pmod_loc, quote_location exp],
-                 None))
-
 
 let rec mkPexpList exp l =
   match l with
@@ -703,15 +651,14 @@ let rec quote_list_as_expopt_forpats exp el =
            (Texp_construct(Lazy.force constr_ppat_tuple,
                                 [mkPexpList exp el])))
 
-let gensymstring_count = ref 0 (* OXX scope expanded to allow for resetting *)
+let gensymstring_count = ref 0
 
 (* generates a fresh identifier *)
 let gensymstring s =
   incr gensymstring_count;
   s ^ "_" ^ string_of_int !gensymstring_count
 
-(* OXX resets the counter used to ensure unique identifiers.
-   this behavior is supressed by the -noreset command. *)
+(* resets the counter used to ensure unique identifiers *)
 let reset_gensymstring_counter () = gensymstring_count := 0
 
 let gensymlongident li =
@@ -779,7 +726,7 @@ let rec mkPattern exp p =
                              [mkPexpList exp el]))
   | Tpat_construct ({cstr_tag=tag},pl) ->
       let lid = get_constr_lid tag p.pat_type p.pat_env in
-      mkParsePattern_ext (Some p) exp
+      mkParsePattern exp
         (Texp_construct(Lazy.force constr_ppat_construct,
                              [quote_longident exp lid;
                               quote_list_as_expopt_forpats exp
@@ -801,7 +748,7 @@ let rec mkPattern exp p =
           mkPexpTuple exp [quote_longident exp lid;
                            mkPattern exp p]
       in
-      mkParsePattern_ext (Some p) exp
+      mkParsePattern exp
         (Texp_construct(Lazy.force constr_ppat_record,
                              [mkPexpList exp
                                 (List.map get_idpat dpil)
@@ -827,14 +774,16 @@ let mkNewPEL exp pEl =
 
 (* The preprocessing transformation proper *)
 
+
 let call_trx_mkcsp exp v li =
-  let exp' = remove_texp_cspval {exp with exp_desc = Texp_cspval (Obj.magic v, Longident.parse "")}
-  and expli = remove_texp_cspval {exp with exp_desc = Texp_cspval (Obj.magic li, Longident.parse "")}
+  let exp' = {exp with exp_desc = Texp_cspval (Obj.magic v, Longident.parse "")}
+  and expli = {exp with exp_desc = Texp_cspval (Obj.magic li, Longident.parse "")}
   in {exp with exp_desc = 
       (Texp_apply (trx_mkcsp exp, [(Some exp, Required);
                                    (Some exp',Required);
                                    (Some expli,Required)]))}
 
+(* Postprocessing expressions at level n *)
 let rec trx_e n exp =
   if n = 0 then begin               (*  level 0  *)
     match exp.exp_desc with
@@ -935,12 +884,11 @@ let rec trx_e n exp =
     | Texp_escape e -> assert false
     | Texp_run e ->
         let exec = 
-	  (* ZZZ if !native_mode then trx_execute_expression else  *)
 	  run_expression in
         {exp with
          exp_desc = Texp_apply(exec exp,
                                [(Some (trx_e n e), Required)])}
-    | Texp_cspval (v,li) -> remove_texp_cspval exp
+    | Texp_cspval (v,li) -> exp		(* code generator will deal with that *)
 (*  | _ -> fatal_error ("Trx.trx_e level 0: case not implemented yet") *)
 
   end else begin                           (* level n+1 *)
@@ -1176,7 +1124,7 @@ let rec trx_e n exp =
                                [mkPexpList exp (List.map (trx_e n) el)]))
     | Texp_construct ({cstr_tag=tag}, el) ->
         let lid = get_constr_lid tag exp.exp_type exp.exp_env in
-        mkParseTree_ext (Some exp) exp
+        mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_construct,
                           [quote_longident exp lid;
                            quote_list_as_expopt_forexps exp
@@ -1196,14 +1144,14 @@ let rec trx_e n exp =
             [quote_longident exp lid;
              trx_e n e]
         in let iel = List.map mklidexp idel
-        in mkParseTree_ext (Some exp) exp 
+        in mkParseTree exp 
           (Texp_construct(Lazy.force constr_pexp_record,
                                [mkPexpList exp iel;
                                 mkPexpOption exp (map_option (trx_e n) eo)]))
     | Texp_field (e,ld) ->
         let lids = get_record_lids e.exp_type e.exp_env in
         let lid = List.nth lids ld.lbl_pos in
-        mkParseTree_ext (Some exp) exp
+        mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_field,
                                [trx_e n e;
                                 quote_longident exp lid]))
@@ -1211,7 +1159,7 @@ let rec trx_e n exp =
     | Texp_setfield (e1,ld,e2) ->
         let lids = get_record_lids e1.exp_type e1.exp_env in
         let lid = List.nth lids ld.lbl_pos in
-        mkParseTree_ext (Some exp) exp
+        mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_setfield,
                                [trx_e n e1;
                                 quote_longident exp lid;
@@ -1289,7 +1237,8 @@ let rec trx_e n exp =
                                [trx_e n e;
                                 mkString exp s]))
     | Texp_new (p,cd) ->
-        mkParseTree_ext (Some exp) exp
+	check_path_quotable p;
+        mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_new,
                                [quote_ident exp p]))
     | Texp_instvar (p1,p2) ->
@@ -1352,12 +1301,6 @@ and trx_me me = match me.mod_desc with
     {me with mod_desc =
      Tmod_constraint (trx_me me, mt, mc)}
 
-and quote_me n exp me = match me.mod_desc with
-| Tmod_structure str -> (* @@@@ *)
-    mkParseModuleExpr exp
-      (Texp_construct(Lazy.force constr_pmod_structure,
-                           [quote_structure n exp str]))
-| _ -> fatal_error "Trx.quote_me: case not implemented yet"
 
 and trx_ce ce = match ce.cl_desc with
 | Tclass_ident p -> ce
@@ -1418,6 +1361,75 @@ and trx_structure_item si = match si with
 | Tstr_recmodule imel ->
     let f (i,me) = (i, trx_me me)
     in Tstr_recmodule (List.map f imel)
+
+
+and trx_structure str =
+  List.map trx_structure_item str
+
+
+(* print_obj is taken from tools/dumpobj.ml,
+  replacing printf with fprintf 
+*)
+open Format
+let same_custom x y =
+  Obj.field x 0 = Obj.field (Obj.repr y) 0
+
+let print_obj =
+ let rec loop depthlim ppf x =
+  if Obj.is_block x then begin
+    let tag = Obj.tag x in
+    if tag = Obj.string_tag then
+        fprintf ppf "%S" (Obj.magic x : string)
+    else if tag = Obj.double_tag then
+        fprintf ppf "%.12g" (Obj.magic x : float)
+    else if tag = Obj.double_array_tag then begin
+        let a = (Obj.magic x : float array) in
+        fprintf ppf "[|";
+        for i = 0 to Array.length a - 1 do
+          if i > 0 then fprintf ppf ", ";
+          fprintf ppf "%.12g" a.(i)
+        done;
+        fprintf ppf "|]"
+    end else if tag = Obj.custom_tag && same_custom x 0l then
+        fprintf ppf "%ldl" (Obj.magic x : int32)
+    else if tag = Obj.custom_tag && same_custom x 0n then
+        fprintf ppf "%ndn" (Obj.magic x : nativeint)
+    else if tag = Obj.custom_tag && same_custom x 0L then
+        fprintf ppf "%LdL" (Obj.magic x : int64)
+    else if tag < Obj.no_scan_tag then begin
+        fprintf ppf "<%d>" (Obj.tag x);
+        let looprec =
+	  if depthlim = 0 then
+	    fun ppf x -> fprintf ppf "..."
+	  else loop (pred depthlim) in
+        match Obj.size x with
+          0 -> ()
+        | 1 ->
+            fprintf ppf "(%a)" looprec (Obj.field x 0)
+        | n ->
+            fprintf ppf "(%a" looprec (Obj.field x 0);
+            for i = 1 to n - 1 do
+              fprintf ppf ", %a" looprec (Obj.field x i)
+            done;
+            fprintf ppf ")"
+    end else
+        fprintf ppf "<tag %d>" tag
+  end else
+    fprintf ppf "%d" (Obj.magic x : int)
+ in loop 3
+
+
+(* Obsolete: we never quite handled modules within the code
+
+and quote_me n exp me = match me.mod_desc waith
+| Tmod_structure str -> (* @@@@ *)
+    mkParseModuleExpr exp
+      (Texp_construct(Lazy.force constr_pmod_structure,
+                           [quote_structure n exp str]))
+| _ -> fatal_error "Trx.quote_me: case not implemented yet"
+
+and quote_structure n exp str =
+  mkPexpList exp (List.map (quote_structure_item n exp) str)
 
 and quote_structure_item n exp si = match si with
 | Tstr_value (rf,pel) ->  (* similar to texp_let *)
@@ -1501,59 +1513,58 @@ and quote_structure_item n exp si = match si with
     end
 | _ -> fatal_error "Trx.quote_structure_item: case not implemented yet"
 
-and trx_structure str =
-  List.map trx_structure_item str
+let mkParseModuleExpr exp d =
+  mkExp exp
+    type_parsetree_module_expr
+    (Texp_record([Lazy.force label_pmod_desc,
+                  mkExp exp type_parsetree_module_expr_desc d;
+                  Lazy.force label_pmod_loc, quote_location exp],
+                 None))
 
-and quote_structure n exp str =
-  mkPexpList exp (List.map (quote_structure_item n exp) str)
+let type_parsetree_module_expr_desc = lazy (find_type "Parsetree.module_expr_desc")
+let type_parsetree_module_expr = lazy (find_type "Parsetree.module_expr")
 
-(* print_obj is taken from tools/dumpobj.ml,
-  replacing printf with fprintf 
+let label_pmod_desc = lazy (find_label "Parsetree.pmod_desc")
+let label_pmod_loc  = lazy (find_label "Parsetree.pmod_loc")
+let constr_pmod_structure     = lazy (find_constr "Parsetree.Pmod_structure")
+let constr_pstr_value         = lazy (find_constr "Parsetree.Pstr_value")
+
+let mkParseStructureItem exp d =
+  mkExp exp
+    type_parsetree_structure_item
+    (Texp_record([Lazy.force label_pstr_desc,
+                  mkExp exp type_parsetree_structure_item_desc d;
+                  Lazy.force label_pstr_loc, quote_location exp],
+                 None))
+
+let label_pstr_desc = lazy (find_label "Parsetree.pstr_desc")
+
+
 *)
-open Format
-let same_custom x y =
-  Obj.field x 0 = Obj.field (Obj.repr y) 0
 
-let print_obj =
- let rec loop depthlim ppf x =
-  if Obj.is_block x then begin
-    let tag = Obj.tag x in
-    if tag = Obj.string_tag then
-        fprintf ppf "%S" (Obj.magic x : string)
-    else if tag = Obj.double_tag then
-        fprintf ppf "%.12g" (Obj.magic x : float)
-    else if tag = Obj.double_array_tag then begin
-        let a = (Obj.magic x : float array) in
-        fprintf ppf "[|";
-        for i = 0 to Array.length a - 1 do
-          if i > 0 then fprintf ppf ", ";
-          fprintf ppf "%.12g" a.(i)
-        done;
-        fprintf ppf "|]"
-    end else if tag = Obj.custom_tag && same_custom x 0l then
-        fprintf ppf "%ldl" (Obj.magic x : int32)
-    else if tag = Obj.custom_tag && same_custom x 0n then
-        fprintf ppf "%ndn" (Obj.magic x : nativeint)
-    else if tag = Obj.custom_tag && same_custom x 0L then
-        fprintf ppf "%LdL" (Obj.magic x : int64)
-    else if tag < Obj.no_scan_tag then begin
-        fprintf ppf "<%d>" (Obj.tag x);
-        let looprec =
-	  if depthlim = 0 then
-	    fun ppf x -> fprintf ppf "..."
-	  else loop (pred depthlim) in
-        match Obj.size x with
-          0 -> ()
-        | 1 ->
-            fprintf ppf "(%a)" looprec (Obj.field x 0)
-        | n ->
-            fprintf ppf "(%a" looprec (Obj.field x 0);
-            for i = 1 to n - 1 do
-              fprintf ppf ", %a" looprec (Obj.field x i)
-            done;
-            fprintf ppf ")"
-    end else
-        fprintf ppf "<tag %d>" tag
-  end else
-    fprintf ppf "%d" (Obj.magic x : int)
- in loop 3
+(* Native mode is moved out to the `userland'
+
+let native_mode = ref false (* ZZZ
+  Should be a better way to detect native mode,
+  e.g., by the presence of some modules in asmcomp *)
+
+let remove_texp_cspval exp =
+  if !native_mode = false then exp else
+  failwith "native mode CSP are not impemented yet"
+
+   XXX old code
+  match exp.exp_desc with
+  | Texp_cspval (v,l) ->
+      let i = add_csp_value (v,l) in
+      let exp' = {exp with exp_desc = Texp_constant (Const_int i)} in
+      let desc = if !initial_native_compilation
+        then (Texp_apply (trx_array_get exp, [(Some !local_csp_arr_texp, Required);(Some exp', Required)]))
+	else (Texp_apply (trx_get_csp_value exp, [(Some exp', Required)])) in
+      {exp with exp_desc = desc}
+  | _ -> assert false
+
+let trx_execute_expression exp =
+  let (p, v) = Lazy.force pathval_trx_execute_expression in
+  { exp with exp_type = instance v.val_type;
+    exp_desc = Texp_ident(p, v) }
+*)
