@@ -108,8 +108,8 @@ let rec print_struct_const = function
       printf "[|";
       List.iter (fun f -> print_float f; printf "; ") a;
       printf "|]"
-  | Const_csp_value _ ->      (* NNN *)
-      printf "CSP_value"      (* NNN *)
+  | Const_csp_value obj ->                    (* NNN *)
+      printf "CSP_value"  (* print_obj obj *)    (* NNN *)
 
 (* Print an obj *)
 
