@@ -10,8 +10,7 @@ RUNTIME=$(CAMLROOT)/boot/ocamlrun
 INCLUDES=-I $(CAMLROOT)/utils \
 	-I $(CAMLROOT)/parsing  -I $(CAMLROOT)/typing -I $(CAMLROOT)/bytecomp \
 	-I $(CAMLROOT)/asmcomp  -I $(CAMLROOT)/driver \
-	-I $(CAMLROOT)/toplevel -I $(CAMLROOT)/boot \
-	-I gprint/
+	-I $(CAMLROOT)/toplevel -I $(CAMLROOT)/boot
 COMPILER=$(CAMLROOT)/ocamlc
 CAMLC=$(RUNTIME) $(COMPILER) $(INCLUDES)
 COMPFLAGS=-g -warn-error A -nostdlib
@@ -21,7 +20,7 @@ OPTCOMPFLAGS=-warn-error A -nostdlib
 CAMLDEP=$(CAMLROOT)/boot/ocamlrun $(CAMLROOT)/tools/ocamldep
 
 METALIB=metalib.cma
-METALIBOBJS=runcode.cmo print_code.cmo gprint/gprint.cmo
+METALIBOBJS=runcode.cmo print_code.cmo
 METAOBJS=$(METALIB) bertop.cmo berstart.cmo
 
 all: $(METAOBJS) metaocaml metaocamlc
@@ -43,7 +42,6 @@ $(METALIB): $(METALIBOBJS)
 
 install: metaocaml metaocamlmktop metaocamlc
 	cp runcode.cmi print_code.cmi metalib.cma bertop.cmo berstart.cmo \
-	gprint/gprint.cmi \
 	  $(LIBDIR)
 	cp metaocaml $(BINDIR)/metaocaml$(EXE)
 	cp metaocamlmktop $(BINDIR)/metaocamlmktop$(EXE)
@@ -76,7 +74,7 @@ clean::
 	rm -f *.cm* *.o *.a
 	rm -f test/*.cm* test/*.o
 	rm -f *~
-	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
+#	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
 test:
 	$(BINDIR)/metaocaml test/quick_test.ml
@@ -84,7 +82,7 @@ test:
 	$(BINDIR)/metaocaml test/test21.ml
 	$(BINDIR)/metaocaml test/pythagorian_triples.ml
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) MOCAMLTOP="../metaocaml -I .." testv_top
-	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top
+#	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top
 
 test-compile:
 # 	$(BINDIR)/metaocamlc -o quick_test test/quick_test.ml
@@ -94,7 +92,7 @@ test-compile:
 	./t4
 	$(BINDIR)/metaocamlc -o pt test/pythagorian_triples.ml
 	./pt
-	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
+#	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
 
 clean::
 	rm -f quick_test t4 pt
@@ -118,6 +116,6 @@ makepatch:
 include .depend
 
 depend:
-	$(CAMLDEP) *.mli *.ml gprint/*.mli gprint/*.ml > .depend
+	$(CAMLDEP) *.mli *.ml > .depend
 
 .PHONY: all test clean patch makepatch depend test-compile install
