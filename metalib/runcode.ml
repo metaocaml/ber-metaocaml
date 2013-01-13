@@ -1,7 +1,7 @@
 (* Run the closed code: byte-code and native code *)
 
 open Format
-open Typedtree
+open Parsetree
 
 type 'a cde = {cde : 'c. ('c,'a) code}  (* Type of the closed code *)
 
@@ -46,7 +46,7 @@ let with_disabled_warnings warnings thunk =
 
 let initial_env = ref Env.empty
 
-(* Load and execute bytecode: copied from driver/toploop.ml *)
+(* Load and execute bytecode: copied from toploop/toploop.ml *)
 let load_lambda ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
   let slam = Simplif.simplify_lambda lam in
@@ -80,30 +80,25 @@ let load_lambda ppf lam =
 
 let run' exp =
   if !initial_env = Env.empty then initial_env := Compile.initial_env();
-  begin (* Update the global ident timestamp *)
-    match exp.Parsetree.pexp_ext with
-    | Some v -> let t = Env.get_ident_timestamp (Obj.magic v).exp_env
-                in Ident.set_current_time t
-    | None -> ()
-  end;
   Ctype.init_def(Ident.current_time()); 
   with_disabled_warnings [Warnings.Partial_match "";
 			  Warnings.Unused_argument;
 			  Warnings.Unused_var "";
 			  Warnings.Unused_var_strict ""]
  (fun () ->
-  let texp = try
+   let sstr = [{pstr_desc = Pstr_eval exp; pstr_loc = Location.none}] in
+   let str = try
     begin
-	       Typecore.reset_delayed_checks ();
-	       let texp = Typecore.type_expression !initial_env exp
-           in Typecore.force_delayed_checks (); texp
+       Typecore.reset_delayed_checks ();
+       let (str, sg, newenv) = Typemod.type_toplevel_phrase !initial_env sstr in
+       Typecore.force_delayed_checks (); str
     end
-  with 
+   with 
     x -> (Errors.report_error Format.std_formatter x;
 	  Format.pp_print_newline Format.std_formatter ();
-	  raise Trx.TypeCheckingError) 
+	  raise (Trx.TrxError 
+            "Error type-checking generated code: scope extrusion?"))
   in
-  let str = Trx.trx_structure [Tstr_eval texp] in
   let lam = Translmod.transl_toplevel_definition str in
   load_lambda Format.std_formatter lam
  )

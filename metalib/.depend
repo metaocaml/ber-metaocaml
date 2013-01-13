@@ -1,28 +1,19 @@
-metatop.cmi: 
-print_code.cmi: runcode.cmi 
-reify_type.cmi: 
-runcode.cmi: 
-trxtime.cmi: 
-berstart.cmo: 
-berstart.cmx: 
-bertop.cmo: 
-bertop.cmx: 
-print_code.cmo: runcode.cmi print_code.cmi 
-print_code.cmx: runcode.cmx print_code.cmi 
-reify_type.cmo: reify_type.cmi 
-reify_type.cmx: reify_type.cmi 
-run_native.cmo: 
-run_native.cmx: 
-runcode.cmo: runcode.cmi 
-runcode.cmx: runcode.cmi 
-trxtime.cmo: trxtime.cmi 
-trxtime.cmx: trxtime.cmi 
-gprint/gprint.cmi: 
-gprint/gprint.cmo: print_code.cmi gprint/gprint.cmi 
-gprint/gprint.cmx: print_code.cmx gprint/gprint.cmi 
-gprint/gprint_toplevel.cmo: 
-gprint/gprint_toplevel.cmx: 
-gprint/vgprint.cmo: 
-gprint/vgprint.cmx: 
-gprint/vgprint_aux.cmo: 
-gprint/vgprint_aux.cmx: 
+metatop.cmi :
+print_code.cmi : runcode.cmi
+reify_type.cmi :
+runcode.cmi :
+trxtime.cmi :
+berstart.cmo :
+berstart.cmx :
+bertop.cmo :
+bertop.cmx :
+print_code.cmo : runcode.cmi print_code.cmi
+print_code.cmx : runcode.cmx print_code.cmi
+reify_type.cmo : reify_type.cmi
+reify_type.cmx : reify_type.cmi
+run_native.cmo :
+run_native.cmx :
+runcode.cmo : runcode.cmi
+runcode.cmx : runcode.cmi
+trxtime.cmo : trxtime.cmi
+trxtime.cmx : trxtime.cmi
