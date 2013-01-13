@@ -15,6 +15,15 @@
    Can I get rid of run as a special form? Just use first-class
    polymorphism and check generalization.
 
+So, a parser would just expand .! x  to {Trx.cde = x}.
+So we can write
+    Run.run .! .<1>.
+We don't have to add the record 'a cde to predef. We can add it
+to Trx. The only drawback is that pretty-printer may print
+{cde = x} with the Trx qualification. But it is easy to adjust the
+pretty-printer to omit the Trx qualification.
+Rename BER MetaOCaml to BE MetaOCaml?
+
 trx.ml -- the traversal of the entire Typedtree looking for brackets
 to replace is completely re-written. Now we maintain sharing as much
 as possible. If the tree has no brackets, it is retured as it was.

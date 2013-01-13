@@ -1220,10 +1220,37 @@ let rec trx_e n exp =
    an expression at the level n > 0.
 *)
 
+(* Given a type ty, return ty code code ... code (n times code).
+   When we push the bracket in, expressions that had type ty before
+   will have the type ('cl,ty) code.
+   Here, ('cl,ty) code is an abtract type whose concrete representation
+   is Parsetree.
+   Generally speaking we don't have to adjust the types since the
+   type checking is finished. However, code generator may look
+   at types; it's better if we don't lie. Thus, as trx_bracket
+   translates the expression, it should also adjust the types.
+*)
+
+let rec wrap_ty_in_code : int -> type_expr -> type_expr = fun n ty ->
+  if n=0 then ty else
+  let clsfier = Btype.newgenvar () in
+  wrap_ty_in_code (n-1) (Predef.type_code clsfier ty)
+
+
 let rec trx_bracket : 
   (expression -> expression) -> (* 0-level traversal *)
-  int -> (expression -> expression_desc) = fun trx_exp n -> function
-  | _ -> failwith "na"
+  int -> (expression -> expression) = fun trx_exp n exp ->
+  let new_desc = match exp.exp_desc with
+  | Texp_constant cst ->
+    let ast = 
+      {pexp_loc = exp.exp_loc;
+       pexp_desc = Pexp_constant cst}
+    in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*cst*"))
+  | _ -> failwith "not yet implemented"
+  in
+  {exp with exp_type = wrap_ty_in_code n exp.exp_type;
+            exp_desc = new_desc}
+
 
 (* Functions to help the traversal and mapping of a tree.
    We assume that every tree mapping function of the type 'a -> 'a
@@ -1410,7 +1437,7 @@ and trx_expression = function
 | Texp_object (cs,sl) -> Texp_object (trx_cl_struct cs,sl)
 | Texp_pack me -> Texp_pack (trx_me me)
 
-| Texp_bracket e -> trx_bracket trx_exp 1 e
+| Texp_bracket e -> (trx_bracket trx_exp 1 e).exp_desc
 
 | Texp_escape _ -> assert false         (* Not possible in well-typed code *)
 | Texp_run e -> 
