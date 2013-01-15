@@ -1170,35 +1170,19 @@ let rec trx_e n exp =
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_new,
                                [quote_ident exp p]))
-    | Texp_instvar (p1,p2) ->
-        (* instance variables are always bound at level 0 (for now)
-           so this is like a csp variable *)
-        call_trx_mkcsp exp None (path_to_lid p2)
-    | Texp_setinstvar _ -> fatal_error ("Trx.trx_e: setinstvar should be ruled out during type checking")
-    | Texp_override  _ -> fatal_error ("Trx.trx_e: override should be ruled out during type checking")
-    | Texp_letmodule (id,me,e) ->
-        fatal_error ("Trx.trx_e: let module inside .<...>. not implemented yet")
           (* similar to Texp_for *)
     | Texp_assert e ->
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_assert, 
                                [trx_e n e]))
-    | Texp_assertfalse ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_assertfalse, 
-                               []))
     | Texp_lazy e ->
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_lazy, 
                                [trx_e n e]))
 
-    | Texp_object (id,me,e) ->
-        fatal_error ("Trx.trx_e: object ... inside .<...>. not implemented yet")
-
     | Texp_bracket e ->
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_bracket, 
-                               [trx_e (n+1) e]))
 
     | Texp_escape e ->
         if n=1 then
@@ -1211,8 +1195,6 @@ let rec trx_e n exp =
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_run, 
                                [trx_e n e]))
-    | Texp_cspval (m,li) ->
-        call_trx_mkcsp exp None li
   end
 *)
 
@@ -1236,6 +1218,9 @@ let rec wrap_ty_in_code : int -> type_expr -> type_expr = fun n ty ->
   let clsfier = Btype.newgenvar () in
   wrap_ty_in_code (n-1) (Predef.type_code clsfier ty)
 
+let not_supported msg =
+  raise (TrxError (msg ^ " is not yet supported within brackets"))
+
 
 let rec trx_bracket : 
   (expression -> expression) -> (* 0-level traversal *)
@@ -1246,13 +1231,37 @@ let rec trx_bracket :
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_constant cst}
     in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*cst*"))
+  | Texp_instvar (p1,p2,s) ->
+     not_supported "Objects (Texp_instvar)"
+        (* Alternatively: since instance variables are always bound 
+           at level 0 (for now)
+           so this is like a csp variable 
+        call_trx_mkcsp exp None (path_to_lid p2)
+        *)
+  | Texp_setinstvar _ -> not_supported "Objects (Texp_setinstvar)"
+  | Texp_override  _  -> not_supported "Objects (Texp_override)"
+  | Texp_letmodule (id,s,me,e) -> not_supported "let module"
+
+  | Texp_assertfalse ->
+    let ast = 
+      {pexp_loc = exp.exp_loc;
+       pexp_desc = Pexp_assertfalse}
+    in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*af*"))
+  | Texp_object (cl,fl) -> not_supported "Objects"
+  | Texp_pack _         -> not_supported "First-class modules"
+
+  | Texp_cspval (v,li) ->               (* CSP is a sort of a constant *)
+    let ast = 
+      {pexp_loc = exp.exp_loc;
+       pexp_desc = Pexp_cspval(v,li)}
+    in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*csp*"))
   | _ -> failwith "not yet implemented"
   in
   {exp with exp_type = wrap_ty_in_code n exp.exp_type;
             exp_desc = new_desc}
 
 
-(* Functions to help the traversal and mapping of a tree.
+(* Functions to help traverse and transform a tree.
    We assume that every tree mapping function of the type 'a -> 'a
    throws the exception Not_modified if the tree has not been
    modified.
