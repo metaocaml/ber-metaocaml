@@ -26,6 +26,7 @@ We transform x if it was written Pexp_ident li, or
 in tree terms
 Texp_construct ("Pexp_ident", [
 
+constants (and csp, Assertfalse)
 This file is based on trx.ml from the original MetaOCaml,
 but it is almost completely re-written.
 
@@ -35,9 +36,9 @@ open Parsetree
 open Asttypes
 open Misc
 open Typedtree
-open Ctype
 open Types
 (*
+open Ctype
 open Parmatch
 open Path
 open Ident
@@ -119,6 +120,9 @@ let rec path_to_lid : Path.t -> Longident.t = function
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
+let dummy_lid : string -> Longident.t loc = fun str ->
+  Location.mknoloc (Longident.Lident str)
+
 (* Building Texp nodes *)
 (* Env.initial is used for all look-ups. Unqualified identifiers
    must be found there. For qualified identifiers, Env.lookup
@@ -135,8 +139,111 @@ let texp_ident : string -> expression = fun name ->
                 with Not_found -> fatal_error ("Trx.find_value: " ^ name) in
   { exp_desc = Texp_ident (p,mknoloc lid, vd);
     exp_loc  = Location.none; exp_extra = [];
-    exp_type = instance Env.initial vd.val_type;
+    exp_type = Ctype.instance Env.initial vd.val_type;
     exp_env  = Env.initial }
+
+(* Dealing with CSP *)
+
+exception CannotLift
+
+(* Analyze the type of the expression and figure out if we can lift it.
+   Raise CannotLift if cannot (the type is polymorphic), or it is too
+   much bother.
+   TODO: lists, arrays, option types of liftable types are themselves
+   liftable. We can lift many more types. For arrays, check their length.
+   If the array is short, it should be lifted. For long arrays,
+   building a CSP is better (although it make take a bit longer since
+   we will have to invoke dyn_quote at run-time).
+*)
+let lift_as_literal : 
+  Typedtree.expression -> Path.t -> Longident.t loc -> 
+  Typedtree.expression_desc = fun exp p li ->
+  let base_type =
+    let exp_ty =
+        Ctype.expand_head exp.exp_env (Ctype.correct_levels exp.exp_type) in
+    match Ctype.repr exp_ty with
+    | {desc = Tconstr(p, _, _)} -> p    (* deal with lists, arrays, etc. *)
+    | _ -> raise CannotLift             
+  in
+  raise CannotLift
+(*
+  match () with
+  | _ when Path.same base_type Predef.path_int ->
+      Pexp_constant (Const_int (Obj.magic v))
+  | (true,Some p) when Path.same p Predef.path_char ->
+      Pexp_constant (Const_char (Obj.magic v))
+  | (true,Some p) when Path.same p Predef.path_bool ->
+      let b = if (Obj.magic v) then "true" else "false"
+      in Pexp_construct (Longident.Lident b, None, false)
+  | (false,_) when Obj.tag v = Obj.double_tag ->
+      Pexp_constant (Const_float (string_of_float (Obj.magic v)))
+  | (false,_) when Obj.tag v = Obj.string_tag ->
+      Pexp_constant (Const_string (Obj.magic v))
+  | (_,Some p) when Path.same p Predef.path_nativeint ->
+      Pexp_constant (Const_nativeint (Obj.magic v))
+  | (_,Some p) when Path.same p Predef.path_int32 ->
+      Pexp_constant (Const_int32 (Obj.magic v))
+  | (_,Some p) when Path.same p Predef.path_int64 ->
+      Pexp_constant (Const_int64 (Obj.magic v))
+*)
+
+
+(* Lift the run-time value v into a Parsetree for the code that, when
+   run, will produce v.
+   We do not have the type information for v, but we can examine
+   its run-time representation, to decide if we lift it is a source
+   literal or as a CSP.
+*)
+let dyn_quote : Obj.t -> Longident.t loc -> Parsetree.expression =
+  fun v li ->
+   let dflt = Pexp_cspval(v,li) in        (* By default, we build CSP *)
+   let desc = 
+    match Obj.is_int v with
+    | true -> dflt  (* If v looks like an int, it can represent many things: *)
+                    (* can't lift *)
+    | false when Obj.tag v = Obj.double_tag ->
+      Pexp_constant (Const_float (string_of_float (Obj.obj v)))
+    | false when Obj.tag v = Obj.string_tag ->
+      Pexp_constant (Const_string (Obj.obj v))
+    | _   -> dflt
+   in 
+   {pexp_loc = li.loc; pexp_desc = desc}
+
+
+       
+(* Build Typedtree that creates a CSP for the variable with the given
+   path and type.
+   There are two parts in this code: the static part, when we know
+   the type but we don't know the value.
+   The dynamic part crates CSP when we do know the value, but we
+   do not know the type.
+   In the static phase, we analyze the type and check to see if the
+   value of that type can be lifted. If so, we build the code that
+   will do lifting at the run time (that is, convert a float
+   0.1 to the Parsetree node Pexp_constant(Const_float "0.1")).
+   If the type is polymorphic (the function the variable is part
+   of can be invoked at any type), or if the type is too complex to
+   bother with building a custom lifter, we build the code that
+   will invoke the dynamic lifter, see dyn_quote.
+ *)
+let trx_csp : 
+  Typedtree.expression -> Path.t -> Longident.t loc ->
+  Typedtree.expression_desc = fun exp p li ->
+  (* First we try lifting as a constant *)
+  try lift_as_literal exp p li 
+  with CannotLift ->
+  (* Then check if we can pass by reference *)
+  if ident_can_be_quoted p then
+     let ast = 
+         {pexp_loc = exp.exp_loc;
+          pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
+      in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
+  else
+  (* Otherwise, do the lifting at run-time *)
+  Texp_apply(texp_ident "Trx.dyn_quote",
+             [("",Some exp, Required);
+              (* XXX ("",Some li,  Required) *)
+  ])
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -841,10 +948,6 @@ let rec trx_e n exp =
               (Texp_construct(Lazy.force constr_pexp_ident, 
                  [{exp with exp_type = Lazy.force type_longident_t}]))
           
-    | Texp_constant cst ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_constant, 
-                               [quote_constant exp cst]))
 
     | Texp_let (rf, pel, e1) ->
         begin
@@ -1218,19 +1321,42 @@ let rec wrap_ty_in_code : int -> type_expr -> type_expr = fun n ty ->
   let clsfier = Btype.newgenvar () in
   wrap_ty_in_code (n-1) (Predef.type_code clsfier ty)
 
+
+
 let not_supported msg =
   raise (TrxError (msg ^ " is not yet supported within brackets"))
+
 
 
 let rec trx_bracket : 
   (expression -> expression) -> (* 0-level traversal *)
   int -> (expression -> expression) = fun trx_exp n exp ->
   let new_desc = match exp.exp_desc with
+  | Texp_ident (p,li,vd) when vd.val_kind = Val_reg ->
+    let stage = try Env.find_stage p exp.exp_env
+	        with Not_found ->
+	           ignore(Warnings.print Format.err_formatter 
+	           (Warnings.Camlp4 ("Stage for var is set to implicit 0:" ^ 
+	           Path.name p ^ "\n")));  [] in
+    (* We make CSP only if the variable is bound at the stage 0.
+       If the variable is bound at the stage less than n,
+       we just output the Pexp_ident node. Since the generated code
+       will be type-checked again when is about to be run, we will
+       create CSP at that point then.
+     *)
+    if stage = [] then trx_csp exp p li 
+    else
+      (* always use the Path to construct lid, since path is fully qualified *)
+      let ast = 
+        {pexp_loc = exp.exp_loc;
+         pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
+      in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
+  | Texp_ident (_,_,_) -> not_supported "non-regular variables"
   | Texp_constant cst ->
     let ast = 
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_constant cst}
-    in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*cst*"))
+    in Texp_cspval (Obj.repr ast, dummy_lid "*cst*")
   | Texp_instvar (p1,p2,s) ->
      not_supported "Objects (Texp_instvar)"
         (* Alternatively: since instance variables are always bound 
@@ -1246,7 +1372,7 @@ let rec trx_bracket :
     let ast = 
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_assertfalse}
-    in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*af*"))
+    in Texp_cspval (Obj.repr ast, dummy_lid "*af*")
   | Texp_object (cl,fl) -> not_supported "Objects"
   | Texp_pack _         -> not_supported "First-class modules"
 
@@ -1254,7 +1380,7 @@ let rec trx_bracket :
     let ast = 
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_cspval(v,li)}
-    in Texp_cspval (Obj.repr ast, Location.mknoloc (Longident.Lident "*csp*"))
+    in Texp_cspval (Obj.repr ast, dummy_lid "*csp*")
   | _ -> failwith "not yet implemented"
   in
   {exp with exp_type = wrap_ty_in_code n exp.exp_type;

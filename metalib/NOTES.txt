@@ -29,6 +29,13 @@ to replace is completely re-written. Now we maintain sharing as much
 as possible. If the tree has no brackets, it is retured as it was.
 Previously, it was copied.
 
+Future work:
+   TODO: lists, arrays, option types of liftable types are themselves
+   liftable. We can lift many more types. For arrays, check their length.
+   If the array is short, it should be lifted. For long arrays,
+   building a CSP is better (although it make take a bit longer since
+   we will have to invoke dyn_quote at run-time).
+
   * Main differences from the original MetaOCaml
 
 -- Added metalib (aka ber-metaocaml) directory: the MetaOCaml library, 
