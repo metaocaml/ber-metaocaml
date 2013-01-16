@@ -1,3 +1,7 @@
+January 12, 2013
+	Importing the pretty-printing of code, greatly improved by Jacques
+	Carette.
+
 January 7-12, 2013
 	Beginning the port to OCaml 4.00.1. The basic changes to OCaml
 	are done. Started work on re-writing trx.ml

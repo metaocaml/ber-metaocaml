@@ -15,9 +15,13 @@
    Can I get rid of run as a special form? Just use first-class
    polymorphism and check generalization.
 
-So, a parser would just expand .! x  to {Trx.cde = x}.
-So we can write
+So, a parser would just expand .! x  to {Trx.cde = x}. To really run
+the code, we write
     Run.run .! .<1>.
+Incidentally, we can have Run.run_bytecode and Run.run_native.
+Since it is possible now to dynamically load native code into
+bytecode, we can separate the mode of running the generated code
+(bytecode/native) from the mode of running the generator.
 We don't have to add the record 'a cde to predef. We can add it
 to Trx. The only drawback is that pretty-printer may print
 {cde = x} with the Trx qualification. But it is easy to adjust the
@@ -29,12 +33,38 @@ to replace is completely re-written. Now we maintain sharing as much
 as possible. If the tree has no brackets, it is retured as it was.
 Previously, it was copied.
 
+When the bracket expression is run, it produces the Parsetree that
+represents the code. The tree is constructed at run-time.  In some
+cases the Parsetree can be constructed at compile time, in
+trx.ml. Constants like <1> is such a case, when we can immediately
+construct the Parsetree: Pexp_constant (Constant_int 1).  After we
+construct the Parsetree at compile time, we use CSP to pass it over to
+run-time. When run, the program will use the compiled constant. This
+mechanism of building Parsetree at compile-time whenever possible is
+one of the large differences from the previous versions of MetaOCaml.
+
 Future work:
    TODO: lists, arrays, option types of liftable types are themselves
    liftable. We can lift many more types. For arrays, check their length.
    If the array is short, it should be lifted. For long arrays,
    building a CSP is better (although it make take a bit longer since
    we will have to invoke dyn_quote at run-time).
+
+   When lifting int, bool, etc. values, we generate calls to run-time
+functions like lift_constant_int to do the Parsetree generation. In
+the future we should `inline' those functions -- that is, obtain the
+Typedtree for them and use the tree for building Texp_apply.
+
+
+(generally, search for TODO in trx.ml)
+
+Better quotation (which results in better printing of CSP *)
+# let l x = .<x>.;;
+val l : 'a -> ('cl, 'a) code = <fun>  (* Polymorphic! *)
+# l 1;;
+- : ('a, int) code = .<(* cross-stage persistent value (as id: x) *)>.
+# l 1.0;;
+- : ('a, float) code = .<1.>.   (* Now it prints as a constant *)
 
   * Main differences from the original MetaOCaml
 
