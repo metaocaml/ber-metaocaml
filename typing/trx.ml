@@ -3,22 +3,30 @@
   after the type checking and before the code generation to
   get rid of bracket, esc and run. The main function is
   trx_structure, which initiates the traversal and
-  transforms every found expression with trx_e. The real
-  transformation is done by trx_e.
+  transforms every found expression with trx_exp. The real
+  transformation is done by trx_exp.
 
   For example,
-  <succ 1> gets transformed to mkApp <succ> <1> and eventually to
-  mkApp (mkIdent "succ") (mkConst 1)
-  (one may say that we `push brackets inside')
+     <succ 1> 
+  gets transformed to 
+     mkApp <succ> <1> 
+  and eventually to
+     mkApp (mkIdent "succ") (mkConst 1)
+  One may say that we `push the brackets inside'.
+  We replace bracket with calls to functions that will construct, at run-time,
+  a Parsetree, which is the representation of code type.
 
-  So we replace bracket with calls to functions thayt construct
-  Parsetree, which is the representation of code type.
-
-  In terms of trees:
-  After the type checking, <1> is represented as
-  Texp_bracket (Texp_constant (Constant_int 1))
-  We transform it to
-  Texp_apply (Texp_ident "mkConstant") []
+  Generally, the Parsetree is constructed when the program is run.
+  In some cases we can construct the Parsetree at compile time,
+  that is, when this trx.ml is run. Constants like <1> is such a case.
+  If we see <1>, or, in terms of trees,
+      Texp_bracket (Texp_constant (Constant_int 1))
+  we can immediately construct the Parsetree:
+      Pexp_constant (Constant_int 1)
+  After we construct the Parsetree at compile time, we use CSP to
+  pass it over to run-time. At run-time, we merely use the compiled constant.
+  This mechanism of building Parsetree at compile-time whenever possible
+  is one of the large differences from the previous versions of MetaOCaml.
 
 Future-stage identifier x was represented in tree as 
 Texp_ident (ident,vd)
@@ -43,7 +51,6 @@ open Parmatch
 open Path
 open Ident
 open Env
-open Typecore
 *)
 
 
@@ -53,13 +60,15 @@ let meta_version  = "N 100"
 
 exception TrxError of string
 
+(* ------------------------------------------------------------------------ *)
 (* Path utilities *)
+
 (* We always use path when available, and convert it to Longident
    when needed -- even if the Typedtree already carries the longident.
    The path is preferred because it is fully qualified for
    external identifiers and it is unambiguous.
    If we open a module, its components can be referred to without
-   qualification -- but the path will be qualified.
+   qualification -- the path will be qualified nevertheless.
    When we build a Parsetree representing the generated code,
    we have to use fully qualified identifiers since the open statement
    in the original code won't be represented in the generated
@@ -80,9 +89,9 @@ let is_external = function
 
 
 (* Check to make sure a constructor, label, exception, etc.
-   have the name that we can put into AST.
-   Local names can't be put into AST since the type env in which
-   they are declared is not represented in the AST.
+   have the name that we can put into AST (Parsetree).
+   Local names can't be put into the Parsetree since the type env in which
+   they are declared is not represented in the Parsetree.
 *)
 let check_path_quotable msg path =
   if not (is_external path) then
@@ -111,7 +120,7 @@ let ident_can_be_quoted = function
 
 let ident_can_be_quoted = is_external   (* Perhaps this is a better version *)
 
-(* Convert the path to an identifier. Since the path is assumed to be
+(* Convert a path to an identifier. Since the path is assumed to be
    `global', time stamps don't matter and we can use just strings.
 *)
 let rec path_to_lid : Path.t -> Longident.t = function
@@ -120,9 +129,14 @@ let rec path_to_lid : Path.t -> Longident.t = function
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
-let dummy_lid : string -> Longident.t loc = fun str ->
-  Location.mknoloc (Longident.Lident str)
+let dummy_lid : string -> Longident.t loc = fun name ->
+  Location.mknoloc (Longident.Lident name)
 
+(* Exported. Used as a template for constructing lid expressions *)
+let sample_lid = dummy_lid "*sample*"
+
+
+(* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
 (* Env.initial is used for all look-ups. Unqualified identifiers
    must be found there. For qualified identifiers, Env.lookup
@@ -132,7 +146,7 @@ let dummy_lid : string -> Longident.t loc = fun str ->
 
 (* Should we add memoization? *)
 
-(* Building a node for an identifier with a given name *)
+(* Building a node for an identifier with a given (qualified) name *)
 let texp_ident : string -> expression = fun name ->
   let lid     = Longident.parse name in
   let (p, vd) = try Env.lookup_value lid Env.initial 
@@ -142,13 +156,14 @@ let texp_ident : string -> expression = fun name ->
     exp_type = Ctype.instance Env.initial vd.val_type;
     exp_env  = Env.initial }
 
+(* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
 
 exception CannotLift
 
 (* Analyze the type of the expression and figure out if we can lift it.
-   Raise CannotLift if cannot (the type is polymorphic), or it is too
-   much bother.
+   Raise CannotLift if cannot (e.g., the type is polymorphic), or it is too
+   much to bother.
    TODO: lists, arrays, option types of liftable types are themselves
    liftable. We can lift many more types. For arrays, check their length.
    If the array is short, it should be lifted. For long arrays,
@@ -158,17 +173,15 @@ exception CannotLift
 let lift_as_literal : 
   Typedtree.expression -> Path.t -> Longident.t loc -> 
   Typedtree.expression_desc = fun exp p li ->
-  let base_type =
-    let exp_ty =
+  let exp_ty =
         Ctype.expand_head exp.exp_env (Ctype.correct_levels exp.exp_type) in
-    match Ctype.repr exp_ty with
-    | {desc = Tconstr(p, _, _)} -> p    (* deal with lists, arrays, etc. *)
+  match Ctype.repr exp_ty with
+    | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_int ->
+        raise CannotLift
     | _ -> raise CannotLift             
-  in
-  raise CannotLift
 (*
   match () with
-  | _ when Path.same base_type Predef.path_int ->
+  | _ 
       Pexp_constant (Const_int (Obj.magic v))
   | (true,Some p) when Path.same p Predef.path_char ->
       Pexp_constant (Const_char (Obj.magic v))
@@ -193,6 +206,9 @@ let lift_as_literal :
    We do not have the type information for v, but we can examine
    its run-time representation, to decide if we lift it is a source
    literal or as a CSP.
+
+  TODO: also check for double_array_tag
+   and create a (structured) constant for a double array
 *)
 let dyn_quote : Obj.t -> Longident.t loc -> Parsetree.expression =
   fun v li ->
@@ -209,22 +225,17 @@ let dyn_quote : Obj.t -> Longident.t loc -> Parsetree.expression =
    in 
    {pexp_loc = li.loc; pexp_desc = desc}
 
-
        
-(* Build Typedtree that creates a CSP for the variable with the given
-   path and type.
-   There are two parts in this code: the static part, when we know
-   the type but we don't know the value.
-   The dynamic part crates CSP when we do know the value, but we
-   do not know the type.
-   In the static phase, we analyze the type and check to see if the
-   value of that type can be lifted. If so, we build the code that
-   will do lifting at the run time (that is, convert a float
+(* Build the Typedtree that lifts the variable with the given path and type.
+   Since this code receives the type of the variable, we use the
+   type to generate the lifting code for that particular type.
+   For example, we build the code to convert a float
    0.1 to the Parsetree node Pexp_constant(Const_float "0.1")).
-   If the type is polymorphic (the function the variable is part
-   of can be invoked at any type), or if the type is too complex to
-   bother with building a custom lifter, we build the code that
-   will invoke the dynamic lifter, see dyn_quote.
+   If we cannot or would not type-dependent lifting and we cannot
+   refer to the variable by name (e.g., because it is local),
+   we generate the call to the dynamic quoter, dyn_quote.
+   The latter will receive the actual value to quote and will generate,
+   at run-time, a Parsetree constant or CSP, based on that value.
  *)
 let trx_csp : 
   Typedtree.expression -> Path.t -> Longident.t loc ->
@@ -240,10 +251,13 @@ let trx_csp :
       in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
   else
   (* Otherwise, do the lifting at run-time *)
+  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills is the type, etc.*)
+  let lid_exp = 
+      {lid_exp with exp_desc = Texp_cspval (Obj.repr li, dummy_lid "*csp_li*")}
+  in
   Texp_apply(texp_ident "Trx.dyn_quote",
-             [("",Some exp, Required);
-              (* XXX ("",Some li,  Required) *)
-  ])
+             [("",Some exp,     Required);
+              ("",Some lid_exp, Required)])
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -1332,7 +1346,9 @@ let rec trx_bracket :
   (expression -> expression) -> (* 0-level traversal *)
   int -> (expression -> expression) = fun trx_exp n exp ->
   let new_desc = match exp.exp_desc with
-  | Texp_ident (p,li,vd) when vd.val_kind = Val_reg ->
+    (* Don't just do wheh vd.val_kind = Val_reg 
+       because (+) or Array.get are Val_prim *)
+  | Texp_ident (p,li,vd)  ->
     let stage = try Env.find_stage p exp.exp_env
 	        with Not_found ->
 	           ignore(Warnings.print Format.err_formatter 
@@ -1351,7 +1367,6 @@ let rec trx_bracket :
         {pexp_loc = exp.exp_loc;
          pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
       in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
-  | Texp_ident (_,_,_) -> not_supported "non-regular variables"
   | Texp_constant cst ->
     let ast = 
       {pexp_loc = exp.exp_loc;
