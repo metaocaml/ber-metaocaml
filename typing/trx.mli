@@ -22,6 +22,11 @@ val sample_lid : Longident.t Location.loc  (* A template for lid expressions *)
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> Parsetree.expression
 
+val lift_constant_int : int   -> Parsetree.expression
+val lift_constant_char : char -> Parsetree.expression
+val lift_constant_bool : bool -> Parsetree.expression
+
+
 (*
 val longidenttostring : Longident.t -> string
 val gensymlongident : Longident.t -> Longident.t

@@ -4,7 +4,7 @@
   get rid of bracket, esc and run. The main function is
   trx_structure, which initiates the traversal and
   transforms every found expression with trx_exp. The real
-  transformation is done by trx_exp.
+  transformation is done by trx_bracket.
 
   For example,
      <succ 1> 
@@ -156,6 +156,14 @@ let texp_ident : string -> expression = fun name ->
     exp_type = Ctype.instance Env.initial vd.val_type;
     exp_env  = Env.initial }
 
+(* Building an application *)
+let texp_apply :
+ Typedtree.expression -> Typedtree.expression list -> 
+ Typedtree.expression_desc = fun f args ->
+   Texp_apply(f, List.map (fun arg -> ("",Some arg, Required)) args)
+
+
+  
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
 
@@ -169,6 +177,11 @@ exception CannotLift
    If the array is short, it should be lifted. For long arrays,
    building a CSP is better (although it make take a bit longer since
    we will have to invoke dyn_quote at run-time).
+
+   TODO: currently we generate calls to run-time functions like 
+   lift_constant_int to do the Parsetree generation. In the future
+   we should `inline' those functions -- that is, obtain the Typedtree
+   for them and use the tree for building Texp_apply.
 *)
 let lift_as_literal : 
   Typedtree.expression -> Path.t -> Longident.t loc -> 
@@ -177,28 +190,28 @@ let lift_as_literal :
         Ctype.expand_head exp.exp_env (Ctype.correct_levels exp.exp_type) in
   match Ctype.repr exp_ty with
     | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_int ->
-        raise CannotLift
-    | _ -> raise CannotLift             
-(*
-  match () with
-  | _ 
-      Pexp_constant (Const_int (Obj.magic v))
-  | (true,Some p) when Path.same p Predef.path_char ->
-      Pexp_constant (Const_char (Obj.magic v))
-  | (true,Some p) when Path.same p Predef.path_bool ->
-      let b = if (Obj.magic v) then "true" else "false"
-      in Pexp_construct (Longident.Lident b, None, false)
-  | (false,_) when Obj.tag v = Obj.double_tag ->
-      Pexp_constant (Const_float (string_of_float (Obj.magic v)))
-  | (false,_) when Obj.tag v = Obj.string_tag ->
-      Pexp_constant (Const_string (Obj.magic v))
-  | (_,Some p) when Path.same p Predef.path_nativeint ->
-      Pexp_constant (Const_nativeint (Obj.magic v))
-  | (_,Some p) when Path.same p Predef.path_int32 ->
-      Pexp_constant (Const_int32 (Obj.magic v))
-  | (_,Some p) when Path.same p Predef.path_int64 ->
-      Pexp_constant (Const_int64 (Obj.magic v))
-*)
+        texp_apply (texp_ident "Trx.lift_constant_int") [exp]
+    | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_char ->
+        texp_apply (texp_ident "Trx.lift_constant_char") [exp]
+    | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_bool ->
+        texp_apply (texp_ident "Trx.lift_constant_bool") [exp]
+          (* double and string are handled by dyn_quote *)
+    | _ -> raise CannotLift
+
+(* TODO: similarly handle Const_nativeint, Const_int32, Const_int64 *)
+let lift_constant_int : int -> Parsetree.expression = fun x -> 
+  {pexp_loc  = Location.none;
+   pexp_desc = Pexp_constant (Const_int x)}
+
+let lift_constant_char : char -> Parsetree.expression = fun x -> 
+  {pexp_loc  = Location.none;
+   pexp_desc = Pexp_constant (Const_char x)}
+
+let lift_constant_bool : bool -> Parsetree.expression = fun x -> 
+  let b = if x then "true" else "false" in 
+  {pexp_loc  = Location.none;
+   pexp_desc = Pexp_construct (Location.mknoloc (Longident.Lident b), 
+                               None, false)}
 
 
 (* Lift the run-time value v into a Parsetree for the code that, when
@@ -255,9 +268,7 @@ let trx_csp :
   let lid_exp = 
       {lid_exp with exp_desc = Texp_cspval (Obj.repr li, dummy_lid "*csp_li*")}
   in
-  Texp_apply(texp_ident "Trx.dyn_quote",
-             [("",Some exp,     Required);
-              ("",Some lid_exp, Required)])
+  texp_apply (texp_ident "Trx.dyn_quote") [exp;lid_exp]
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -1315,11 +1326,12 @@ let rec trx_e n exp =
   end
 *)
 
+(* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
    an expression at the level n > 0.
 *)
 
-(* Given a type ty, return ty code code ... code (n times code).
+(* Given a type [ty], return [ty code code ... code] (n times code).
    When we push the bracket in, expressions that had type ty before
    will have the type ('cl,ty) code.
    Here, ('cl,ty) code is an abtract type whose concrete representation
@@ -1401,6 +1413,9 @@ let rec trx_bracket :
   {exp with exp_type = wrap_ty_in_code n exp.exp_type;
             exp_desc = new_desc}
 
+
+(* ------------------------------------------------------------------------ *)
+(* Typedtree traversal to eliminate bracket/escapes *)
 
 (* Functions to help traverse and transform a tree.
    We assume that every tree mapping function of the type 'a -> 'a
@@ -1591,8 +1606,7 @@ and trx_expression = function
 
 | Texp_escape _ -> assert false         (* Not possible in well-typed code *)
 | Texp_run e -> 
-  Texp_apply(texp_ident "Runcode.run'",
-             [("",Some (trx_exp e), Required)])
+    texp_apply (texp_ident "Runcode.run'") [trx_exp e]
 | Texp_cspval (_,_) -> raise Not_modified
 
 

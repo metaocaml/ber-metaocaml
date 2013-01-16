@@ -41,14 +41,30 @@ Error: .! error: 'cl not generalizable in ('cl, 'a) code
 *)
 
 (* CSP *)
+
 let x = 1 in .<x>.;;
 (*
-- : ('cl, int) code = .<(* cross-stage persistent value (as id: x) *)>.
+- : ('cl, int) code = .<1>.
 *)
-
 let x = 1.0 in .<x>.;;
 (*
 - : ('cl, float) code = .<1.>.
+*)
+let x = true in .<x>.;;
+(*
+- : ('cl, bool) code = .<(true)>.
+*)
+let x = "aaa" in .<x>.;;
+(*
+- : ('cl, string) code = .<"aaa">.
+*)
+let x = 'a' in .<x>.;;
+(*
+- : ('cl, char) code = .<'a'>.
+*)
+let x = ['a'] in .<x>.;;
+(*
+- : ('cl, char list) code = .<(* cross-stage persistent value (as id: x) *)>.
 *)
 
 let l x = .<x>.;;                       (* polymorphic *)
