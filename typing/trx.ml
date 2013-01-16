@@ -28,6 +28,9 @@
   This mechanism of building Parsetree at compile-time whenever possible
   is one of the large differences from the previous versions of MetaOCaml.
 
+  Bindings.
+  Checking for scope extrusion: stack of currently active ids...
+
 Future-stage identifier x was represented in tree as 
 Texp_ident (ident,vd)
 We transform x if it was written Pexp_ident li, or
@@ -157,13 +160,45 @@ let texp_ident : string -> expression = fun name ->
     exp_env  = Env.initial }
 
 (* Building an application *)
-let texp_apply :
- Typedtree.expression -> Typedtree.expression list -> 
+let texp_apply : Typedtree.expression -> Typedtree.expression list -> 
  Typedtree.expression_desc = fun f args ->
    Texp_apply(f, List.map (fun arg -> ("",Some arg, Required)) args)
 
 
-  
+(* building a typical Parsetree node: Pexp_assert of expression*)
+let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression = 
+  fun l x -> {pexp_loc  = l; pexp_desc = Pexp_assert e}
+
+(* When we translate the typed-treee, we have to manually compile
+   the above code 
+First, to see the AST for the phrase, invoke the top-level with the flag
+-dparsetree. Then
+   {pexp_loc  = l; pexp_desc = Pexp_assert e}
+
+gives the parsetree:
+let build_assert_ast : Location.t -> Parsetree.expression -> Parsetree.expression = 
+{pexp_loc = l1;
+ pexp_desc = 
+  Pexp_record
+        ([(Location.mknoloc (Longident.parse "Parsetree.pexp_loc"), 
+           Pexp_ident "l");
+         (Location.mknoloc (Longident.parse "Parsetree.pexp_desc"),
+           {pexp_loc  = Location.none;
+            pexp_desc = Pexp_construct 
+                          ((Location.mknoloc (Longident.parse 
+                                                "Parsetree.Pexp_assert")),
+              Some {pexp_loc = Location.none;
+                    pexp_desc = Pexp_ident "e"},
+              false)})
+        ],
+        None)}
+type_expression
+
+If building the parsetree on our own, beware! For example, labels in
+Texp_record must be sorted, in their declared order!
+*)
+
+
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
 
@@ -467,16 +502,6 @@ searches for infrequent things.
 Since things like int, bool and string are going to be used all the time,
 we should just look them up eagerly.
 Further, should we use Predef.path_int, etc?
-
-let type_constant = function
-    Const_int _ -> instance_def Predef.type_int
-  | Const_char _ -> instance_def Predef.type_char
-  | Const_string _ -> instance_def Predef.type_string
-  | Const_float _ -> instance_def Predef.type_float
-  | Const_int32 _ -> instance_def Predef.type_int32
-  | Const_int64 _ -> instance_def Predef.type_int64
-  | Const_nativeint _ -> instance_def Predef.type_nativeint
-
 *)
 
 let type_bool = lazy (find_type "bool")
@@ -571,17 +596,9 @@ let constr_longident_lident   = lazy (find_constr "Longident.Lident")
 let constr_longident_ldot     = lazy (find_constr "Longident.Ldot")
 let constr_longident_lapply   = lazy (find_constr "Longident.Lapply")
 
-let pathval_run_expression = lazy (find_value "Runcode.run'")
 let pathval_trx_longidenttostring = lazy (find_value "Trx.longidenttostring")
 let pathval_trx_gensymlongident = lazy (find_value "Trx.gensymlongident")
-let pathval_trx_mkcsp = lazy (find_value "Trx.mkcsp")
 
-let run_expression exp =
-  let (p, v) = Lazy.force pathval_run_expression in
-  { exp with exp_type = instance v.val_type;
-    exp_desc = Texp_ident(p, v) }
-
-  
 let trx_longidenttostring exp =
   let (p, v) = Lazy.force pathval_trx_longidenttostring in
   { exp with exp_type = instance v.val_type;
@@ -1358,7 +1375,7 @@ let rec trx_bracket :
   (expression -> expression) -> (* 0-level traversal *)
   int -> (expression -> expression) = fun trx_exp n exp ->
   let new_desc = match exp.exp_desc with
-    (* Don't just do wheh vd.val_kind = Val_reg 
+    (* Don't just do when vd.val_kind = Val_reg 
        because (+) or Array.get are Val_prim *)
   | Texp_ident (p,li,vd)  ->
     let stage = try Env.find_stage p exp.exp_env
@@ -1367,14 +1384,13 @@ let rec trx_bracket :
 	           (Warnings.Camlp4 ("Stage for var is set to implicit 0:" ^ 
 	           Path.name p ^ "\n")));  [] in
     (* We make CSP only if the variable is bound at the stage 0.
-       If the variable is bound at the stage less than n,
-       we just output the Pexp_ident node. Since the generated code
-       will be type-checked again when is about to be run, we will
-       create CSP at that point then.
+       Variables bound at stage > 0 are subject to renaming.
+       They are translated into stage 0 variable but of a different
+       type (Longident.t loc), as explained in the title comments.
+       We also do the non-escaping check.
      *)
     if stage = [] then trx_csp exp p li 
-    else
-      (* always use the Path to construct lid, since path is fully qualified *)
+    else                                (* XXX *)
       let ast = 
         {pexp_loc = exp.exp_loc;
          pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
