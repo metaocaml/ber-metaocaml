@@ -138,6 +138,9 @@ let dummy_lid : string -> Longident.t loc = fun name ->
 (* Exported. Used as a template for constructing lid expressions *)
 let sample_lid = dummy_lid "*sample*"
 
+(* Exported. Used as a template for constructing Location.t expressions *)
+let sample_loc = Location.none
+
 
 (* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
@@ -165,9 +168,10 @@ let texp_apply : Typedtree.expression -> Typedtree.expression list ->
    Texp_apply(f, List.map (fun arg -> ("",Some arg, Required)) args)
 
 
+
 (* building a typical Parsetree node: Pexp_assert of expression*)
 let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  fun l x -> {pexp_loc  = l; pexp_desc = Pexp_assert e}
+  fun l e -> {pexp_loc  = l; pexp_desc = Pexp_assert e}
 
 (* When we translate the typed-treee, we have to manually compile
    the above code 
@@ -299,7 +303,7 @@ let trx_csp :
       in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
   else
   (* Otherwise, do the lifting at run-time *)
-  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills is the type, etc.*)
+  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills in the type, etc.*)
   let lid_exp = 
       {lid_exp with exp_desc = Texp_cspval (Obj.repr li, dummy_lid "*csp_li*")}
   in
@@ -380,61 +384,6 @@ let get_record_lids ty tenv =
   let type_lid = path_to_lid (get_type_path ty tenv) in
   let label_lid (name,_,_) = update_lid type_lid name
   in List.map label_lid lbls
-
-
-(* Given a value and its type, create a constant (that is, literal value)
-   of that type. For example, convert 1 to "1"
-*)
-
-let reify_to_literal v exp deflt =
-  let exp_base_type =
-    let exp_ty =
-      Ctype.expand_head exp.exp_env (Ctype.correct_levels exp.exp_type) in
-    (match Ctype.repr exp_ty with
-    | {desc = Tconstr(p, _, _)} -> Some p
-    | _ -> None) in
-  match (Obj.is_int v, exp_base_type) with
-  | (true,Some p) when Path.same p Predef.path_int ->
-      Pexp_constant (Const_int (Obj.magic v))
-  | (true,Some p) when Path.same p Predef.path_char ->
-      Pexp_constant (Const_char (Obj.magic v))
-  | (true,Some p) when Path.same p Predef.path_bool ->
-      let b = if (Obj.magic v) then "true" else "false"
-      in Pexp_construct (Longident.Lident b, None, false)
-  | (false,_) when Obj.tag v = Obj.double_tag ->
-      Pexp_constant (Const_float (string_of_float (Obj.magic v)))
-  | (false,_) when Obj.tag v = Obj.string_tag ->
-      Pexp_constant (Const_string (Obj.magic v))
-  | (_,Some p) when Path.same p Predef.path_nativeint ->
-      Pexp_constant (Const_nativeint (Obj.magic v))
-  | (_,Some p) when Path.same p Predef.path_int32 ->
-      Pexp_constant (Const_int32 (Obj.magic v))
-  | (_,Some p) when Path.same p Predef.path_int64 ->
-      Pexp_constant (Const_int64 (Obj.magic v))
-  | _ -> deflt ()
-
-
-(* ZZZ There is a lot of hacks here. First of all, mutation of rdesc
-   is ugly.
-   Second, we should add more constants,
-   literal lists and perhaps even datatype constructors, which are global.
-   At the very least [] should be literal, and short lists and arrays.
-   Also, see my article about gprint and the drawback of mkcsp mentioned
-   there, and correspondence with Cristiano about that time.
-*)
-let mkcsp v eo li =
-  let deflt = Pexp_cspval (Obj.magic v, li) in
-  let rdesc = match eo with
-  | None -> deflt
-  | Some exp ->				(* Try to make a literal AST value *)
-      reify_to_literal v exp 		(* (pass by literal value) *)
-      (fun () ->			(* Try to pass by reference *)
-	match exp.exp_desc with
-	| Texp_ident (i,_) when ident_can_be_quoted i ->
-          Pexp_ident (path_to_lid i)
-	| _ -> deflt)
-  in {pexp_desc = rdesc;
-      pexp_loc = Location.none}
 
 
 let map_option f o =
@@ -676,36 +625,6 @@ let mktrue exp =
   { exp with exp_type = Lazy.force type_bool;
     exp_desc = Texp_construct(Lazy.force constr_true, []) } 
 
-let quote_position exp p =
-  {exp with exp_desc =
-   Texp_record([Lazy.force label_pos_fname,
-                mkString exp p.Lexing.pos_fname;
-                Lazy.force label_pos_lnum,
-                {exp with exp_desc = Texp_constant (Const_int p.Lexing.pos_lnum)};
-                Lazy.force label_pos_bol,
-                {exp with exp_desc = Texp_constant (Const_int p.Lexing.pos_bol)};
-                Lazy.force label_pos_cnum,
-                {exp with exp_desc = Texp_constant (Const_int p.Lexing.pos_cnum)}
-              ],
-               None)}
-
-let quote_location exp =
-  let make_absolute file =
-    if Filename.is_relative file
-    then Filename.concat (Sys.getcwd()) file
-    else file in
-  let _  = if String.length !Location.input_name = 0
-  then ""
-  else make_absolute !Location.input_name 
-  in {exp with exp_desc =
-      Texp_record([Lazy.force label_loc_start,
-                   quote_position exp exp.exp_loc.Location.loc_start;
-                   Lazy.force label_loc_end,
-                   quote_position exp exp.exp_loc.Location.loc_end;
-                   Lazy.force label_loc_ghost,
-                   if exp.exp_loc.Location.loc_ghost then mktrue exp else mkfalse exp;
-                 ],
-                  None)}
 
 let mkExp exp t d = 
   { exp with exp_type = Lazy.force t;
@@ -1411,6 +1330,14 @@ let rec trx_bracket :
   | Texp_override  _  -> not_supported "Objects (Texp_override)"
   | Texp_letmodule (id,s,me,e) -> not_supported "let module"
 
+  | Texp_assert e ->
+      let loc_exp = texp_ident "Trx.sample_loc" in (* this fills in the type, etc.*)
+      let loc_exp = 
+      {loc_exp with exp_desc = Texp_cspval (Obj.repr exp.exp_loc, 
+                                            dummy_lid "*loc*")}
+      in
+      texp_apply (texp_ident "Trx.build_assert")
+        [loc_exp; trx_bracket trx_exp n e]
   | Texp_assertfalse ->
     let ast = 
       {pexp_loc = exp.exp_loc;
