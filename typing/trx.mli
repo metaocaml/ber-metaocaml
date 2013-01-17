@@ -1,5 +1,7 @@
-(* BER MetaOcaml--specific type checking. 
-   Should be eventually merged with typecore...
+(* BER MetaOCaml compilation
+   Transforming the Typedtree to eliminate brackets, escapes and
+   run, replacing them with calls to ordinary OCaml functions
+   to build the code representation (that is, Parsetree).
 *)
 
 exception TrxError of string
@@ -23,11 +25,14 @@ val sample_loc : Location.t
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> Parsetree.expression
 
-val lift_constant_int : int   -> Parsetree.expression
+val lift_constant_int  : int  -> Parsetree.expression
 val lift_constant_char : char -> Parsetree.expression
 val lift_constant_bool : bool -> Parsetree.expression
 
 val build_assert : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_apply : Location.t -> 
+                    (Asttypes.label * Parsetree.expression) array -> 
+                    Parsetree.expression
 
 
 (*

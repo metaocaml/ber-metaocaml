@@ -95,3 +95,44 @@ l 1.0;;                  (* better printing in N100 *)
 *)
 
 
+let x = true in .<assert x>.;;
+(*
+- : ('cl, unit) code = .<assert (true)>.
+*)
+
+(* Applications and labels *)
+.<succ 1>.;;
+(*
+- : ('cl, int) code = .<succ 1>.
+*)
+
+! .<succ 1>.;;
+(* - : int = 2 *)
+
+.<1 + 2>.;;
+(*
+- : ('cl, int) code = .<(1 + 2)>.
+*)
+.! .<(1 + 2)>.;;
+(* - : int = 3 *)
+
+.<String.length "abc">.;;
+(*
+- : ('cl, int) code = .<String.length "abc">.
+*)
+.! .<String.length "abc">.;;
+(* - : int = 3 *)
+
+.<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
+(*
+- : ('cl, string) code = .<(StringLabels.sub "abc" ~pos:1 ~len:2>.
+*)
+.! .<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
+(* - : string = "bc" *)
+
+.<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
+(*
+- : ('cl, string) code = .<(StringLabels.sub "abc" ~pos:1 ~len:2>.
+*)
+.! .<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
+(* - : string = "bc" *)

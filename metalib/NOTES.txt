@@ -66,6 +66,11 @@ val l : 'a -> ('cl, 'a) code = <fun>  (* Polymorphic! *)
 # l 1.0;;
 - : ('a, float) code = .<1.>.   (* Now it prints as a constant *)
 
+-- Applications with labeled arguments are supported now.
+
+-- Precise type assignment when building Typedtree nodes (when
+   hand-compiling Parsetree generation).
+   
   * Main differences from the original MetaOCaml
 
 -- Added metalib (aka ber-metaocaml) directory: the MetaOCaml library, 

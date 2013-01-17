@@ -152,7 +152,7 @@ let sample_loc = Location.none
 
 (* Should we add memoization? *)
 
-(* Building a node for an identifier with a given (qualified) name *)
+(* Compiling an identifier with a given (qualified) name *)
 let texp_ident : string -> expression = fun name ->
   let lid     = Longident.parse name in
   let (p, vd) = try Env.lookup_value lid Env.initial 
@@ -167,7 +167,47 @@ let texp_apply : Typedtree.expression -> Typedtree.expression list ->
  Typedtree.expression_desc = fun f args ->
    Texp_apply(f, List.map (fun arg -> ("",Some arg, Required)) args)
 
+(* Compiling location data *)
+let texp_loc : Location.t -> Typedtree.expression = fun loc ->
+  let loc_exp = texp_ident "Trx.sample_loc" in (* this fills in the type, etc.*)
+  {loc_exp with exp_desc = Texp_cspval (Obj.repr loc, dummy_lid "*loc*")}
 
+(* Compiling a string constant *)
+let texp_string : string -> Typedtree.expression = fun str ->
+  { exp_desc = Texp_constant (Const_string str);
+    exp_loc  = Location.none; exp_extra = [];
+    exp_type = Ctype.instance_def Predef.type_string;
+    exp_env  = Env.initial }
+
+(* Compiling a tuple *)
+let texp_tuple : Typedtree.expression list -> Typedtree.expression = fun el ->
+  { exp_desc = Texp_tuple el;
+    exp_loc  = Location.none; exp_extra = [];
+    exp_type = Ctype.newty (Ttuple (List.map (fun e -> e.exp_type) el));
+    exp_env  = Env.initial }
+
+(* Compiling an non-empty array *)
+(* We use this function for grouping trx_bracket-transformed expressions,
+   which have the same representation type (but may be different
+   code type). We ignore the differences in the code type, since
+   the representation type is the same
+
+   We don't use lists since they are harder to compile, and more
+   fragile. Texp_construct has more arguments, we have to locate
+   constructor information, etc.
+*)
+let texp_array : Typedtree.expression list -> Typedtree.expression = function
+  | [] -> assert false
+  | (h::_) as el ->
+      { exp_desc = Texp_array el;
+        exp_loc  = Location.none; exp_extra = [];
+        exp_type = Predef.type_array h.exp_type;
+        exp_env  = Env.initial }
+
+
+
+(* ------------------------------------------------------------------------ *)
+(* Building Parsetree nodes *)
 
 (* building a typical Parsetree node: Pexp_assert of expression*)
 let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression = 
@@ -201,6 +241,17 @@ type_expression
 If building the parsetree on our own, beware! For example, labels in
 Texp_record must be sorted, in their declared order!
 *)
+
+(* Build the application. The first element in the array is the
+   function. The others are arguments. *)
+let build_apply : Location.t -> (label * Parsetree.expression) array -> 
+  Parsetree.expression = 
+  fun l ea -> 
+    assert (Array.length ea > 1);
+    {pexp_loc  = l; 
+     pexp_desc = Pexp_apply (snd ea.(0),List.tl (Array.to_list ea))}
+
+                             
 
 
 (* ------------------------------------------------------------------------ *)
@@ -1039,7 +1090,8 @@ let rec trx_e n exp =
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_apply, 
                                [trx_e n e;
-                                mkPexpList exp (map_strict (fun x -> mkPexpTuple exp
+                                mkPexpList exp (map_strict 
+                                                  (fun x -> mkPexpTuple exp
                                     [mkString exp "";
                                      trx_e n x]) 
                                                   eol)]))
@@ -1265,6 +1317,11 @@ let rec trx_e n exp =
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
    an expression at the level n > 0.
+
+   Since bracket-translation is somewhat similar to un-typechecking,
+   see tools/untypeast.ml for hints on mapping Typedtree.expression
+   to Parsetree.expression.
+
 *)
 
 (* Given a type [ty], return [ty code code ... code] (n times code).
@@ -1314,11 +1371,24 @@ let rec trx_bracket :
         {pexp_loc = exp.exp_loc;
          pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
       in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
+
   | Texp_constant cst ->
     let ast = 
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_constant cst}
     in Texp_cspval (Obj.repr ast, dummy_lid "*cst*")
+
+  | Texp_apply (e, el) ->
+     (* first, we remove from el the information added by the type-checker *)
+     let lel = List.fold_right (function                 (* keep the order! *)
+                | (_,None,_)   -> fun acc -> acc
+                | (l,Some e,_) -> fun acc -> (l,e)::acc) el [] in
+     let lel = ("",e) :: lel in          (* Add the operator data *)
+      texp_apply (texp_ident "Trx.build_apply")
+        [texp_loc exp.exp_loc; 
+         texp_array (List.map (fun (l,e) ->
+           texp_tuple [texp_string l;trx_bracket trx_exp n e]) lel)]
+
   | Texp_instvar (p1,p2,s) ->
      not_supported "Objects (Texp_instvar)"
         (* Alternatively: since instance variables are always bound 
@@ -1331,18 +1401,14 @@ let rec trx_bracket :
   | Texp_letmodule (id,s,me,e) -> not_supported "let module"
 
   | Texp_assert e ->
-      let loc_exp = texp_ident "Trx.sample_loc" in (* this fills in the type, etc.*)
-      let loc_exp = 
-      {loc_exp with exp_desc = Texp_cspval (Obj.repr exp.exp_loc, 
-                                            dummy_lid "*loc*")}
-      in
       texp_apply (texp_ident "Trx.build_assert")
-        [loc_exp; trx_bracket trx_exp n e]
+        [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
   | Texp_assertfalse ->
     let ast = 
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_assertfalse}
     in Texp_cspval (Obj.repr ast, dummy_lid "*af*")
+
   | Texp_object (cl,fl) -> not_supported "Objects"
   | Texp_pack _         -> not_supported "First-class modules"
 
