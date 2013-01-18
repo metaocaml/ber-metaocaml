@@ -120,29 +120,40 @@ let check_path_quotable msg path =
    constructor. That type_path is fully qualified.
  *)
 (* TODO: memoize? *)
-let qualify_ctor : Path.t -> type_expr -> Env.t -> Longident.t = 
- fun p ty env ->
-  if is_external p then path_to_lid p
-  else 
+let qualify_ctor : Path.t -> constructor_description -> Longident.t = 
+ fun p cdesc ->
+  let lid = path_to_lid p in
+  if is_external p then lid
+  else if try ignore (Env.lookup_constructor lid Env.initial); true
+          with Not_found -> false
+       then lid
+  else match (cdesc.cstr_tag, Ctype.repr cdesc.cstr_res) with
+  | (Cstr_exception (p,_),_) ->
+      if is_external p then path_to_lid p else
+      raise (TrxError ("Exception " ^ Path.name p ^
+        " cannot be used within brackets. Put into a separate file."))
+  | (_,{desc = Tconstr(ty_path, _, _)}) ->
+      (if is_external ty_path then
+        match (ty_path,p) with
+        | (Path.Pident _,_) -> path_to_lid p
+        | (Path.Pdot(p1,_,s),Path.Pident id) -> 
+            path_to_lid (Path.Pdot(p1,Ident.name id,s))
+        | _ -> assert false
+      else
+        raise (TrxError ("Constructor " ^ Path.name p ^
+               " cannot be used within brackets. Put into a separate file.")))
+
+  | _ -> Printtyp.type_expr Format.err_formatter cdesc.cstr_res;
+           failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
+                     Path.name p)
+
+(*
   let ty_path = 
     let ty = Ctype.expand_head env (Ctype.correct_levels ty) in
     match Ctype.repr ty with
     | {desc = Tconstr(p, _, _)} -> p
-    | _ -> Printtyp.type_expr Format.err_formatter ty;
-           failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
-                     Path.name p)
   in 
-  Printtyp.path Format.std_formatter ty_path;
-  print_endline "xxx";
-  if is_external ty_path then
-    match (ty_path,p) with
-    | (Path.Pident _,_) -> path_to_lid p
-    | (Path.Pdot(p1,_,s),Path.Pident id) -> 
-        path_to_lid (Path.Pdot(p1,Ident.name id,s))
-    | _ -> assert false
-  else
-    raise (TrxError ("Constructor " ^ Path.name p ^
-     " cannot be used within brackets. Put into a separate file."))
+*)
 
 
 (* Test if we should refer to a CSP value by name rather than by
@@ -1363,8 +1374,8 @@ let rec trx_bracket :
     ditto for constructors with 0 arg (true); 1 arg (Some)
     and two arguments; both local and global.
     Also check ctors in a separate module. *)
-  | Texp_construct (p, li, _, args, explicit_arity) ->
-      let lid = qualify_ctor p exp.exp_type exp.exp_env in
+  | Texp_construct (p, li, cdesc, args, explicit_arity) ->
+      let lid = qualify_ctor p cdesc in
       texp_apply (texp_ident "Trx.build_construct")
         [texp_loc exp.exp_loc; 
          texp_lid (mkloc lid li.loc);

@@ -136,3 +136,165 @@ let x = true in .<assert x>.;;
 *)
 .! .<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
 (* - : string = "bc" *)
+
+(* Nested brackets and escapes and run *)
+.<.<1>.>.;;
+(*
+- : ('cl, ('cl0, int) code) code = .<.<1>.>.
+*)
+.! .<.<1>.>.;;
+(* - : ('cl, int) code = .<1>. *)
+.! (.! .<.<1>.>.);;)
+(* - : int = 1 *)
+.<.!.<1>.>.;;
+(*
+- : ('cl, int) code = .<.!.<1>.>.
+*)
+.! .<.!.<1>.>.;;
+(* - : int = 1 *)
+.<1 + .~(let x = 2 in .<x>.)>.;;
+(*
+- : ('cl, int) code = .<(1 + 2)>.
+*)
+let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
+(*
+- : ('cl, int) code = .<((2 + 4) + (2 + 4))>.
+*)
+
+.<1 + .~(let x = 2 in .<.<x>.>.)>.;;
+(*
+Characters 24-29:
+  .<1 + .~(let x = 2 in .<.<x>.>.)>.;;
+                          ^^^^^
+Error: This expression has type ('cl, 'a) code
+       but an expression was expected of type int
+*)
+.<1 + .! .~(let x = 2 in .<.<x>.>.)>.;;
+(*
+- : ('cl, int) code = .<(1 + .!.<2>.)>.
+*)
+.! .<1 + .! .~(let x = 2 in .<.<x>.>.)>.;;
+(* - : int = 3 *)
+.! .<1 + .~ (.~(let x = 2 in .<.<x>.>.))>.;;
+(*
+Characters 12-40:
+  .! .<1 + .~ (.~(let x = 2 in .<.<x>.>.))>.;;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Wrong level: escape at level 0
+*)
+
+.<.<.~(.<1>.)>.>.;;
+(*
+- : ('cl, ('cl0, int) code) code = .<.<.~(.<1>.)>.>.
+*)
+.!.<.<.~(.<1>.)>.>.;;
+(*
+- : ('cl, int) code = .<1>.
+*)
+.<.<.~.~(.<.<1>.>.)>.>.;;
+(*
+- : ('cl, ('cl0, int) code) code = .<.<.~(.<1>.)>.>.
+*)
+
+(* Lazy *)
+.<lazy 1>.;;
+(*
+- : ('cl, int lazy_t) code = .<lazy 1>.
+*)
+Lazy.force (.! .<lazy 1>.);;
+(* - : int = 1 *)
+
+(* Tuples *)
+.<(1,"abc")>.;;
+(*
+- : ('cl, int * string) code = .<((1), ("abc"))>.
+*)
+.<(1,"abc",'d')>.;;
+(*
+- : ('cl, int * string * char) code = .<((1), ("abc"), ('d'))>.
+*)
+match .! .<(1,"abc",'d')>. with (_,x,_) -> x;;
+(* - : string = "abc" *)
+
+
+(* Constructors and enforcing externality *)
+.<raise Not_found>.;;
+(*
+- : ('cl, 'a) code = .<(raise (Not_found)>.
+*)
+.<raise (Scan_failure "")>.;;
+(*
+Characters 8-25:
+  .<raise (Scan_failure "")>.;;
+          ^^^^^^^^^^^^^^^^^
+Error: Unbound constructor Scan_failure
+*)
+.<raise (Scanf.Scan_failure "")>.;;
+(*
+- : ('cl, 'a) code = .<(raise (Scanf.Scan_failure (""))>.
+*)
+open Scanf;;
+.<raise (Scan_failure "")>.;;
+(*
+- : ('cl, 'a) code = .<(raise (Scanf.Scan_failure (""))>.
+*)
+.! .<raise (Scan_failure "")>.;;
+(*
+Exception: Scanf.Scan_failure "".
+*)
+
+
+.<true>.;;
+(*
+- : ('cl, bool) code = .<(true)>.
+*)
+.<Some 1>.;;
+(*
+- : ('cl, int option) code = .<(Some (1))>.
+*)
+.<Some [1]>.;;
+(*
+- : ('cl, int list option) code = .<(Some ([1]))>.
+*)
+.! .<Some [1]>.;;
+(*
+- : int list option = Some [1]
+*)
+.<None>.;;
+(*
+- : ('cl, 'a option) code = .<(None)>.
+*)
+.! .<None>.;;
+(*
+- : 'a option = None
+*)
+
+.<Genlex.Int 1>.;;
+(*
+- : ('cl, Genlex.token) code = .<(Genlex.Int (1))>.
+*)
+open Genlex;;
+.<Int 1>.;;
+(*
+- : ('cl, Genlex.token) code = .<(Genlex.Int (1))>.
+*)
+.! .<Int 1>.;;
+(*
+- : Genlex.token = Int 1
+*)
+
+module Foo = struct exception E end;;
+.<raise Foo.E>.;;
+(*
+Fatal error: exception Trx.TrxError("Exception Foo.E cannot be used within brackets. Put into a separate file.")
+*)
+type foo = Bar;;
+.<Bar>.;;
+(*
+Fatal error: exception Trx.TrxError("Constructor Bar cannot be used within brackets. Put into a separate file.")
+*)
+module Foo = struct type foo = Bar end;;
+.<Foo.Bar>.;;
+(*
+Fatal error: exception Trx.TrxError("Constructor Foo.Bar cannot be used within brackets. Put into a separate file.")
+*)

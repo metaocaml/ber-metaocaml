@@ -19,6 +19,14 @@ let tr3 = .<fun x -> .~(let x = .! .<x>. in .<x>.)>.;;
 Error: .! error: 'a not generalizable in ('a, 'b) code
 *)
 
+.< fun x -> .~ (.!.< x >.) >.;;
+(*
+Characters 15-26:
+  .< fun x -> .~ (.!.< x >.) >.;;
+                 ^^^^^^^^^^^
+Error: .! occurs check error: 'cl occurs in ('cl, ('cl, 'a) code) code
+*)
+
 let tr4 = .<fun x -> .~(let x = .! x in .<x>.)>.;;
 (*
 Characters 35-36:
