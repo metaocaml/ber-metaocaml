@@ -837,8 +837,12 @@ and transl_exp0 e =
           cl_type = Cty_signature cty;
           cl_env = e.exp_env }
   | Texp_cspval (v,_) ->  Lconst(Const_csp_value v)         (* NNN *)
-  | Texp_run _ | Texp_escape _  | Texp_bracket _ ->         (* NNN *)
-      fatal_error "Translcore.trans_exp with meta stuff"    (* NNN *)
+  | Texp_run _ | Texp_escape _  | Texp_bracket _ ->         (* NNN begin *)
+      Printtyped.implementation Format.err_formatter
+        {str_type = []; str_final_env = e.exp_env;
+         str_items = [{str_env = e.exp_env; str_loc = Location.none; 
+                       str_desc =Tstr_eval e}]};
+      fatal_error "Translcore.trans_exp with meta stuff"    (* NNN end *)
 
 and transl_list expr_list =
   List.map transl_exp expr_list

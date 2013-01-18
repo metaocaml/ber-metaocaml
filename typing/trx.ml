@@ -1617,7 +1617,9 @@ and trx_expression = function
 | Texp_object (cs,sl) -> Texp_object (trx_cl_struct cs,sl)
 | Texp_pack me -> Texp_pack (trx_me me)
 
-| Texp_bracket e -> (trx_bracket trx_exp 1 e).exp_desc
+| Texp_bracket e -> 
+  let trx_exp e = try trx_exp e with Not_modified -> e in
+  (trx_bracket trx_exp 1 e).exp_desc
 
 | Texp_escape _ -> assert false         (* Not possible in well-typed code *)
 | Texp_run e -> 
