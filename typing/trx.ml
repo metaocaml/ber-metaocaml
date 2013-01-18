@@ -80,11 +80,19 @@ exception TrxError of string
    a .cmo file.
 *)
 let is_external = function
-  | Path.Pident _ -> false              (* not qualified *)
-  | Path.Papply _ -> false
+  | Path.Pident id -> Ident.persistent id              (* not qualified *)
+  | Path.Papply _  -> false
   | Path.Pdot(Path.Pident id, _,_) -> Ident.persistent id
   | _             -> false
 
+(* Convert a path to an identifier. Since the path is assumed to be
+   `global', time stamps don't matter and we can use just strings.
+*)
+let rec path_to_lid : Path.t -> Longident.t = function
+  | Path.Pident i       -> Longident.Lident (Ident.name i)
+  | Path.Pdot (p,s,_)   -> Longident.Ldot (path_to_lid p, s)
+  | Path.Papply (p1,p2) ->
+      Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
 (* Check to make sure a constructor, label, exception, etc.
    have the name that we can put into AST (Parsetree).
@@ -96,36 +104,57 @@ let check_path_quotable msg path =
     raise (TrxError (msg ^ " " ^ Path.name path ^
      " cannot be used within brackets. Put into a separate file."))
 
+(* Check to see that a constructor belongs to a type defined
+   in a persistent module or the initial environment.
+   Return the fully qualified name to put into AST 
+   (Unless the constructor is Pervasive).
+
+   If the constructor is already fully qualified (whose module identifier
+   is persistent), we are all done. For example, Scanf.Scan_failure.
+   The major complexity is in this scenario:
+      open Scanf
+      .<raise (Scan_failure "xx")>.
+   The Texp_construct node contains the lid and path that refer only
+   to Scan_failure. We have to find the fully qualified path and check
+   that it is external. We do that by finding the path for the _type_
+   constructor. That type_path is fully qualified.
+ *)
+(* TODO: memoize? *)
+let qualify_ctor : Path.t -> type_expr -> Env.t -> Longident.t = 
+ fun p ty env ->
+  if is_external p then path_to_lid p
+  else 
+  let ty_path = 
+    let ty = Ctype.expand_head env (Ctype.correct_levels ty) in
+    match Ctype.repr ty with
+    | {desc = Tconstr(p, _, _)} -> p
+    | _ -> Printtyp.type_expr Format.err_formatter ty;
+           failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
+                     Path.name p)
+  in 
+  Printtyp.path Format.std_formatter ty_path;
+  print_endline "xxx";
+  if is_external ty_path then
+    match (ty_path,p) with
+    | (Path.Pident _,_) -> path_to_lid p
+    | (Path.Pdot(p1,_,s),Path.Pident id) -> 
+        path_to_lid (Path.Pdot(p1,Ident.name id,s))
+    | _ -> assert false
+  else
+    raise (TrxError ("Constructor " ^ Path.name p ^
+     " cannot be used within brackets. Put into a separate file."))
+
+
 (* Test if we should refer to a CSP value by name rather than by
    value
 *)
 (* Module identifiers for the modules that are expected to be
    present at run-time -- that is, will be available for
    dynamic linking of the run-time generated code.
-   Basically we can assume the standard library.
 *)
 
-(* 
-let pervasive_idents =
-  List.map Ident.create_persistent 
-  ["Pervasives"; "Array"; "Printf"; "List"; "String"]
+let ident_can_be_quoted = is_external
 
-let ident_can_be_quoted = function
-  | Path.Pdot(Path.Pident id, _,_) ->
-      List.exists (Ident.same id) pervasive_idents
-  | _ -> false
-*)
-
-let ident_can_be_quoted = is_external   (* Perhaps this is a better version *)
-
-(* Convert a path to an identifier. Since the path is assumed to be
-   `global', time stamps don't matter and we can use just strings.
-*)
-let rec path_to_lid : Path.t -> Longident.t = function
-  | Path.Pident i       -> Longident.Lident (Ident.name i)
-  | Path.Pdot (p,s,_)   -> Longident.Ldot (path_to_lid p, s)
-  | Path.Papply (p1,p2) ->
-      Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
 let dummy_lid : string -> Longident.t loc = fun name ->
   Location.mknoloc (Longident.Lident name)
@@ -194,7 +223,7 @@ let texp_tuple : Typedtree.expression list -> Typedtree.expression = fun el ->
   mk_texp (Texp_tuple el)
           (Ctype.newty (Ttuple (List.map (fun e -> e.exp_type) el)))
 
-(* Compiling an non-empty array *)
+(* Compiling an array *)
 (* We use this function for grouping trx_bracket-transformed expressions,
    which have the same representation type (but may be different
    code type). We ignore the differences in the code type, since
@@ -205,7 +234,9 @@ let texp_tuple : Typedtree.expression list -> Typedtree.expression = fun el ->
    constructor information, etc.
 *)
 let texp_array : Typedtree.expression list -> Typedtree.expression = function
-  | [] -> assert false
+  | [] -> 
+      mk_texp (Texp_array []) 
+	      (Ctype.instance_def (Predef.type_array (Btype.newgenvar ())))
   | (h::_) as el ->
       mk_texp (Texp_array el) 
 	      (Ctype.instance_def (Predef.type_array h.exp_type))
@@ -1333,10 +1364,10 @@ let rec trx_bracket :
     and two arguments; both local and global.
     Also check ctors in a separate module. *)
   | Texp_construct (p, li, _, args, explicit_arity) ->
-      check_path_quotable "Constructor" p;
+      let lid = qualify_ctor p exp.exp_type exp.exp_env in
       texp_apply (texp_ident "Trx.build_construct")
         [texp_loc exp.exp_loc; 
-         texp_lid (mkloc (path_to_lid p) li.loc);
+         texp_lid (mkloc lid li.loc);
 	 texp_array (List.map (trx_bracket trx_exp n) args);
          texp_bool explicit_arity]
 
