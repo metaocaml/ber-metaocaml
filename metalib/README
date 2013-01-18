@@ -7,14 +7,13 @@
    2 Installation
    3 Staging constructs
    4 Common Problems
-   5 Known Bugs
-   6 Detailed Discussion
-   7 Credits
+   5 Detailed Discussion
+   6 Credits
 
 1. COPYRIGHT
 
-BER MetaOCaml is a derivative work of MetaOCaml, licensed according to
-ORIGINAL-LICENSE-META
+BER MetaOCaml is a complete re-implementation of MetaOCaml, 
+which was licensed according to ORIGINAL-LICENSE-META
 
 
 2. INSTALLATION
@@ -23,8 +22,8 @@ ORIGINAL-LICENSE-META
 
 
 3. STAGING CONSTRUCTS
-   (This section is copied verbatim from the last release of MetaOCaml;
-    Feb 3, 2006)
+   (This section is essentially that the last release of MetaOCaml;
+    Feb 3, 2006. In is modified for BER MetaOCaml)
 
   The three new constructs are
 
@@ -35,14 +34,19 @@ ORIGINAL-LICENSE-META
   A special type constructor,
   called code is used to type code expressions. For example, 
 
+
     # .< 2 + 4 >.;;
-    - : ('a, int) code = .<(2 + 4)>.
+    - : ('cl, int) code = .<(2 + 4)>.
+
+  The type constructor code takes *two* arguments. The first argument
+  is always a type variable, usually named 'cl, called an environment
+  classifier, and is used to correctly type the run (.!)  construct.
 
   Code fragments can be spliced into larger code contexts by using the
   escape construct: 
 
     # let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
-    - : ('a, int) code = .<((2 + 4) + (2 + 4))>.
+    - : ('cl, int) code = .<((2 + 4) + (2 + 4))>.
 
   The escape construct takes an expression of type ((_,t) code) and
   produces an expression of type t, but only inside of a
@@ -51,16 +55,11 @@ ORIGINAL-LICENSE-META
   in the following type error:
 
     # .~ .< 2 + 3 >.;;
-    Characters 3-14:
-      .~ .< 2 + 3 >.;;
-         ^^^^^^^^^^^
+    Characters 0-14:
+    .~ .< 2 + 3 >.;;
+    ^^^^^^^^^^^^^^
     Wrong level: escape at level 0
 
-  The type constructor code
-  takes *two* arguments ( "int code" in the previous version becomes
-  "('a,int) code" in the current). The first argument is always a type
-  variable, called an environment classifier, and is used to correctly
-  type the run (.!)  construct. 
 
   The run construct takes a code value, executes it and returns its result. 
   For example: 
@@ -72,17 +71,17 @@ ORIGINAL-LICENSE-META
   their environment classifier, and is used to prevent nonsensical programs 
   such as the following:
 
-    # .< fun x -> .~ (.!.< x >.) >.;;
-    Characters 18-25:
-       .< fun x -> .~ (.!.< x >.) >.;;
-                         ^^^^^^^
-    .! error: 'a not generalizable in ('a, 'b) code
+    # .< fun x -> .~ (let u = .!.< x >. in .<()>.) >.;;
+    Characters 24-33:
+      .< fun x -> .~ (let u = .!.< x >. in .<()>.) >.;;
+                              ^^^^^^^^^
+    Error: .! error: 'cl not generalizable in ('cl, 'a) code
+
+  Please see many more examples in test/trivial.ml and other files
+  in the test/ directory.
 
 
 4. COMMON PROBLEMS
-   (This section is copied verbatim from the last release of MetaOCaml;
-    Feb 3, 2006)
-
    1. To use MetaOCaml under MS Windows, please do not use "Windows
       OCaml".  Rather, use the standard OCaml system under cygwin.  If you
       happened to install the "Windows OCaml" in the past, manually remove
@@ -91,30 +90,23 @@ ORIGINAL-LICENSE-META
       Advance -> Environment variables, and edit the OCAMLLIB variable and
       remove any entries in that entry.
 
+   2. Escaped expressions at the same level evaluate from right to left.
 
-5. KNOWN BUGS
-   (This section is copied verbatim from the last release of MetaOCaml,
-    Feb 3, 2006)
-
-  1. Regular ocaml crashed if you use bracket (".< >."), escape (".~"),
-     or run (".!").
-
-  2. Escaped expressions at the same level evaluate from right to left.
-
-  3. Objects and modules are not supported.
+   3. Objects and modules are not supported within brackets are not supported
+     (but you can use brackets within modules or objects).
 
 
-6. DETAILED DISCUSSION
+5. DETAILED DISCUSSION
    See NOTES.txt
 
-7. CREDITS
+6. CREDITS
 
-  This project is fundamentally based on the an early version of
-  MetaOcaml, which was funded primarily by an NSF project titled:
+  BER MetaOCaml is a re-implemention of the early version of
+  MetaOCaml, which was funded primarily by an NSF project titled:
 
 	"ITR/SY(CISE): Putting Multi-Stage Annotations to Work"
 
-  The project is led by Walid Taha. Most of the development
+  The project was led by Walid Taha. Most of the development
   and implementation of staging was done by Cristiano
   Calcagno, then at Imperial College. 
   Edward Pizzi has implemented the pretty-printing library.

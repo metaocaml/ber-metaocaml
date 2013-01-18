@@ -66,6 +66,9 @@ val l : 'a -> ('cl, 'a) code = <fun>  (* Polymorphic! *)
 # l 1.0;;
 - : ('a, float) code = .<1.>.   (* Now it prints as a constant *)
 
+-- Added very many regression tests (which also work as examples) to test
+every feature: see test/trivial.ml and test/simple.ml
+
 -- Applications with labeled arguments are supported now.
 
 -- Precise type assignment when building Typedtree nodes (when
