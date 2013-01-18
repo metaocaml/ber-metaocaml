@@ -30,10 +30,32 @@ val lift_constant_char : char -> Parsetree.expression
 val lift_constant_bool : bool -> Parsetree.expression
 
 val build_assert : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_lazy   : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_bracket : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_escape  : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_run     : Location.t -> Parsetree.expression -> Parsetree.expression
+
+val build_sequence : 
+  Location.t -> Parsetree.expression -> Parsetree.expression -> 
+  Parsetree.expression
+val build_while : 
+  Location.t -> Parsetree.expression -> Parsetree.expression -> 
+  Parsetree.expression
+val build_when : 
+  Location.t -> Parsetree.expression -> Parsetree.expression -> 
+  Parsetree.expression
+
 val build_apply : Location.t -> 
                     (Asttypes.label * Parsetree.expression) array -> 
                     Parsetree.expression
 
+val build_tuple : 
+  Location.t -> Parsetree.expression array -> Parsetree.expression
+val build_array : 
+  Location.t -> Parsetree.expression array -> Parsetree.expression
+val build_construct :
+ Location.t -> Longident.t Location.loc -> Parsetree.expression array -> bool ->
+ Parsetree.expression
 
 (*
 val longidenttostring : Longident.t -> string

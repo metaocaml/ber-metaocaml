@@ -1,10 +1,9 @@
 (*
-  The goal of this file is to post-process the Typedtree
-  after the type checking and before the code generation to
-  get rid of bracket, esc and run. The main function is
-  trx_structure, which initiates the traversal and
-  transforms every found expression with trx_exp. The real
-  transformation is done by trx_bracket.
+  This file is to post-process the Typedtree built by the type checker
+  before it is passed to the code generator -- to get rid of bracket,
+  escape and run. The main function is trx_structure, which initiates the
+  traversal and transforms every found expression with trx_exp. The
+  real transformation is done by trx_bracket.
 
   For example,
      <succ 1> 
@@ -12,9 +11,9 @@
      mkApp <succ> <1> 
   and eventually to
      mkApp (mkIdent "succ") (mkConst 1)
-  One may say that we `push the brackets inside'.
-  We replace bracket with calls to functions that will construct, at run-time,
-  a Parsetree, which is the representation of code type.
+  One may say that we `push the brackets inside'.  We replace bracket
+  with calls to functions that will construct, at run-time, a
+  Parsetree, which is the representation of values of the code type.
 
   Generally, the Parsetree is constructed when the program is run.
   In some cases we can construct the Parsetree at compile time,
@@ -31,15 +30,20 @@
   Bindings.
   Checking for scope extrusion: stack of currently active ids...
 
+  <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
+
+
 Future-stage identifier x was represented in tree as 
 Texp_ident (ident,vd)
 We transform x if it was written Pexp_ident li, or
 in tree terms
 Texp_construct ("Pexp_ident", [
 
-constants (and csp, Assertfalse)
+
 This file is based on trx.ml from the original MetaOCaml,
-but it is almost completely re-written.
+but it is completely re-written. The traversal algorithm,
+the way of compiling Parsetree builders, dealing with CSP
+and many other algorithms are different.
 
 *)
 
@@ -48,15 +52,6 @@ open Asttypes
 open Misc
 open Typedtree
 open Types
-(*
-open Ctype
-open Parmatch
-open Path
-open Ident
-open Env
-*)
-
-
 
 (* BER MetaOCaml version string *)
 let meta_version  = "N 100"
@@ -98,7 +93,7 @@ let is_external = function
 *)
 let check_path_quotable msg path =
   if not (is_external path) then
-    raise (TrxError (msg ^ 
+    raise (TrxError (msg ^ " " ^ Path.name path ^
      " cannot be used within brackets. Put into a separate file."))
 
 (* Test if we should refer to a CSP value by name rather than by
@@ -150,17 +145,22 @@ let sample_loc = Location.none
    up as needed.
 *)
 
-(* Should we add memoization? *)
+let mk_texp : Typedtree.expression_desc -> type_expr -> Typedtree.expression =
+  fun desc ty ->
+  { exp_desc = desc; exp_type = ty;
+    exp_loc  = Location.none; exp_extra = [];
+    exp_env  = Env.initial }
+
+(* TODO: add memoization? *)
 
 (* Compiling an identifier with a given (qualified) name *)
 let texp_ident : string -> expression = fun name ->
   let lid     = Longident.parse name in
   let (p, vd) = try Env.lookup_value lid Env.initial 
                 with Not_found -> fatal_error ("Trx.find_value: " ^ name) in
-  { exp_desc = Texp_ident (p,mknoloc lid, vd);
-    exp_loc  = Location.none; exp_extra = [];
-    exp_type = Ctype.instance Env.initial vd.val_type;
-    exp_env  = Env.initial }
+  mk_texp (Texp_ident (p,mknoloc lid, vd))
+          (Ctype.instance Env.initial vd.val_type)
+
 
 (* Building an application *)
 let texp_apply : Typedtree.expression -> Typedtree.expression list -> 
@@ -172,25 +172,33 @@ let texp_loc : Location.t -> Typedtree.expression = fun loc ->
   let loc_exp = texp_ident "Trx.sample_loc" in (* this fills in the type, etc.*)
   {loc_exp with exp_desc = Texp_cspval (Obj.repr loc, dummy_lid "*loc*")}
 
+(* Compiling longident with location data *)
+let texp_lid : Longident.t loc -> Typedtree.expression = fun lid ->
+  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills in the type, etc.*)
+  {lid_exp with exp_desc = Texp_cspval (Obj.repr lid, dummy_lid "*lid*")}
+
 (* Compiling a string constant *)
 let texp_string : string -> Typedtree.expression = fun str ->
-  { exp_desc = Texp_constant (Const_string str);
-    exp_loc  = Location.none; exp_extra = [];
-    exp_type = Ctype.instance_def Predef.type_string;
-    exp_env  = Env.initial }
+  mk_texp (Texp_constant (Const_string str))
+          (Ctype.instance_def Predef.type_string)
+
+(* Compiling a boolean *)
+let texp_bool : bool -> Typedtree.expression = fun b ->
+  let lid = Longident.Lident (if b then "true" else "false") in
+  let (path, cdec) = Env.lookup_constructor lid Env.initial in
+  mk_texp (Texp_construct(path, mknoloc lid, cdec, [], false))
+          (Ctype.instance_def Predef.type_bool)
 
 (* Compiling a tuple *)
 let texp_tuple : Typedtree.expression list -> Typedtree.expression = fun el ->
-  { exp_desc = Texp_tuple el;
-    exp_loc  = Location.none; exp_extra = [];
-    exp_type = Ctype.newty (Ttuple (List.map (fun e -> e.exp_type) el));
-    exp_env  = Env.initial }
+  mk_texp (Texp_tuple el)
+          (Ctype.newty (Ttuple (List.map (fun e -> e.exp_type) el)))
 
 (* Compiling an non-empty array *)
 (* We use this function for grouping trx_bracket-transformed expressions,
    which have the same representation type (but may be different
    code type). We ignore the differences in the code type, since
-   the representation type is the same
+   the representation type is the same.
 
    We don't use lists since they are harder to compile, and more
    fragile. Texp_construct has more arguments, we have to locate
@@ -199,11 +207,8 @@ let texp_tuple : Typedtree.expression list -> Typedtree.expression = fun el ->
 let texp_array : Typedtree.expression list -> Typedtree.expression = function
   | [] -> assert false
   | (h::_) as el ->
-      { exp_desc = Texp_array el;
-        exp_loc  = Location.none; exp_extra = [];
-        exp_type = Predef.type_array h.exp_type;
-        exp_env  = Env.initial }
-
+      mk_texp (Texp_array el) 
+	      (Ctype.instance_def (Predef.type_array h.exp_type))
 
 
 (* ------------------------------------------------------------------------ *)
@@ -211,7 +216,7 @@ let texp_array : Typedtree.expression list -> Typedtree.expression = function
 
 (* building a typical Parsetree node: Pexp_assert of expression*)
 let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  fun l e -> {pexp_loc  = l; pexp_desc = Pexp_assert e}
+  fun l e -> {pexp_loc = l; pexp_desc = Pexp_assert e}
 
 (* When we translate the typed-treee, we have to manually compile
    the above code 
@@ -242,6 +247,29 @@ If building the parsetree on our own, beware! For example, labels in
 Texp_record must be sorted, in their declared order!
 *)
 
+(* Other similar buiders *)
+let build_lazy : Location.t -> Parsetree.expression -> Parsetree.expression = 
+  fun l e -> {pexp_loc = l; pexp_desc = Pexp_lazy e}
+let build_bracket : Location.t -> Parsetree.expression -> Parsetree.expression= 
+  fun l e -> {pexp_loc = l; pexp_desc = Pexp_bracket e}
+let build_escape : Location.t -> Parsetree.expression -> Parsetree.expression = 
+  fun l e -> {pexp_loc = l; pexp_desc = Pexp_escape e}
+let build_run : Location.t -> Parsetree.expression -> Parsetree.expression = 
+  fun l e -> {pexp_loc = l; pexp_desc = Pexp_run e}
+
+let build_sequence : 
+  Location.t -> Parsetree.expression -> Parsetree.expression -> 
+  Parsetree.expression = 
+  fun l e1 e2 -> {pexp_loc = l; pexp_desc = Pexp_sequence (e1,e2) }
+let build_while : 
+  Location.t -> Parsetree.expression -> Parsetree.expression -> 
+  Parsetree.expression = 
+  fun l e1 e2 -> {pexp_loc = l; pexp_desc = Pexp_while (e1,e2) }
+let build_when : 
+  Location.t -> Parsetree.expression -> Parsetree.expression -> 
+  Parsetree.expression = 
+  fun l e1 e2 -> {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) }
+
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
 let build_apply : Location.t -> (label * Parsetree.expression) array -> 
@@ -251,8 +279,28 @@ let build_apply : Location.t -> (label * Parsetree.expression) array ->
     {pexp_loc  = l; 
      pexp_desc = Pexp_apply (snd ea.(0),List.tl (Array.to_list ea))}
 
-                             
+let build_tuple : 
+  Location.t -> Parsetree.expression array -> Parsetree.expression =
+  fun l ea -> {pexp_loc = l; pexp_desc = Pexp_tuple (Array.to_list ea) }
 
+let build_array : 
+  Location.t -> Parsetree.expression array -> Parsetree.expression =
+  fun l ea -> {pexp_loc = l; pexp_desc = Pexp_array (Array.to_list ea) }
+
+let build_construct :
+ Location.t -> Longident.t loc -> Parsetree.expression array -> bool ->
+ Parsetree.expression =
+ fun loc lid args explicit_arity ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_construct (lid,
+     begin
+      match Array.length args with
+      | 0 -> None
+      | 1 -> Some (args.(0))
+      | n -> Some { pexp_loc  = loc;
+                    pexp_desc = Pexp_tuple (Array.to_list args) }
+     end,
+     explicit_arity) }
 
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
@@ -334,7 +382,7 @@ let dyn_quote : Obj.t -> Longident.t loc -> Parsetree.expression =
    type to generate the lifting code for that particular type.
    For example, we build the code to convert a float
    0.1 to the Parsetree node Pexp_constant(Const_float "0.1")).
-   If we cannot or would not type-dependent lifting and we cannot
+   If we cannot or would not do the type-dependent lifting and we cannot
    refer to the variable by name (e.g., because it is local),
    we generate the call to the dynamic quoter, dyn_quote.
    The latter will receive the actual value to quote and will generate,
@@ -354,11 +402,7 @@ let trx_csp :
       in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
   else
   (* Otherwise, do the lifting at run-time *)
-  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills in the type, etc.*)
-  let lid_exp = 
-      {lid_exp with exp_desc = Texp_cspval (Obj.repr li, dummy_lid "*csp_li*")}
-  in
-  texp_apply (texp_ident "Trx.dyn_quote") [exp;lid_exp]
+  texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -483,38 +527,14 @@ let find_label name =
     Env.lookup_label lid env0
   with Not_found ->
     fatal_error ("Trx.find_label: " ^ name)
-let find_value name =
-  try
-    let lid = Longident.parse name in
-    Env.lookup_value lid env0
-  with Not_found ->
-    fatal_error ("Trx.find_value: " ^ name)
 
-(* ZZZ I wonder if the following really necessary. First of all,
-parsing of the identifiers, using Longident.parse above, can be
-done outside of lazy. Further, we are looking for identifiers in
-the same initial env. Should we just refer to the predefined env?
-Especially the types like string and list and their cosntructors.
-Predefined env has all this information, and it stays the same.
-
+(* 
 I guess the point of lazy is to memoize repeated searches, and avoid
 searches for infrequent things.
 Since things like int, bool and string are going to be used all the time,
 we should just look them up eagerly.
-Further, should we use Predef.path_int, etc?
 *)
 
-let type_bool = lazy (find_type "bool")
-let type_location = lazy (find_type "Location.t")
-let pathval_location_none = lazy (find_value "Location.none")
-let type_constant = lazy (find_type "Asttypes.constant")
-let constr_const_int = lazy (find_constr "Asttypes.Const_int")
-let constr_const_char = lazy (find_constr "Asttypes.Const_char")
-let constr_const_string = lazy (find_constr "Asttypes.Const_string")
-let constr_const_float = lazy (find_constr "Asttypes.Const_float")
-let constr_const_int32 = lazy (find_constr "Asttypes.Const_int32")
-let constr_const_int64 = lazy (find_constr "Asttypes.Const_int64")
-let constr_const_nativeint = lazy (find_constr "Asttypes.Const_nativeint")
 let constr_cons = lazy (find_constr "::")
 let constr_nil = lazy (find_constr "[]")
 let constr_none = lazy (find_constr "None")
@@ -547,10 +567,7 @@ let type_parsetree_expression_desc = lazy (find_type "Parsetree.expression_desc"
 let type_parsetree_pattern_desc = lazy (find_type "Parsetree.pattern_desc")
 let type_parsetree_structure_item_desc = lazy (find_type "Parsetree.structure_item_desc")
 let type_core_type_desc = lazy (find_type "Parsetree.core_type_desc")
-let type_list       = lazy (find_type "int")  (* XXO bad hack.  Walid. *)
-let type_exp_option = lazy (find_type "int")  (* XXO bad hack.  Walid. *)
 let type_rec_flag   = lazy (find_type "Asttypes.rec_flag")
-let type_label      = lazy (find_type "string")
 
 let constr_pexp_constant      = lazy (find_constr "Parsetree.Pexp_constant")
 let constr_pexp_ident         = lazy (find_constr "Parsetree.Pexp_ident")
@@ -614,29 +631,10 @@ let trx_mkcsp exp =
   { exp with exp_type = instance v.val_type;
     exp_desc = Texp_ident(p, v) }
 
-
-let mkString exp s =
-  { exp with 
-    exp_type = instance_def Predef.type_string;
-    exp_desc = Texp_constant(Const_string (s)) }
-
 let mkInt exp i =
   { exp with
     exp_type = instance_def Predef.type_int;
     exp_desc = Texp_constant(Const_int (i))}
-
-let quote_constant exp cst =
-  let (constr,e) =
-    match cst with
-    | Const_int _ -> (Lazy.force constr_const_int, exp)
-    | Const_char _ -> (Lazy.force constr_const_char, exp)
-    | Const_string s -> (Lazy.force constr_const_string, mkString exp s)
-    | Const_float s -> (Lazy.force constr_const_float, mkString exp s)
-    | Const_int32 _ -> (Lazy.force constr_const_int32, exp)
-    | Const_int64 _ -> (Lazy.force constr_const_int64, exp)
-    | Const_nativeint _ -> (Lazy.force constr_const_nativeint, exp)
-  in {exp with exp_type = Lazy.force type_constant;
-      exp_desc = Texp_construct(constr, [e]) } 
 
 (* Walid: We should factor out the 'mk' functionality. *)
 
@@ -667,15 +665,6 @@ let quote_direction_flag df exp =
   | Downto -> constr_downto
   in { exp with exp_type = Lazy.force type_rec_flag;
        exp_desc = Texp_construct(Lazy.force cst, []) }
-
-let mkfalse exp =
-  { exp with exp_type = Lazy.force type_bool;
-    exp_desc = Texp_construct(Lazy.force constr_false, []) }
-
-let mktrue exp =
-  { exp with exp_type = Lazy.force type_bool;
-    exp_desc = Texp_construct(Lazy.force constr_true, []) } 
-
 
 let mkExp exp t d = 
   { exp with exp_type = Lazy.force t;
@@ -787,15 +776,6 @@ let mkPpatTuple exp exps =
     type_parsetree_pattern_desc
     (Texp_construct(Lazy.force constr_ppat_tuple, 
                     [mkPexpList exp exps]))
-
-let rec quote_list_as_expopt_forexps exp el =
-  match el with
-    [] -> mkNone exp
-  | [e] -> mkSome exp e
-  | _ -> mkSome exp
-        (mkParseTree exp
-           (Texp_construct(Lazy.force constr_pexp_tuple,
-                                [mkPexpList exp el])))
 
 let rec quote_list_as_expopt_forpats exp el =
   match el with
@@ -929,15 +909,6 @@ let mkNewPEL exp pEl =
 
 (* The preprocessing transformation proper *)
 
-
-let call_trx_mkcsp exp v li =
-  let exp' = {exp with exp_desc = Texp_cspval (Obj.magic v, Longident.parse "")}
-  and expli = {exp with exp_desc = Texp_cspval (Obj.magic li, Longident.parse "")}
-  in {exp with exp_desc = 
-      (Texp_apply (trx_mkcsp exp, [(Some exp, Required);
-                                   (Some exp',Required);
-                                   (Some expli,Required)]))}
-
 (* Postprocessing expressions at level n *)
 let rec trx_e n exp =
     match exp.exp_desc with
@@ -1046,8 +1017,6 @@ let rec trx_e n exp =
         end
 
     | Texp_function (pel, partial) ->
-        (* XXO implement the translation
-           trans(\x.e)  --->  let x = gensym "x" in LAM x trans(e) *)
         let idlist =
           List.fold_right (fun (p,e) -> boundinpattern p) pel []  
         and gensymexp id =  (* (gensym "x") *)
@@ -1163,10 +1132,6 @@ let rec trx_e n exp =
               pel', 
               transtry))
 
-    | Texp_tuple el ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_tuple,
-                               [mkPexpList exp (List.map (trx_e n) el)]))
     | Texp_construct ({cstr_tag=tag}, el) ->
         let lid = get_constr_lid tag exp.exp_type exp.exp_env in
         mkParseTree exp
@@ -1219,16 +1184,7 @@ let rec trx_e n exp =
                                [trx_e n e1;
                                 trx_e n e2;
                                 mkPexpOption exp (map_option (trx_e n) eo)]))
-    | Texp_sequence (e1,e2) ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_sequence,
-                               [trx_e n e1;
-                                trx_e n e2]))
-    | Texp_while (e1,e2) ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_while,
-                               [trx_e n e1;
-                                trx_e n e2]))
+
     | Texp_for (id,e1,e2,df,e3) ->
         let gensymexp id =  (* (gensym "x") *)
           mkExp exp
@@ -1268,11 +1224,6 @@ let rec trx_e n exp =
               [(idpat id, gensymexp id)], 
               transfor))
 
-    | Texp_when (e1,e2) ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_when,
-            [trx_e n e1;
-             trx_e n e2]))
     | Texp_send (e,m) ->
         let s = match m with
         |  Tmeth_name s -> s
@@ -1287,30 +1238,6 @@ let rec trx_e n exp =
           (Texp_construct(Lazy.force constr_pexp_new,
                                [quote_ident exp p]))
           (* similar to Texp_for *)
-    | Texp_assert e ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_assert, 
-                               [trx_e n e]))
-    | Texp_lazy e ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_lazy, 
-                               [trx_e n e]))
-
-    | Texp_bracket e ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_bracket, 
-
-    | Texp_escape e ->
-        if n=1 then
-          trx_e (n-1) e
-        else
-          mkParseTree exp
-            (Texp_construct(Lazy.force constr_pexp_escape, 
-                                 [trx_e (n-1) e]))
-    | Texp_run e ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_run, 
-                               [trx_e n e]))
   end
 *)
 
@@ -1377,17 +1304,79 @@ let rec trx_bracket :
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_constant cst}
     in Texp_cspval (Obj.repr ast, dummy_lid "*cst*")
+(*
+  | Texp_let of rec_flag * (pattern * expression) list * expression
+  | Texp_function of label * (pattern * expression) list * partial
+*)
 
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
      let lel = List.fold_right (function                 (* keep the order! *)
                 | (_,None,_)   -> fun acc -> acc
                 | (l,Some e,_) -> fun acc -> (l,e)::acc) el [] in
-     let lel = ("",e) :: lel in          (* Add the operator data *)
+     let lel = ("",e) :: lel in          (* Add the operator *)
       texp_apply (texp_ident "Trx.build_apply")
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (l,e) ->
            texp_tuple [texp_string l;trx_bracket trx_exp n e]) lel)]
+(*
+  | Texp_match of expression * (pattern * expression) list * partial
+  | Texp_try of expression * (pattern * expression) list
+*)
+  | Texp_tuple el ->
+      texp_apply (texp_ident "Trx.build_tuple")
+        [texp_loc exp.exp_loc; 
+	 texp_array (List.map (trx_bracket trx_exp n) el)]
+
+  (* XXX check raise Not_found and raise local exception;
+    ditto for constructors with 0 arg (true); 1 arg (Some)
+    and two arguments; both local and global.
+    Also check ctors in a separate module. *)
+  | Texp_construct (p, li, _, args, explicit_arity) ->
+      check_path_quotable "Constructor" p;
+      texp_apply (texp_ident "Trx.build_construct")
+        [texp_loc exp.exp_loc; 
+         texp_lid (mkloc (path_to_lid p) li.loc);
+	 texp_array (List.map (trx_bracket trx_exp n) args);
+         texp_bool explicit_arity]
+
+(*
+  | Texp_variant of label * expression option
+  | Texp_record of
+      (Path.t * Longident.t loc * label_description * expression) list *
+        expression option
+  | Texp_field of expression * Path.t * Longident.t loc * label_description
+  | Texp_setfield of
+      expression * Path.t * Longident.t loc * label_description * expression
+  | Texp_array of expression list
+  | Texp_ifthenelse of expression * expression * expression option
+*)
+  | Texp_sequence (e1,e2) ->
+      texp_apply (texp_ident "Trx.build_sequence")
+        [texp_loc exp.exp_loc; 
+	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
+  | Texp_while (e1,e2) ->
+      texp_apply (texp_ident "Trx.build_while")
+        [texp_loc exp.exp_loc; 
+	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
+(*
+  | Texp_for of
+      Ident.t * string loc * expression * expression * direction_flag *
+        expression
+*)
+  | Texp_when (e1,e2) ->
+      texp_apply (texp_ident "Trx.build_when")
+        [texp_loc exp.exp_loc; 
+	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
+(*
+  | Texp_send of expression * meth * expression option
+*)
+  | Texp_new (p,li,_) ->
+    check_path_quotable "Class" p;
+    let ast = 
+      {pexp_loc = exp.exp_loc;
+       pexp_desc = Pexp_new (Location.mkloc (path_to_lid p) li.loc)}
+    in Texp_cspval (Obj.repr ast, dummy_lid "*new*")
 
   | Texp_instvar (p1,p2,s) ->
      not_supported "Objects (Texp_instvar)"
@@ -1409,16 +1398,33 @@ let rec trx_bracket :
        pexp_desc = Pexp_assertfalse}
     in Texp_cspval (Obj.repr ast, dummy_lid "*af*")
 
+  | Texp_lazy e ->
+      texp_apply (texp_ident "Trx.build_lazy")
+        [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
+
   | Texp_object (cl,fl) -> not_supported "Objects"
   | Texp_pack _         -> not_supported "First-class modules"
 
+  | Texp_bracket e ->
+      texp_apply (texp_ident "Trx.build_bracket")
+        [texp_loc exp.exp_loc; trx_bracket trx_exp (n+1) e]
+  | Texp_escape e ->
+      if n = 1 then (trx_exp e).exp_desc	(* switch to 0 level *)
+      else
+      texp_apply (texp_ident "Trx.build_escape")
+        [texp_loc exp.exp_loc; trx_bracket trx_exp (n-1) e]
+  | Texp_run e ->
+      texp_apply (texp_ident "Trx.build_run")
+        [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
   | Texp_cspval (v,li) ->               (* CSP is a sort of a constant *)
     let ast = 
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_cspval(v,li)}
     in Texp_cspval (Obj.repr ast, dummy_lid "*csp*")
+
   | _ -> failwith "not yet implemented"
   in
+  (* TODO List.fold_right untype_extra exp.exp_extra *)
   {exp with exp_type = wrap_ty_in_code n exp.exp_type;
             exp_desc = new_desc}
 
