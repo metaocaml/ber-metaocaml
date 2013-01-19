@@ -392,6 +392,19 @@ let build_record :
   {pexp_loc  = loc;
    pexp_desc = Pexp_record (Array.to_list lel,eo)}
 
+let build_field :
+ Location.t -> Parsetree.expression -> Longident.t loc -> Parsetree.expression =
+ fun loc e lid ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_field (e,lid)}
+
+let build_setfield :
+ Location.t -> Parsetree.expression -> Longident.t loc -> 
+   Parsetree.expression -> Parsetree.expression =
+ fun loc e1 lid e2 ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_setfield (e1,lid,e2)}
+
 
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
@@ -626,71 +639,30 @@ Since things like int, bool and string are going to be used all the time,
 we should just look them up eagerly.
 *)
 
-let constr_cons = lazy (find_constr "::")
-let constr_nil = lazy (find_constr "[]")
-let constr_none = lazy (find_constr "None")
-let constr_some = lazy (find_constr "Some")
-let constr_false = lazy (find_constr "false")
-let constr_true = lazy (find_constr "true")
 let constr_nonrecursive = lazy (find_constr "Asttypes.Nonrecursive")
 let constr_recursive = lazy (find_constr "Asttypes.Recursive")
 let constr_default = lazy (find_constr "Asttypes.Default")
 let constr_upto = lazy (find_constr "Asttypes.Upto")
 let constr_downto = lazy (find_constr "Asttypes.Downto")
     
-let type_longident_t = lazy (find_type "Longident.t")
 let type_parsetree_expression = lazy (find_type "Parsetree.expression")
 let type_parsetree_pattern = lazy (find_type "Parsetree.pattern")
 let type_parsetree_structure_item = lazy (find_type "Parsetree.structure_item")
 let type_parsetree_core_type = lazy (find_type "Parsetree.core_type")
-let label_pexp_desc = lazy (find_label "Parsetree.pexp_desc")
-let label_pexp_loc  = lazy (find_label "Parsetree.pexp_loc")
-let label_ppat_desc = lazy (find_label "Parsetree.ppat_desc")
-let label_ppat_loc  = lazy (find_label "Parsetree.ppat_loc")
-let label_loc_start = lazy (find_label "Location.loc_start")
-let label_loc_end   = lazy (find_label "Location.loc_end")
-let label_loc_ghost = lazy (find_label "Location.loc_ghost")
-let label_pos_fname = lazy (find_label "Lexing.pos_fname")
-let label_pos_lnum = lazy (find_label "Lexing.pos_lnum")
-let label_pos_bol = lazy (find_label "Lexing.pos_bol")
-let label_pos_cnum = lazy (find_label "Lexing.pos_cnum")
 let type_parsetree_expression_desc = lazy (find_type "Parsetree.expression_desc")
 let type_parsetree_pattern_desc = lazy (find_type "Parsetree.pattern_desc")
 let type_parsetree_structure_item_desc = lazy (find_type "Parsetree.structure_item_desc")
 let type_core_type_desc = lazy (find_type "Parsetree.core_type_desc")
 let type_rec_flag   = lazy (find_type "Asttypes.rec_flag")
 
-let constr_pexp_constant      = lazy (find_constr "Parsetree.Pexp_constant")
-let constr_pexp_ident         = lazy (find_constr "Parsetree.Pexp_ident")
-let constr_pexp_apply         = lazy (find_constr "Parsetree.Pexp_apply")
 let constr_pexp_function      = lazy (find_constr "Parsetree.Pexp_function")
 let constr_pexp_match         = lazy (find_constr "Parsetree.Pexp_match")
 let constr_pexp_try           = lazy (find_constr "Parsetree.Pexp_try")
 let constr_pexp_ifthenelse    = lazy (find_constr "Parsetree.Pexp_ifthenelse")
-let constr_pexp_record        = lazy (find_constr "Parsetree.Pexp_record")
-let constr_pexp_field         = lazy (find_constr "Parsetree.Pexp_field")
-let constr_pexp_setfield      = lazy (find_constr "Parsetree.Pexp_setfield")
-let constr_pexp_array         = lazy (find_constr "Parsetree.Pexp_array")
-let constr_pexp_sequence      = lazy (find_constr "Parsetree.Pexp_sequence")
-let constr_pexp_while         = lazy (find_constr "Parsetree.Pexp_while")
 let constr_pexp_for           = lazy (find_constr "Parsetree.Pexp_for")
-let constr_pexp_when          = lazy (find_constr "Parsetree.Pexp_when")
 let constr_pexp_send          = lazy (find_constr "Parsetree.Pexp_send")
-let constr_pexp_new           = lazy (find_constr "Parsetree.Pexp_new")
 let constr_pexp_let           = lazy (find_constr "Parsetree.Pexp_let")
-let constr_pexp_bracket       = lazy (find_constr "Parsetree.Pexp_bracket")
-let constr_pexp_escape        = lazy (find_constr "Parsetree.Pexp_escape")
-let constr_pexp_run           = lazy (find_constr "Parsetree.Pexp_run")
-let constr_pexp_assert        = lazy (find_constr "Parsetree.Pexp_assert")
-let constr_pexp_assertfalse   = lazy (find_constr "Parsetree.Pexp_assertfalse")
-let constr_pexp_lazy      = lazy (find_constr "Parsetree.Pexp_lazy")
-let constr_pexp_tuple         = lazy (find_constr "Parsetree.Pexp_tuple")
 let constr_pexp_variant       = lazy (find_constr "Parsetree.Pexp_variant")
-let constr_pexp_construct     = lazy (find_constr "Parsetree.Pexp_construct")
-let constr_pexp_cspval        = lazy (find_constr "Parsetree.Pexp_cspval")
-let constr_pexp_letmodule     = lazy (find_constr "Parsetree.Pexp_letmodule")
-let constr_ppat_construct     = lazy (find_constr "Parsetree.Ppat_construct")
-let constr_ppat_record        = lazy (find_constr "Parsetree.Ppat_record")
 let constr_ppat_or            = lazy (find_constr "Parsetree.Ppat_or")
 let constr_ppat_lazy          = lazy (find_constr "Parsetree.Ppat_lazy")
 let constr_ppat_array         = lazy (find_constr "Parsetree.Ppat_array")
@@ -700,9 +672,6 @@ let constr_ppat_constant      = lazy (find_constr "Parsetree.Ppat_constant")
 let constr_ppat_alias         = lazy (find_constr "Parsetree.Ppat_alias")
 let constr_ppat_variant       = lazy (find_constr "Parsetree.Ppat_variant")
 let constr_ppat_tuple         = lazy (find_constr "Parsetree.Ppat_tuple")
-let constr_longident_lident   = lazy (find_constr "Longident.Lident")
-let constr_longident_ldot     = lazy (find_constr "Longident.Ldot")
-let constr_longident_lapply   = lazy (find_constr "Longident.Lapply")
 
 let pathval_trx_longidenttostring = lazy (find_value "Trx.longidenttostring")
 let pathval_trx_gensymlongident = lazy (find_value "Trx.gensymlongident")
@@ -721,25 +690,6 @@ let trx_mkcsp exp =
   let (p, v) = Lazy.force pathval_trx_mkcsp in
   { exp with exp_type = instance v.val_type;
     exp_desc = Texp_ident(p, v) }
-
-let mkInt exp i =
-  { exp with
-    exp_type = instance_def Predef.type_int;
-    exp_desc = Texp_constant(Const_int (i))}
-
-(* Walid: We should factor out the 'mk' functionality. *)
-
-let mkNone exp =
-  { exp with exp_type = Lazy.force type_exp_option;
-    exp_desc = Texp_construct(Lazy.force constr_none, []) }
-    
-let mkSome exp e =
-  { exp with exp_type = Lazy.force type_exp_option;
-    exp_desc = Texp_construct(Lazy.force constr_some, [e]) }
-
-let mkPexpOption exp eo = match eo with
-  None -> mkNone exp
-| Some e -> mkSome exp e
 
 let quote_rec_flag rf exp =
   let cst = match rf with
@@ -856,11 +806,6 @@ let rec mkPexpList exp l =
         type_list
         (Texp_construct(Lazy.force constr_cons, 
                         [x;mkPexpList exp xs]))
-
-let mkPexpTuple exp exps = 
-  mkExp exp
-    type_parsetree_expression_desc
-    (Texp_construct(Lazy.force constr_pexp_tuple, exps))
 
 let mkPpatTuple exp exps =
   mkExp exp
@@ -1437,10 +1382,20 @@ let rec trx_bracket :
                        trx_bracket trx_exp n e]) lel);
          texp_option (map_option (trx_bracket trx_exp n) eo)]
 
+  | Texp_field (e,p,li,ldesc) ->
+      texp_apply (texp_ident "Trx.build_field")
+        [texp_loc exp.exp_loc; 
+         trx_bracket trx_exp n e;
+         texp_lid (mkloc (qualify_label p ldesc) li.loc)]
+
+  | Texp_setfield (e1,p,li,ldesc,e2) ->
+      texp_apply (texp_ident "Trx.build_setfield")
+        [texp_loc exp.exp_loc; 
+         trx_bracket trx_exp n e1;
+         texp_lid (mkloc (qualify_label p ldesc) li.loc);
+         trx_bracket trx_exp n e2]
+
 (*
-  | Texp_field of expression * Path.t * Longident.t loc * label_description
-  | Texp_setfield of
-      expression * Path.t * Longident.t loc * label_description * expression
   | Texp_array of expression list
   | Texp_ifthenelse of expression * expression * expression option
 *)

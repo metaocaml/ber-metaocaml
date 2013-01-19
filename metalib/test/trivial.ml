@@ -298,3 +298,63 @@ module Foo = struct type foo = Bar end;;
 (*
 Fatal error: exception Trx.TrxError("Constructor Foo.Bar cannot be used within brackets. Put into a separate file.")
 *)
+
+(* Records *)
+
+.<{Complex.re = 1.0; im = 2.0}>.;;
+(*
+- : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
+*)
+Complex.conj (.! .<{Complex.re = 1.0; im = 2.0}>.);;
+(*
+- : Complex.t = {Complex.re = 1.; Complex.im = -2.}
+*)
+let x = {Complex.re = 1.0; im = 2.0} in .<x.re>.;;
+(*
+Characters 42-46:
+  let x = {Complex.re = 1.0; im = 2.0} in .<x.re>.;;
+                                            ^^^^
+Error: Unbound record field label re
+*)
+let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.;;
+(*
+- : ('cl, float) code =
+.<((* cross-stage persistent value (as id: x) *)).Complex.re>.
+*)
+.!(let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.);;
+(* - : float = 1. *)
+let x = ref 1 in .<x.contents>.;;       (* Pervasive record *)
+(*
+- : ('cl, int) code =
+.<((* cross-stage persistent value (as id: x) *)).contents>.
+*)
+.!(let x = ref 1 in .<x.contents>.);;
+(* - : int = 1 *)
+let x = ref 1 in .<x.contents <- 2>.;;
+(*
+- : ('cl, unit) code =
+.<((* cross-stage persistent value (as id: x) *)).contents <- 2>.
+*)
+let x = ref 1 in (.! .<x.contents <- 2>.); x;;
+(* - : int ref = {contents = 2} *)
+
+open Complex;;
+.<{re = 1.0; im = 2.0}>.;;
+(*
+- : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
+*)
+norm (.! .<{re = 1.0; im = 2.0}>.);;
+(* - : float = 2.23606797749979 *)
+let x = {re = 1.0; im = 2.0} in .<x.re>.;;
+(*
+- : ('cl, float) code =
+.<((* cross-stage persistent value (as id: x) *)).Complex.re>.
+*)
+.!(let x = {re = 1.0; im = 2.0} in .<x.re>.);;
+(* - : float = 1. *)
+
+type foo = {fool : int};;
+.<{fool = 1}>.;;
+(*
+Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. Put into a separate file.")
+*)

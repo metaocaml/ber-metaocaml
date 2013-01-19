@@ -59,6 +59,12 @@ val build_construct :
 val build_record :
  Location.t -> (Longident.t Location.loc * Parsetree.expression) array ->
  Parsetree.expression option -> Parsetree.expression
+val build_field :
+ Location.t -> Parsetree.expression -> Longident.t Location.loc -> 
+ Parsetree.expression
+val build_setfield :
+ Location.t -> Parsetree.expression -> Longident.t Location.loc -> 
+   Parsetree.expression -> Parsetree.expression
 
 (*
 val longidenttostring : Longident.t -> string
