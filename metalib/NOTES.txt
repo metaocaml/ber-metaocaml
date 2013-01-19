@@ -55,6 +55,13 @@ functions like lift_constant_int to do the Parsetree generation. In
 the future we should `inline' those functions -- that is, obtain the
 Typedtree for them and use the tree for building Texp_apply.
 
+The main trx.ml algorithm (translation of brackets) can be greatly
+improved and sped-up, by constructing as large Parsetree subtrees as
+possible at compile time, and passing them as CSP. See
+``TODO: an optimization idea. Consider <assert e> as a typical
+expression.'' in trx.ml
+
+
 
 (generally, search for TODO in trx.ml)
 
