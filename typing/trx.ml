@@ -35,15 +35,12 @@
 
 Future-stage identifier x was represented in tree as 
 Texp_ident (ident,vd)
-We transform x if it was written Pexp_ident li, or
-in tree terms
-Texp_construct ("Pexp_ident", [
 
 
-This file is based on trx.ml from the original MetaOCaml,
-but it is completely re-written. The traversal algorithm,
-the way of compiling Parsetree builders, dealing with CSP
-and many other algorithms are different.
+This file is based on trx.ml from the original MetaOCaml, but it is
+completely re-written from scratch and has many comments. The
+traversal algorithm, the way of compiling Parsetree builders, dealing
+with CSP and many other algorithms are all different.
 
 *)
 
@@ -94,6 +91,15 @@ let rec path_to_lid : Path.t -> Longident.t = function
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
+(* Replace the last component of p1 with p2, which should be a Pident
+   path 
+*)
+let path_replace_last : Path.t -> Path.t -> Path.t = fun p1 p2 ->
+ match (p1,p2) with
+  | (Path.Pident _,x) -> x
+  | (Path.Pdot(p1,_,s),Path.Pident id) -> Path.Pdot(p1,Ident.name id,s)
+  | _ -> assert false
+
 (* Check to make sure a constructor, label, exception, etc.
    have the name that we can put into AST (Parsetree).
    Local names can't be put into the Parsetree since the type env in which
@@ -105,21 +111,30 @@ let check_path_quotable msg path =
      " cannot be used within brackets. Put into a separate file."))
 
 (* Check to see that a constructor belongs to a type defined
-   in a persistent module or the initial environment.
+   in a persistent module or in the initial environment.
    Return the fully qualified name to put into AST 
-   (Unless the constructor is Pervasive).
+   (Pervasive constructors remain unqualified however).
 
-   If the constructor is already fully qualified (whose module identifier
-   is persistent), we are all done. For example, Scanf.Scan_failure.
-   The major complexity is in this scenario:
+   We have nothing to do if the constructor is already fully qualified
+   with a persistent module identifier: for example, Scanf.Scan_failure.
+   The major complexity comes from this scenario:
       open Scanf
       .<raise (Scan_failure "xx")>.
-   The Texp_construct node contains the lid and path that refer only
-   to Scan_failure. We have to find the fully qualified path and check
+   The Texp_construct node of Typedtree contains the lid and the
+   path that refer to "Scan_failure" without any module qualifications.
+   We have to find the fully qualified path and check
    that it is external. We do that by finding the path for the _type_
-   constructor. That type_path is fully qualified.
+   constructor, for the type of which the data constructor is a member.
+   That type_path is fully qualified. We can assertain the later fact
+   from Typecore.constructors_of_type, which puts the complete path
+   into the type of the constructor, which is always of the form
+   Tconstr(ty_path,_,_). The function constructors_of_type is used
+   within store_type, which is used when opening a module.
+
+   Alternatively we could've used Env.lookup_constuctor, which also
+   returns the qualified path? Searching the environment is costly
+   though.
  *)
-(* TODO: memoize? *)
 let qualify_ctor : Path.t -> constructor_description -> Longident.t = 
  fun p cdesc ->
   let lid = path_to_lid p in
@@ -133,27 +148,36 @@ let qualify_ctor : Path.t -> constructor_description -> Longident.t =
       raise (TrxError ("Exception " ^ Path.name p ^
         " cannot be used within brackets. Put into a separate file."))
   | (_,{desc = Tconstr(ty_path, _, _)}) ->
-      (if is_external ty_path then
-        match (ty_path,p) with
-        | (Path.Pident _,_) -> path_to_lid p
-        | (Path.Pdot(p1,_,s),Path.Pident id) -> 
-            path_to_lid (Path.Pdot(p1,Ident.name id,s))
-        | _ -> assert false
+      if is_external ty_path then
+        path_to_lid (path_replace_last ty_path p)
       else
         raise (TrxError ("Constructor " ^ Path.name p ^
-               " cannot be used within brackets. Put into a separate file.")))
-
+               " cannot be used within brackets. Put into a separate file."))
   | _ -> Printtyp.type_expr Format.err_formatter cdesc.cstr_res;
            failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
                      Path.name p)
 
-(*
-  let ty_path = 
-    let ty = Ctype.expand_head env (Ctype.correct_levels ty) in
-    match Ctype.repr ty with
-    | {desc = Tconstr(p, _, _)} -> p
-  in 
+(* Check to see that a record label belongs to a record defined
+   in a persistent module or in the initial environment.
+   This is a label version of qualify_ctor
 *)
+let qualify_label : Path.t -> label_description -> Longident.t =
+ fun p ldesc ->
+  let lid = path_to_lid p in
+  if is_external p then lid
+  else if try ignore (Env.lookup_label lid Env.initial); true
+          with Not_found -> false
+       then lid
+  else match (Ctype.repr ldesc.lbl_res) with
+  | {desc = Tconstr(ty_path, _, _)} ->
+      if is_external ty_path then
+        path_to_lid (path_replace_last ty_path p)
+      else
+        raise (TrxError ("Label " ^ Path.name p ^
+               " cannot be used within brackets. Put into a separate file."))
+  | _ -> Printtyp.type_expr Format.err_formatter ldesc.lbl_res;
+           failwith ("qualify_label: cannot determine type from label "^
+                     Path.name p)
 
 
 (* Test if we should refer to a CSP value by name rather than by
@@ -176,7 +200,6 @@ let sample_lid = dummy_lid "*sample*"
 (* Exported. Used as a template for constructing Location.t expressions *)
 let sample_loc = Location.none
 
-
 (* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
 (* Env.initial is used for all look-ups. Unqualified identifiers
@@ -185,11 +208,12 @@ let sample_loc = Location.none
    up as needed.
 *)
 
-let mk_texp : Typedtree.expression_desc -> type_expr -> Typedtree.expression =
-  fun desc ty ->
+let mk_texp : ?env:Env.t -> Typedtree.expression_desc -> type_expr -> 
+  Typedtree.expression =
+  fun ?(env=Env.initial) desc ty ->
   { exp_desc = desc; exp_type = ty;
     exp_loc  = Location.none; exp_extra = [];
-    exp_env  = Env.initial }
+    exp_env  = env }
 
 (* TODO: add memoization? *)
 
@@ -223,11 +247,28 @@ let texp_string : string -> Typedtree.expression = fun str ->
           (Ctype.instance_def Predef.type_string)
 
 (* Compiling a boolean *)
+(* For prototype, see Typecore.option_none *)
 let texp_bool : bool -> Typedtree.expression = fun b ->
   let lid = Longident.Lident (if b then "true" else "false") in
   let (path, cdec) = Env.lookup_constructor lid Env.initial in
   mk_texp (Texp_construct(path, mknoloc lid, cdec, [], false))
           (Ctype.instance_def Predef.type_bool)
+
+(* Compiling an option *)
+(* For prototype, see Typecore.option_none *)
+let texp_option : Typedtree.expression option -> Typedtree.expression = 
+  function
+    | None -> 
+        let lid = Longident.Lident "None" in
+        let (path, cnone) = Env.lookup_constructor lid Env.initial in
+        mk_texp (Texp_construct(path, mknoloc lid, cnone, [], false))
+                (Btype.newgenvar ())
+    | Some e ->
+        let lid = Longident.Lident "Some" in
+        let (path, csome) = Env.lookup_constructor lid Env.initial in
+        mk_texp (Texp_construct(path, mknoloc lid , csome, [e],false))
+                (Ctype.instance_def (Predef.type_option e.exp_type)) 
+                ~env:e.exp_env
 
 (* Compiling a tuple *)
 let texp_tuple : Typedtree.expression list -> Typedtree.expression = fun el ->
@@ -343,6 +384,14 @@ let build_construct :
                     pexp_desc = Pexp_tuple (Array.to_list args) }
      end,
      explicit_arity) }
+
+let build_record :
+ Location.t -> (Longident.t loc * Parsetree.expression) array ->
+ Parsetree.expression option -> Parsetree.expression =
+ fun loc lel eo ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_record (Array.to_list lel,eo)}
+
 
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
@@ -1187,19 +1236,6 @@ let rec trx_e n exp =
           (Texp_construct(Lazy.force constr_pexp_variant,
                                [mkString exp label;
                                 mkPexpOption exp (map_option (trx_e n) eo)]))      
-    | Texp_record (del, eo) ->
-        let lids = get_record_lids exp.exp_type exp.exp_env in
-        let idel = List.map (fun (d,e) -> (List.nth lids d.lbl_pos, d, e)) del in
-(* Walid: why "mkPexpTuple exp" instead of "mkPexpTuple e" *)
-        let mklidexp (lid,d,e) =
-          mkPexpTuple exp 
-            [quote_longident exp lid;
-             trx_e n e]
-        in let iel = List.map mklidexp idel
-        in mkParseTree exp 
-          (Texp_construct(Lazy.force constr_pexp_record,
-                               [mkPexpList exp iel;
-                                mkPexpOption exp (map_option (trx_e n) eo)]))
     | Texp_field (e,ld) ->
         let lids = get_record_lids e.exp_type e.exp_env in
         let lid = List.nth lids ld.lbl_pos in
@@ -1291,6 +1327,16 @@ let rec trx_e n exp =
    see tools/untypeast.ml for hints on mapping Typedtree.expression
    to Parsetree.expression.
 
+TODO: an optimization idea. Consider <assert e> as a typical expression.
+We translate it to the invocation of build_assert that will construct
+the Parsetree node at run-time. However, of 'e' is simple (e.g., a constant)
+then we can construct the Parsetree node at compile time and pass it
+as a CSP. There are no longer any functions calls to make at run-time.
+So, we can modify the translation of <assert e> below to detect
+if the translation of e produced Texp_cspval. We exract the CSP value,
+invoke build_assert (at compile time, when trx.ml is run) to build
+the Pexp_assert node, and wrap it as a CSP.
+
 *)
 
 (* Given a type [ty], return [ty code code ... code] (n times code).
@@ -1309,11 +1355,12 @@ let rec wrap_ty_in_code : int -> type_expr -> type_expr = fun n ty ->
   let clsfier = Btype.newgenvar () in
   wrap_ty_in_code (n-1) (Predef.type_code clsfier ty)
 
-
+let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
+  | None   -> None
+  | Some x -> Some (f x)
 
 let not_supported msg =
   raise (TrxError (msg ^ " is not yet supported within brackets"))
-
 
 
 let rec trx_bracket : 
@@ -1370,10 +1417,6 @@ let rec trx_bracket :
         [texp_loc exp.exp_loc; 
 	 texp_array (List.map (trx_bracket trx_exp n) el)]
 
-  (* XXX check raise Not_found and raise local exception;
-    ditto for constructors with 0 arg (true); 1 arg (Some)
-    and two arguments; both local and global.
-    Also check ctors in a separate module. *)
   | Texp_construct (p, li, cdesc, args, explicit_arity) ->
       let lid = qualify_ctor p cdesc in
       texp_apply (texp_ident "Trx.build_construct")
@@ -1384,9 +1427,17 @@ let rec trx_bracket :
 
 (*
   | Texp_variant of label * expression option
-  | Texp_record of
-      (Path.t * Longident.t loc * label_description * expression) list *
-        expression option
+*)
+
+  | Texp_record (lel,eo) ->
+      texp_apply (texp_ident "Trx.build_record")
+        [texp_loc exp.exp_loc; 
+         texp_array (List.map (fun (p,li,ldesc,e) ->
+           texp_tuple [texp_lid (mkloc (qualify_label p ldesc) li.loc);
+                       trx_bracket trx_exp n e]) lel);
+         texp_option (map_option (trx_bracket trx_exp n) eo)]
+
+(*
   | Texp_field of expression * Path.t * Longident.t loc * label_description
   | Texp_setfield of
       expression * Path.t * Longident.t loc * label_description * expression
