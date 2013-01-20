@@ -71,6 +71,11 @@ val build_setfield :
    Parsetree.expression -> Parsetree.expression
 val build_variant :
  Location.t -> string -> Parsetree.expression option -> Parsetree.expression
+val build_send :
+ Location.t -> Parsetree.expression -> string -> Parsetree.expression
+val build_open :
+ Location.t -> Longident.t Location.loc -> Parsetree.expression -> 
+ Parsetree.expression
 
 (*
 val longidenttostring : Longident.t -> string

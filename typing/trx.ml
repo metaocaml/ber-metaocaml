@@ -418,6 +418,19 @@ let build_variant :
   {pexp_loc  = loc;
    pexp_desc = Pexp_variant (l,eo)}
 
+let build_send :
+ Location.t -> Parsetree.expression -> string -> Parsetree.expression =
+ fun loc e l ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_send (e,l)}
+
+let build_open :
+ Location.t -> Longident.t loc -> Parsetree.expression -> Parsetree.expression =
+ fun loc l e ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_open (l,e)}
+
+
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
 
@@ -1178,11 +1191,6 @@ let rec trx_e n exp =
               pel', 
               transtry))
 
-    | Texp_variant (label, eo) ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_variant,
-                               [mkString exp label;
-                                mkPexpOption exp (map_option (trx_e n) eo)]))      
     | Texp_for (id,e1,e2,df,e3) ->
         let gensymexp id =  (* (gensym "x") *)
           mkExp exp
@@ -1221,21 +1229,6 @@ let rec trx_e n exp =
              (Nonrecursive,
               [(idpat id, gensymexp id)], 
               transfor))
-
-    | Texp_send (e,m) ->
-        let s = match m with
-        |  Tmeth_name s -> s
-        |  Tmeth_val i -> Ident.name i in
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_send,
-                               [trx_e n e;
-                                mkString exp s]))
-    | Texp_new (p,cd) ->
-	check_path_quotable p;
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_new,
-                               [quote_ident exp p]))
-          (* similar to Texp_for *)
   end
 *)
 
@@ -1401,9 +1394,19 @@ let rec trx_bracket :
       texp_apply (texp_ident "Trx.build_when")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-(*
-  | Texp_send of expression * meth * expression option
-*)
+
+  | Texp_send (e,m,_) ->
+      (* We don't check the persistence of the method: after all,
+         a method name is somewhat like a polymorphic variant.
+         It's perfectly OK to have a function fun x -> x # foo
+      *)
+      texp_apply (texp_ident "Trx.build_send")
+        [texp_loc exp.exp_loc; 
+	 trx_bracket trx_exp n e;
+         texp_string (match m with
+                        | Tmeth_name name -> name
+                        | Tmeth_val id -> Ident.name id)]
+
   | Texp_new (p,li,_) ->
     check_path_quotable "Class" p;
     let ast = 
@@ -1456,8 +1459,27 @@ let rec trx_bracket :
     in Texp_cspval (Obj.repr ast, dummy_lid "*csp*")
 
   | _ -> failwith "not yet implemented"
+  in                               
+  let trx_extra (extra, loc) exp = (* See untype_extra in tools/untypeast.ml *)
+   let desc =
+    match extra with
+      (* Should check that cty1 and cty2 contain only globally declared
+         type components
+       *)
+    | Texp_constraint (cty1, cty2) -> not_supported "Texp_constraint"
+
+    | Texp_open (path, lid, _) -> 
+       check_path_quotable "Texp_open" path;
+       texp_apply (texp_ident "Trx.build_open")
+        [texp_loc exp.exp_loc; 
+         texp_lid (mkloc (path_to_lid path) lid.loc);
+         exp]      (* exp is the result of trx_bracket *)
+
+    | Texp_poly cto  -> not_supported "Texp_poly"
+    | Texp_newtype s -> not_supported "Texp_newtype"
+    in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
   in
-  (* TODO List.fold_right untype_extra exp.exp_extra *)
+  List.fold_right trx_extra exp.exp_extra
   {exp with exp_type = wrap_ty_in_code n exp.exp_type;
             exp_desc = new_desc}
 
@@ -1651,11 +1673,12 @@ and trx_expression = function
 | Texp_pack me -> Texp_pack (trx_me me)
 
 | Texp_bracket e -> 
-  let trx_exp e = try trx_exp e with Not_modified -> e in
+   let trx_exp e = try trx_exp e with Not_modified -> e in
   (trx_bracket trx_exp 1 e).exp_desc
 
 | Texp_escape _ -> assert false         (* Not possible in well-typed code *)
 | Texp_run e -> 
+    let trx_exp e = try trx_exp e with Not_modified -> e in
     texp_apply (texp_ident "Runcode.run'") [trx_exp e]
 | Texp_cspval (_,_) -> raise Not_modified
 

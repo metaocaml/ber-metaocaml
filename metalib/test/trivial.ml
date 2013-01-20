@@ -392,3 +392,26 @@ Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. 
 match .! .<`Bar 1>. with `Bar x -> x ;;
 (* - : int = 1 *)
 
+(* Some support for modules *)
+et f = fun x -> .<x # foo>.;;
+(*
+val f : < foo : 'a; .. > -> ('cl, 'a) code = <fun>
+*)
+let x = object method foo = 1 end;;
+(*
+val x : < foo : int > = <obj>
+*)
+f x;;
+(*
+- : ('a, int) code =
+.<(((* cross-stage persistent value (as id: x) *))#foo)>.
+*)
+.! (f x);;
+(* - : int = 1 *)
+
+(* Local open *)
+.! .<Complex.(norm {re=1.0; im = 3.0})>.;;
+(*
+- : float = 3.16227766016837952
+*)
+
