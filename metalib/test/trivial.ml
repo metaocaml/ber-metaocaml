@@ -380,3 +380,15 @@ Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. 
 .! .<if Some 1 = None then print_string "weird">.;;
 (* - : unit = () *)
 
+(* Polymorphic variants *)
+.<`Foo>.;;
+(*
+- : ('cl, [> `Foo ]) code = .<`Foo>.
+*)
+.<`Bar 1>.;;
+(*
+- : ('cl, [> `Bar of int ]) code = .<`Bar 1>.
+*)
+match .! .<`Bar 1>. with `Bar x -> x ;;
+(* - : int = 1 *)
+

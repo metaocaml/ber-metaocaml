@@ -412,6 +412,11 @@ let build_setfield :
   {pexp_loc  = loc;
    pexp_desc = Pexp_setfield (e1,lid,e2)}
 
+let build_variant :
+ Location.t -> string -> Parsetree.expression option -> Parsetree.expression =
+ fun loc l eo ->
+  {pexp_loc  = loc;
+   pexp_desc = Pexp_variant (l,eo)}
 
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
@@ -668,7 +673,6 @@ let constr_pexp_try           = lazy (find_constr "Parsetree.Pexp_try")
 let constr_pexp_for           = lazy (find_constr "Parsetree.Pexp_for")
 let constr_pexp_send          = lazy (find_constr "Parsetree.Pexp_send")
 let constr_pexp_let           = lazy (find_constr "Parsetree.Pexp_let")
-let constr_pexp_variant       = lazy (find_constr "Parsetree.Pexp_variant")
 let constr_ppat_or            = lazy (find_constr "Parsetree.Ppat_or")
 let constr_ppat_lazy          = lazy (find_constr "Parsetree.Ppat_lazy")
 let constr_ppat_array         = lazy (find_constr "Parsetree.Ppat_array")
@@ -1174,14 +1178,6 @@ let rec trx_e n exp =
               pel', 
               transtry))
 
-    | Texp_construct ({cstr_tag=tag}, el) ->
-        let lid = get_constr_lid tag exp.exp_type exp.exp_env in
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_construct,
-                          [quote_longident exp lid;
-                           quote_list_as_expopt_forexps exp
-                             (List.map (trx_e n) el);
-                           mkfalse exp])) 
     | Texp_variant (label, eo) ->
         mkParseTree exp
           (Texp_construct(Lazy.force constr_pexp_variant,
@@ -1349,9 +1345,11 @@ let rec trx_bracket :
 	 texp_array (List.map (trx_bracket trx_exp n) args);
          texp_bool explicit_arity]
 
-(*
-  | Texp_variant of label * expression option
-*)
+  | Texp_variant (l,eo) ->              (* polymorphic variant *)
+      texp_apply (texp_ident "Trx.build_variant")
+        [texp_loc exp.exp_loc; 
+         texp_string l;
+	 texp_option (map_option (trx_bracket trx_exp n) eo)]
 
   | Texp_record (lel,eo) ->
       texp_apply (texp_ident "Trx.build_record")
