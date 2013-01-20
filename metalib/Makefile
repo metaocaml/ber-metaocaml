@@ -12,7 +12,7 @@ INCLUDES=-I $(CAMLROOT)/utils \
 	-I $(CAMLROOT)/asmcomp  -I $(CAMLROOT)/driver \
 	-I $(CAMLROOT)/toplevel -I $(CAMLROOT)/stdlib
 COMPILER=$(CAMLROOT)/ocamlc
-CAMLC=$(RUNTIME) $(COMPILER) -nostdlib $(INCLUDES)
+CAMLC=$(RUNTIME) $(COMPILER) $(INCLUDES)
 COMPFLAGS=-g -warn-error A -nostdlib
 OPTCOMPILER=$(CAMLROOT)/ocamlopt
 CAMLOPT=$(RUNTIME) $(OPTCOMPILER)
@@ -47,15 +47,15 @@ install: metaocaml metaocamlmktop metaocamlc
 	cp metaocamlmktop $(BINDIR)/metaocamlmktop$(EXE)
 	cp metaocamlc $(BINDIR)/metaocamlc$(EXE)
 
-metaocaml: $(METAOBJS)
-	$(CAMLROOT)/tools/ocamlmktop \
-	-o $@ $(METALIB) bertop.cmo berstart.cmo
-# $(CAMLC) -nostdlib -linkall \
-# $(CAMLROOT)/compilerlibs/ocamlcommon.cma \
-# $(CAMLROOT)/compilerlibs/ocamlbytecomp.cma \
-# $(CAMLROOT)/compilerlibs/ocamltoplevel.cma \
-# -o $@ $(METALIB) bertop.cmo berstart.cmo \
-# $(CAMLROOT)/toplevel/topstart.cmo
+metaocaml: $(METAOBJS) $(CAMLROOT)/compilerlibs/ocamlcommon.cma
+# $(CAMLROOT)/tools/ocamlmktop \
+# -o $@ $(METALIB) bertop.cmo berstart.cmo
+	$(CAMLC) -nostdlib -linkall \
+	$(CAMLROOT)/compilerlibs/ocamlcommon.cma \
+	$(CAMLROOT)/compilerlibs/ocamlbytecomp.cma \
+	$(CAMLROOT)/compilerlibs/ocamltoplevel.cma \
+	-o $@ $(METALIB) bertop.cmo berstart.cmo \
+	$(CAMLROOT)/toplevel/topstart.cmo
 
 
 

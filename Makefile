@@ -120,7 +120,8 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  # NNNNN otherlibraries ocamldoc
+  metaocaml # NNN
+# NNNNN otherlibraries ocamldoc
 # NNN The rest is not tried or not yet supported
 #  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
 
@@ -290,18 +291,13 @@ install:
 	cp compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma compilerlibs/ocamltoplevel.cma $(BYTESTART) $(TOPLEVELSTART) $(COMPLIBDIR)
 	cp expunge $(LIBDIR)/expunge$(EXE)
 	cp toplevel/topdirs.cmi $(LIBDIR)
-# NNN The following is needed for the sake of trx.ml (see the lazy
-# identifier resolution in that file)
-# We need to copy the following interfaces, or we can't compile
-# anything with brackets
-# If we get trx.ml to use predef, the copying below can be done at a later time
-	cp parsing/asttypes.cmi parsing/parsetree.cmi \
-	   parsing/location.cmi \
-           parsing/longident.cmi  \
-           typing/trx.cmi \
-           typing/trx.cmo \
-           typing/ident.cmi $(LIBDIR)
-# NNNXXX Use compilerlibs as much as needed
+# NNN typing/trx.ml needs its own interface (since it looks up identifiers
+# in itself)
+# Although typing/trx.cmi is already copied, see above, it is copied
+# into $((COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
+	cp typing/trx.cmi $(LIBDIR)
+# BTW, trx.cmo is part of ocamlcommon.cma
+	cd metalib; $(MAKE) install
 # NNN end
 	cd tools; $(MAKE) install
 	-cd man; $(MAKE) install
@@ -787,6 +783,18 @@ package-macosx:
 
 clean::
 	rm -rf package-macosx/*.pkg package-macosx/*.dmg
+
+# NNN BER MetaOCaml 
+metaocaml: ocamlc
+	cd metalib && $(MAKE) clean all
+
+clean::
+	cd metalib && $(MAKE) clean
+
+alldepend::
+	cd metalib && $(MAKE) depend
+# NNN end
+
 
 # Default rules
 
