@@ -53,6 +53,10 @@ val build_tuple :
   Location.t -> Parsetree.expression array -> Parsetree.expression
 val build_array : 
   Location.t -> Parsetree.expression array -> Parsetree.expression
+val build_ifthenelse : 
+  Location.t -> 
+  Parsetree.expression -> Parsetree.expression -> Parsetree.expression option ->
+  Parsetree.expression
 val build_construct :
  Location.t -> Longident.t Location.loc -> Parsetree.expression array -> bool ->
  Parsetree.expression

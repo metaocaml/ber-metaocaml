@@ -216,6 +216,15 @@ Lazy.force (.! .<lazy 1>.);;
 match .! .<(1,"abc",'d')>. with (_,x,_) -> x;;
 (* - : string = "abc" *)
 
+(* Arrays *)
+.<[||]>.;;
+(*
+- : ('cl, 'a array) code = .<[||]>.
+*)
+let x = .<1+2>. in .<[|.~x;.~x|]>.;;
+(*
+- : ('cl, int array) code = .<[|(1 + 2); (1 + 2)|]>.
+*)
 
 (* Constructors and enforcing externality *)
 .<raise Not_found>.;;
@@ -358,3 +367,16 @@ type foo = {fool : int};;
 (*
 Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. Put into a separate file.")
 *)
+
+(* Conditional *)
+
+.<if true then 1 else 2>.;;
+(* - : ('cl, int) code = .<if (true) then 1 else 2>. *)
+<if Some 1 = None then print_string "weird">.;;
+(*
+- : ('cl, unit) code =
+.<if ((Some (1)) = (None)) then (print_string "weird">.
+*)
+.! .<if Some 1 = None then print_string "weird">.;;
+(* - : unit = () *)
+

@@ -370,6 +370,13 @@ let build_array :
   Location.t -> Parsetree.expression array -> Parsetree.expression =
   fun l ea -> {pexp_loc = l; pexp_desc = Pexp_array (Array.to_list ea) }
 
+let build_ifthenelse : 
+  Location.t -> 
+  Parsetree.expression -> Parsetree.expression -> Parsetree.expression option ->
+  Parsetree.expression =
+  fun l e1 e2 eo -> 
+  {pexp_loc = l; pexp_desc = Pexp_ifthenelse (e1,e2,eo) }
+
 let build_construct :
  Location.t -> Longident.t loc -> Parsetree.expression array -> bool ->
  Parsetree.expression =
@@ -658,7 +665,6 @@ let type_rec_flag   = lazy (find_type "Asttypes.rec_flag")
 let constr_pexp_function      = lazy (find_constr "Parsetree.Pexp_function")
 let constr_pexp_match         = lazy (find_constr "Parsetree.Pexp_match")
 let constr_pexp_try           = lazy (find_constr "Parsetree.Pexp_try")
-let constr_pexp_ifthenelse    = lazy (find_constr "Parsetree.Pexp_ifthenelse")
 let constr_pexp_for           = lazy (find_constr "Parsetree.Pexp_for")
 let constr_pexp_send          = lazy (find_constr "Parsetree.Pexp_send")
 let constr_pexp_let           = lazy (find_constr "Parsetree.Pexp_let")
@@ -1181,33 +1187,6 @@ let rec trx_e n exp =
           (Texp_construct(Lazy.force constr_pexp_variant,
                                [mkString exp label;
                                 mkPexpOption exp (map_option (trx_e n) eo)]))      
-    | Texp_field (e,ld) ->
-        let lids = get_record_lids e.exp_type e.exp_env in
-        let lid = List.nth lids ld.lbl_pos in
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_field,
-                               [trx_e n e;
-                                quote_longident exp lid]))
-
-    | Texp_setfield (e1,ld,e2) ->
-        let lids = get_record_lids e1.exp_type e1.exp_env in
-        let lid = List.nth lids ld.lbl_pos in
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_setfield,
-                               [trx_e n e1;
-                                quote_longident exp lid;
-                                trx_e n e2]))
-    | Texp_array el ->
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_array,
-                               [mkPexpList exp (List.map (trx_e n) el)]))
-    | Texp_ifthenelse (e1,e2,eo) ->
-        mkParseTree  exp
-          (Texp_construct(Lazy.force constr_pexp_ifthenelse,
-                               [trx_e n e1;
-                                trx_e n e2;
-                                mkPexpOption exp (map_option (trx_e n) eo)]))
-
     | Texp_for (id,e1,e2,df,e3) ->
         let gensymexp id =  (* (gensym "x") *)
           mkExp exp
@@ -1395,10 +1374,18 @@ let rec trx_bracket :
          texp_lid (mkloc (qualify_label p ldesc) li.loc);
          trx_bracket trx_exp n e2]
 
-(*
-  | Texp_array of expression list
-  | Texp_ifthenelse of expression * expression * expression option
-*)
+  | Texp_array el ->
+      texp_apply (texp_ident "Trx.build_array")
+        [texp_loc exp.exp_loc; 
+	 texp_array (List.map (trx_bracket trx_exp n) el)]
+
+  | Texp_ifthenelse (e,et,efo) ->
+      texp_apply (texp_ident "Trx.build_ifthenelse")
+        [texp_loc exp.exp_loc; 
+         trx_bracket trx_exp n e;
+         trx_bracket trx_exp n et;
+	 texp_option (map_option (trx_bracket trx_exp n) efo)]
+
   | Texp_sequence (e1,e2) ->
       texp_apply (texp_ident "Trx.build_sequence")
         [texp_loc exp.exp_loc; 
