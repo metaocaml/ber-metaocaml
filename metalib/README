@@ -6,7 +6,7 @@
    1 Copyright 
    2 Installation
    3 Staging constructs
-   4 Common Problems
+   4 Restrictions and Common Problems
    5 Detailed Discussion
    6 Credits
 
@@ -22,8 +22,8 @@ which was licensed according to ORIGINAL-LICENSE-META
 
 
 3. STAGING CONSTRUCTS
-   (This section is essentially that the last release of MetaOCaml;
-    Feb 3, 2006. In is modified for BER MetaOCaml)
+   (This is a modified version of the section from the last
+    release of the original MetaOCaml, Feb 3, 2006)
 
   The three new constructs are
 
@@ -81,32 +81,56 @@ which was licensed according to ORIGINAL-LICENSE-META
   in the test/ directory.
 
 
-4. COMMON PROBLEMS
-   1. To use MetaOCaml under MS Windows, please do not use "Windows
-      OCaml".  Rather, use the standard OCaml system under cygwin.  If you
-      happened to install the "Windows OCaml" in the past, manually remove
-      some environment variables before you can install the standard system
-      successfully.  To do that, goto START -> Control Panel -> System ->
-      Advance -> Environment variables, and edit the OCAMLLIB variable and
-      remove any entries in that entry.
+4. RESTRICTIONS AND COMMON PROBLEMS
 
-   2. Escaped expressions at the same level evaluate from right to left.
+   1. All data contructors and record labels used within brackets must
+   come from the types that are declared in separately compiled modules.
+   For example, the following works:
+       .<true>.                 (* data constructor is Pervasive *)
+       .<Some [1]>.             (* ditto                         *)
+       .<{Complex.re = 1.0; im = 2.0}>. (* The Record Complex is defined *)
+                                        (* in the standard library.      *)
+       open Complex                     (* which is separately complied  *)
+       .<{re = 1.0; im = 2.0}>.
 
-   3. Objects and modules are not supported within brackets are not supported
+   But the following is not allowed:
+
+       type foo = Bar
+       .<Bar>.
+
+       module Foo = struct exception E end
+      .<raise Foo.E>.
+
+   The type declaration foo or the module declaration Foo must be
+   moved into a separate file. The corresponding .cmi file must also be
+   available at run-time: either placed into the same directory as
+   the executable, or somewhere within the OCaml library search
+   path.
+
+   2. Escaped expressions at the same level evaluate in the same
+   order as arguments in an application. For a byte-code OCaml,
+   this order is RIGHT to left.
+
+   3. Objects and modules are not supported within brackets
      (but you can use brackets within modules or objects).
 
 
 5. DETAILED DISCUSSION
-   See NOTES.txt
+
+   For differences from the original MetaOCaml and further discussion,
+   see NOTES.txt.
+
 
 6. CREDITS
 
-  BER MetaOCaml is a re-implemention of the early version of
-  MetaOCaml, which was funded primarily by an NSF project titled:
+  BER MetaOCaml is a complete re-implemention of the original
+  MetaOCaml. 
+
+  The original MetaOCaml was funded primarily by an NSF project titled:
 
 	"ITR/SY(CISE): Putting Multi-Stage Annotations to Work"
 
-  The project was led by Walid Taha. Most of the development
+  That project was led by Walid Taha. Most of the original development
   and implementation of staging was done by Cristiano
   Calcagno, then at Imperial College. 
   Edward Pizzi has implemented the pretty-printing library.
@@ -114,4 +138,3 @@ which was licensed according to ORIGINAL-LICENSE-META
 
   Many members of the metaocaml-users and metaocaml-hackers lists have
   helped identify bugs and in some cases fixed them.
-
