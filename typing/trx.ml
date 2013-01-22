@@ -28,14 +28,28 @@
   is one of the large differences from the previous versions of MetaOCaml.
 
   Bindings.
-  Checking for scope extrusion: stack of currently active ids...
+  The principal rule of translating binding forms is
+     <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
+  Emphatically, gensym cannot be generated at compile time!
+  Reason: consider recursive invocation:
+     let rec f z = <fun y -> ~( ... f 1 ... )>
 
-  <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
+  Thus, at run-time, we generate new names for bound variables and
+  use the OCaml's evaluator (the `run-time') to substitute these
+  new names in <e>. Therefore, future-stage bound variable after
+  translation become present-stage bound variables,
+  but at a different type: Longident.t loc.
 
-
-Future-stage identifier x was represented in tree as 
-Texp_ident (ident,vd)
-
+  We now check for scope extrusion: we enforce the region discipline
+  for generated identifiers.  A future-stage bound variable (translated 
+  as a present-stage bound-variable of the Longident.t loc type) can only 
+  be used when the gensym'ed binding is alive. Thus the translation of a 
+  binder becomes
+     <fun x -> e> ---> let x = gensym "x" in 
+      new_region x (fun () -> (mkLAM x <e>))
+  and <x> is translated as build_ident x, where build_ident will check
+  that the identifier is within the dynamic scope established by
+  new_region.
 
 This file is based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
@@ -54,6 +68,11 @@ open Types
 let meta_version  = "N 100"
 
 exception TrxError of string
+
+(* Co-opt Camlp4 class of warnings *)
+let debug_print : string -> unit = fun msg ->
+ ignore(Warnings.print Format.err_formatter 
+          (Warnings.Camlp4 msg))
 
 (* ------------------------------------------------------------------------ *)
 (* Path utilities *)
@@ -533,6 +552,24 @@ let trx_csp :
   (* Otherwise, do the lifting at run-time *)
   texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
 
+(* ------------------------------------------------------------------------ *)
+(* Bindings in future stage *)
+
+let gensymstring_count = ref 0
+
+(* generates a fresh identifier *)
+let gensymstring s =
+  incr gensymstring_count;
+  s ^ "_" ^ string_of_int !gensymstring_count
+
+(* resets the counter used to ensure unique identifiers *)
+let reset_gensymstring_counter () = gensymstring_count := 0
+
+let gensymlongident li =
+  match li with
+    Longident.Lident s -> Longident.Lident (gensymstring s)
+  | _ -> fatal_error ("Trx.gensymstring: not a simple id")
+
 (*
 (* based on code taken from typing/parmatch.ml *)
 
@@ -580,18 +617,6 @@ let get_constr_name tag ty tenv  = match tag with
   with
   | Datarepr.Constr_not_found -> "*Unknown constructor*"
 
-let update_lid lid name =
-  match lid with
-    Longident.Lident _ -> Longident.Lident name
-  | Longident.Ldot (p,_) -> Longident.Ldot (p,name)
-  | _ -> fatal_error("Trx.update_lid")
-
-(* XXO: get the constructor lid by getting the path of
-   the type and updating it with the constructor name.
-   For example, Parsetree.Ppat_any is reconstructed from
-   type: Parsetree.pattern_desc
-   name: Ppat_any                                *)
-
 XXX use:	check_path_quotable p;
 
 let get_constr_lid tag ty tenv = 
@@ -608,12 +633,6 @@ let get_record_lids ty tenv =
   let type_lid = path_to_lid (get_type_path ty tenv) in
   let label_lid (name,_,_) = update_lid type_lid name
   in List.map label_lid lbls
-
-
-let map_option f o =
-  match o with
-    None -> None
-  | Some x -> Some (f x) 
 
 let rec map_strict f l =
   match l with
@@ -667,8 +686,6 @@ we should just look them up eagerly.
 let constr_nonrecursive = lazy (find_constr "Asttypes.Nonrecursive")
 let constr_recursive = lazy (find_constr "Asttypes.Recursive")
 let constr_default = lazy (find_constr "Asttypes.Default")
-let constr_upto = lazy (find_constr "Asttypes.Upto")
-let constr_downto = lazy (find_constr "Asttypes.Downto")
     
 let type_parsetree_expression = lazy (find_type "Parsetree.expression")
 let type_parsetree_pattern = lazy (find_type "Parsetree.pattern")
@@ -696,23 +713,6 @@ let constr_ppat_alias         = lazy (find_constr "Parsetree.Ppat_alias")
 let constr_ppat_variant       = lazy (find_constr "Parsetree.Ppat_variant")
 let constr_ppat_tuple         = lazy (find_constr "Parsetree.Ppat_tuple")
 
-let pathval_trx_longidenttostring = lazy (find_value "Trx.longidenttostring")
-let pathval_trx_gensymlongident = lazy (find_value "Trx.gensymlongident")
-
-let trx_longidenttostring exp =
-  let (p, v) = Lazy.force pathval_trx_longidenttostring in
-  { exp with exp_type = instance v.val_type;
-    exp_desc = Texp_ident(p, v) }
-
-let trx_gensymlongident exp =
-  let (p, v) = Lazy.force pathval_trx_gensymlongident in
-  { exp with exp_type = instance v.val_type;
-    exp_desc = Texp_ident(p, v) }
-
-let trx_mkcsp exp =
-  let (p, v) = Lazy.force pathval_trx_mkcsp in
-  { exp with exp_type = instance v.val_type;
-    exp_desc = Texp_ident(p, v) }
 
 let quote_rec_flag rf exp =
   let cst = match rf with
@@ -845,20 +845,6 @@ let rec quote_list_as_expopt_forpats exp el =
            (Texp_construct(Lazy.force constr_ppat_tuple,
                                 [mkPexpList exp el])))
 
-let gensymstring_count = ref 0
-
-(* generates a fresh identifier *)
-let gensymstring s =
-  incr gensymstring_count;
-  s ^ "_" ^ string_of_int !gensymstring_count
-
-(* resets the counter used to ensure unique identifiers *)
-let reset_gensymstring_counter () = gensymstring_count := 0
-
-let gensymlongident li =
-  match li with
-    Longident.Lident s -> Longident.Lident (gensymstring s)
-  | _ -> fatal_error ("Trx.gensymstring: not a simple id")
 
 let longidenttostring li =
   match li with
@@ -1285,9 +1271,9 @@ let rec trx_bracket :
   | Texp_ident (p,li,vd)  ->
     let stage = try Env.find_stage p exp.exp_env
 	        with Not_found ->
-	           ignore(Warnings.print Format.err_formatter 
-	           (Warnings.Camlp4 ("Stage for var is set to implicit 0:" ^ 
-	           Path.name p ^ "\n")));  [] in
+                  if false then
+                    debug_print ("Stage for var is set to implicit 0:" ^ 
+	                         Path.name p ^ "\n");  [] in
     (* We make CSP only if the variable is bound at the stage 0.
        Variables bound at stage > 0 are subject to renaming.
        They are translated into stage 0 variable but of a different

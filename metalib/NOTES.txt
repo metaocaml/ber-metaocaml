@@ -122,6 +122,16 @@ it as a literal is ungainly. It could also help syntactic extensions,
    (And so does format_path?) Add them to longident and path
    modules.
 
+Better error handling. Currently it is very unmodular! To add a new
+error, say, to typecore.ml one has to add the error to typecore.mli,
+make the same addition to typecore.ml, augment the printing function
+in typecore.ml. To add a new category, one has to augment
+driver/errors.ml. The best way is toi have the exception to be uniform
+                  exception Error of (format -> unit)
+So, the error carries the function that will print out the error
+message on the supplied ppf. Handler becomes much more extensible!
+
+
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
 -no-camlp4 -no-graph
 
