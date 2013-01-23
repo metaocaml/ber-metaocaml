@@ -11,7 +11,7 @@ let install_printers () =
 (* Initialization function *)
 
 let initialize () =
-  Printf.printf "Meta Caml toplevel, version %s\n" Trx.meta_version;
+  Printf.printf "BER MetaOCaml toplevel, version %s\n" Trx.meta_version;
   install_printers ()
 
 (* Hook up to the top level *)
