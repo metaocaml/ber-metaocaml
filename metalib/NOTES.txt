@@ -105,6 +105,7 @@ every feature: see test/trivial.ml and test/simple.ml
 
 -- All modified lines in the OCaml code are marked by (* NNN *)
 
+-- There are comments now -- and lots of them
 
 OCaml Core type checker was changed to use type_expect. This generates
 better error messages. Therefore, the type checking of brackets,
