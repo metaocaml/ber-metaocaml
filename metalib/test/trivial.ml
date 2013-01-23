@@ -415,3 +415,70 @@ f x;;
 - : float = 3.16227766016837952
 *)
 
+.! .<let open Complex in norm {re=1.0; im = 3.0}>.;;
+
+(* - : float = 3.16227766016837952 *)
+
+# .<for i=1 to 5 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
+(*
+- : ('cl, unit) code =
+.<for i_10 = 1 to 5 do Printf.printf "ok %d %d\n" i_10 (i_10 + 1) done>.
+*)
+.! .<for i=1 to 5 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
+(*
+ok 1 2
+ok 2 3
+ok 3 4
+ok 4 5
+ok 5 6
+*)
+
+.<for i=5 downto 1 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
+(*
+- : ('cl, unit) code =
+.<for i_8 = 5 downto 1 do Printf.printf "ok %d %d\n" i_8 (i_8 + 1) done>.
+*)
+.! .<for i=5 downto 1 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
+(*
+ok 5 6
+ok 4 5
+ok 3 4
+ok 2 3
+ok 1 2
+*)
+
+.<for i=1 to 2 do for j=1 to 3 do Printf.printf "ok %d %d\n" i j done done>.;;
+(*
+- : ('cl, unit) code =
+.<for i_14 = 1 to 2 do
+   for j_15 = 1 to 3 do (Printf.printf "ok %d %d\n" i_14 j_15 done done>.
+*)
+.! .<for i=1 to 2 do for j=1 to 3 do Printf.printf "ok %d %d\n" i j done done>.;;
+(*
+ok 1 1
+ok 1 2
+ok 1 3
+ok 2 1
+ok 2 2
+ok 2 3
+*)
+
+let c = .<for i=1 to 2 do .~(let x = .<i>. in .<for i=1 to 3 do Printf.printf "ok %d %d\n" i .~x done>.) done>.;;
+(*
+val c : ('cl, unit) code =
+  .<for i_20 = 1 to 2 do
+     for i_21 = 1 to 3 do (Printf.printf "ok %d %d\n" i_21 i_20 done done>.
+*)
+.! c;;
+(*
+ok 1 1
+ok 2 1
+ok 3 1
+ok 1 2
+ok 2 2
+ok 3 2
+*)
+
+let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
+
+let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<i>.; .<()>.) done>. in (r,!x);;

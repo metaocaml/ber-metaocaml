@@ -18,8 +18,9 @@ val trx_structure: Typedtree.structure -> Typedtree.structure
    Therefore, do NOT rename the functions or change their types!
 *)
 
-val sample_lid : Longident.t Location.loc  (* A template for lid expressions *)
-val sample_loc : Location.t
+val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
+val sample_loc  : Location.t
+val sample_name : string Location.loc
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> Parsetree.expression
@@ -75,6 +76,14 @@ val build_send :
 val build_open :
  Location.t -> Longident.t Location.loc -> Parsetree.expression -> 
  Parsetree.expression
+
+val build_ident : Location.t -> string Location.loc -> Parsetree.expression
+val with_binding_region : 
+    string Location.loc -> (string Location.loc -> 'a) -> 'a
+val build_for : 
+  Location.t -> string Location.loc -> 
+  Parsetree.expression -> Parsetree.expression -> 
+  bool -> Parsetree.expression -> Parsetree.expression
 
 (*
 val longidenttostring : Longident.t -> string

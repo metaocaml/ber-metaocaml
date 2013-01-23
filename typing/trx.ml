@@ -27,7 +27,11 @@
   This mechanism of building Parsetree at compile-time whenever possible
   is one of the large differences from the previous versions of MetaOCaml.
 
-  Bindings.
+  Future-stage Bindings.
+  Future-stage bindings are introduced by patterns in let, fun,
+  match, try and for forms. Global bindings are always at present-stage;
+  since local modules in brackets are not allowed, all future bindings are
+  unqualified (simple names, without the module path).
   The principal rule of translating binding forms is
      <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
   Emphatically, gensym cannot be generated at compile time!
@@ -38,7 +42,9 @@
   use the OCaml's evaluator (the `run-time') to substitute these
   new names in <e>. Therefore, a future-stage bound variable after
   translation become a present-stage bound variable,
-  but at a different type: Longident.t loc.
+  but at a different type: string loc. We use string loc rather
+  than Longident.t loc since all, at present, future-stage bindings
+  are simple names.
 
   We now check for scope extrusion: we enforce the region discipline
   for generated identifiers.  A future-stage bound variable (translated 
@@ -49,7 +55,15 @@
       new_binding_region x (fun () -> (mkLAM x <e>))
   and <x> is translated as build_ident x, where build_ident will check
   that the identifier is within the dynamic scope established by
-  new_binding_region.
+  new_binding_region. Further, the let-form and new_binding_region
+  can be fused, leading to the final translation
+     <fun x -> e> ---> with_binding_region "x" (fun x -> mkLAM x <e>)
+  For more complicated binding patterns, we iterate
+     <fun (x1,x2) -> e> ---> 
+       with_binding_region "x1" (fun x1 ->
+       with_binding_region "x2" (fun x2 ->
+         mkLAM (x1,x2) <e>))
+
 
 This file is based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
@@ -226,6 +240,9 @@ let dummy_lid : string -> Longident.t loc = fun name ->
 
 (* Exported. Used as a template for constructing lid expressions *)
 let sample_lid = dummy_lid "*sample*"
+
+(* Exported. Used as a template for constructing name expression *)
+let sample_name : string loc = mknoloc "*sample*"
 
 (* Exported. Used as a template for constructing Location.t expressions *)
 let sample_loc = Location.none
@@ -565,46 +582,66 @@ let trx_csp :
 
 (* ------------------------------------------------------------------------ *)
 (* Bindings in the future stage *)
-
+(* Recall, all bindings at the future stage are introduced by
+   patterns, and hence are simple names, without any module qualifications
+*)
 let gensym_count = ref 0
 
-(* Generate a fresh identifier with a given base name *)
+(* Generate a fresh name with a given base name *)
 let gensym : string -> string = fun s ->
   incr gensym_count;
   s ^ "_" ^ string_of_int !gensym_count
 
 let reset_gensym_counter () = gensym_count := 0
 
-(* Make a simple Longident unique *)
-let genident : Longident.t loc -> Longident.t loc = function
-  | {txt = Longident.Lident s} as li ->
-      {li with txt = Longident.Lident (gensym s)}
-  | _ -> assert false
+(* Make a simple identifier unique *)
+let genident : string loc -> string loc = fun name ->
+  {name with txt = gensym name.txt}
 
 (* The names of gensym'd future stage bindings currently in scope,
    of new_binding_region
 *)
 module BVar = Set.Make(struct
-  type t = Longident.t loc
-  let compare li1 li2 = String.compare (Longident.last li1.txt) 
-                                       (Longident.last li2.txt)
+  type t = string loc
+  let compare li1 li2 = String.compare li1.txt li2.txt
  end)
 
 let bindings_in_scope : BVar.t ref = ref BVar.empty
 
-(* Build an Parsetree for a future-stage identifier, checking that
+(* Build a Parsetree for a future-stage identifier, checking that
    it is in scope
 *)
-let build_ident : Location.t -> Longident.t loc -> Parsetree.expression =
+let build_ident : Location.t -> string loc -> Parsetree.expression =
  fun loc l ->
    if BVar.mem l !bindings_in_scope then
      {pexp_loc  = loc;
-      pexp_desc = Pexp_ident l}
+      pexp_desc = Pexp_ident (mkloc (Longident.Lident l.txt) l.loc)}
    else
     trx_error ~loc:loc (fun ppf -> Format.fprintf ppf 
        "Scope extrusion for the identifier %s bound at %a"
-       (Longident.last l.txt) Location.print l.loc)
+       l.txt Location.print l.loc)
 
+(* Generate a gensym with a given base name and enter a new region 
+   in which this gensym will live
+*)
+let with_binding_region : string loc -> (string loc -> 'a) -> 'a =
+  fun name_base body ->
+    let old_bindings = !bindings_in_scope in
+    let new_var = genident name_base in
+    let () = bindings_in_scope := BVar.add new_var old_bindings in
+    let r = 
+      try body new_var with e -> bindings_in_scope := old_bindings; raise e
+    in
+    bindings_in_scope := old_bindings; r
+
+
+let build_for : 
+  Location.t -> string loc -> Parsetree.expression -> Parsetree.expression -> 
+  bool -> Parsetree.expression -> Parsetree.expression =
+  fun l name elo ehi dir ebody -> 
+  {pexp_loc = l; 
+   pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) }
+      
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -1324,7 +1361,7 @@ let rec trx_bracket :
          (* Future-stage bound variable becomes the present-stage
             bound-variable, but at a different type
           *)
-         match texp_ident "Trx.sample_lid" with (* fill in the type, etc.*)
+         match texp_ident "Trx.sample_name" with (* fill in the type, etc.*)
          | {exp_desc = Texp_ident (_,_,vd); exp_type = ty}  ->
            {exp with exp_desc = Texp_ident(p,li,vd); exp_type = ty}
          | _ -> assert false]
@@ -1413,11 +1450,47 @@ let rec trx_bracket :
       texp_apply (texp_ident "Trx.build_while")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-(*
-  | Texp_for of
-      Ident.t * string loc * expression * expression * direction_flag *
-        expression
-*)
+
+  | Texp_for (id, name, elo, ehi, dir, ebody) ->
+      let name_exp = texp_ident "Trx.sample_name" in
+      let ty = wrap_ty_in_code n exp.exp_type in (* lifted type of for *)
+      let base_name_exp = 
+            {name_exp with
+               exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} in
+      let pat = 
+         { pat_desc = Tpat_var (id,name);
+           pat_loc  = exp.exp_loc; pat_extra = [];
+           pat_type = name_exp.exp_type;
+           pat_env  = name_exp.exp_env }(* does not include the binding to id!*)
+      in
+      let name_vd = match name_exp.exp_desc with
+                     | Texp_ident (_,_,vd) -> vd
+                     | _ -> assert false in
+      let gensymed_exp =                (* translated var *)
+         {name_exp with exp_desc = 
+          Texp_ident (Path.Pident id,
+                       (mkloc (Longident.Lident name.txt) name.loc),name_vd)} in
+      let body = 
+        { exp_desc = 
+            texp_apply (texp_ident "Trx.build_for") 
+            [texp_loc exp.exp_loc;
+             gensymed_exp;
+             trx_bracket trx_exp n elo;
+             trx_bracket trx_exp n ehi;
+             texp_bool (dir = Upto);
+             trx_bracket trx_exp n ebody];
+          exp_type = ty;
+          exp_loc  = exp.exp_loc; exp_extra = [];
+          exp_env  = exp.exp_env } in
+      let fun_body_exp = 
+        { exp_desc = Texp_function ("",[(pat,body)],Total); 
+          exp_type = Ctype.newty (Tarrow("", name_exp.exp_type, ty, Cok));
+          exp_loc  = exp.exp_loc; exp_extra = [];
+          exp_env  = exp.exp_env }
+      in
+      texp_apply (texp_ident "Trx.with_binding_region")
+        [base_name_exp; fun_body_exp]
+
   | Texp_when (e1,e2) ->
       texp_apply (texp_ident "Trx.build_when")
         [texp_loc exp.exp_loc; 
