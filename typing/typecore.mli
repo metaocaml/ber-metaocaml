@@ -106,6 +106,7 @@ type error =
   | Wrong_stage of (type_expr list) * (type_expr list)    (* NNN *)
   | Run_occur_check of type_expr * type_expr		  (* NNN *)
   | Run_alpha_not_generalizable of type_expr * type_expr  (* NNN *)
+  | Trx_error of (Format.formatter -> unit)               (* NNN *)
 
 exception Error of Location.t * error
 

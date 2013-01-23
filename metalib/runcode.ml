@@ -96,8 +96,8 @@ let run' exp =
    with 
     x -> (Errors.report_error Format.std_formatter x;
 	  Format.pp_print_newline Format.std_formatter ();
-	  raise (Trx.TrxError 
-            "Error type-checking generated code: scope extrusion?"))
+	  failwith 
+            "Error type-checking generated code: scope extrusion?")
   in
   let lam = Translmod.transl_toplevel_definition str in
   load_lambda Format.std_formatter lam

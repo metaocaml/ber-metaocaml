@@ -4,8 +4,6 @@
    to build the code representation (that is, Parsetree).
 *)
 
-exception TrxError of string
-
 val meta_version : string
 (** [meta_version] is the version of BER MetaOCaml*)
 
@@ -17,6 +15,7 @@ val trx_structure: Typedtree.structure -> Typedtree.structure
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
    Trx may generate code the refers to the functions below.
+   Therefore, do NOT rename the functions or change their types!
 *)
 
 val sample_lid : Longident.t Location.loc  (* A template for lid expressions *)

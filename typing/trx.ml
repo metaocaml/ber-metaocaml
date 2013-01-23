@@ -31,13 +31,13 @@
   The principal rule of translating binding forms is
      <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
   Emphatically, gensym cannot be generated at compile time!
-  Reason: consider recursive invocation:
+  Reason: consider the recursive invocation:
      let rec f z = <fun y -> ~( ... f 1 ... )>
 
   Thus, at run-time, we generate new names for bound variables and
   use the OCaml's evaluator (the `run-time') to substitute these
-  new names in <e>. Therefore, future-stage bound variable after
-  translation become present-stage bound variables,
+  new names in <e>. Therefore, a future-stage bound variable after
+  translation become a present-stage bound variable,
   but at a different type: Longident.t loc.
 
   We now check for scope extrusion: we enforce the region discipline
@@ -46,10 +46,10 @@
   be used when the gensym'ed binding is alive. Thus the translation of a 
   binder becomes
      <fun x -> e> ---> let x = gensym "x" in 
-      new_region x (fun () -> (mkLAM x <e>))
+      new_binding_region x (fun () -> (mkLAM x <e>))
   and <x> is translated as build_ident x, where build_ident will check
   that the identifier is within the dynamic scope established by
-  new_region.
+  new_binding_region.
 
 This file is based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
@@ -67,12 +67,13 @@ open Types
 (* BER MetaOCaml version string *)
 let meta_version  = "N 100"
 
-exception TrxError of string
-
 (* Co-opt Camlp4 class of warnings *)
 let debug_print : string -> unit = fun msg ->
  ignore(Warnings.print Format.err_formatter 
           (Warnings.Camlp4 msg))
+
+let trx_error ?(loc = Location.none) fn =
+  raise (Typecore.Error (loc, Typecore.Trx_error fn))
 
 (* ------------------------------------------------------------------------ *)
 (* Path utilities *)
@@ -126,8 +127,10 @@ let path_replace_last : Path.t -> Path.t -> Path.t = fun p1 p2 ->
 *)
 let check_path_quotable msg path =
   if not (is_external path) then
-    raise (TrxError (msg ^ " " ^ Path.name path ^
-     " cannot be used within brackets. Put into a separate file."))
+    trx_error (fun ppf ->
+      Format.fprintf ppf 
+        "%s %s cannot be used within brackets. Put into a separate file."
+        msg (Path.name path))
 
 (* Check to see that a constructor belongs to a type defined
    in a persistent module or in the initial environment.
@@ -154,8 +157,10 @@ let check_path_quotable msg path =
    returns the qualified path? Searching the environment is costly
    though.
  *)
-let qualify_ctor : Path.t -> constructor_description -> Longident.t = 
- fun p cdesc ->
+let qualify_ctor : Location.t -> Path.t -> constructor_description -> 
+  Longident.t loc = 
+ fun loc p cdesc ->
+  (fun lid -> Location.mkloc lid loc) (
   let lid = path_to_lid p in
   if is_external p then lid
   else if try ignore (Env.lookup_constructor lid Env.initial); true
@@ -164,24 +169,29 @@ let qualify_ctor : Path.t -> constructor_description -> Longident.t =
   else match (cdesc.cstr_tag, Ctype.repr cdesc.cstr_res) with
   | (Cstr_exception (p,_),_) ->
       if is_external p then path_to_lid p else
-      raise (TrxError ("Exception " ^ Path.name p ^
-        " cannot be used within brackets. Put into a separate file."))
+       trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+       "Exception %s cannot be used within brackets. Put into a separate file."
+        (Path.name p))
   | (_,{desc = Tconstr(ty_path, _, _)}) ->
       if is_external ty_path then
         path_to_lid (path_replace_last ty_path p)
       else
-        raise (TrxError ("Constructor " ^ Path.name p ^
-               " cannot be used within brackets. Put into a separate file."))
+      trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+      "Constructor %s cannot be used within brackets. Put into a separate file."
+          (Path.name p))
   | _ -> Printtyp.type_expr Format.err_formatter cdesc.cstr_res;
            failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
                      Path.name p)
+  )
 
 (* Check to see that a record label belongs to a record defined
    in a persistent module or in the initial environment.
    This is a label version of qualify_ctor
 *)
-let qualify_label : Path.t -> label_description -> Longident.t =
- fun p ldesc ->
+let qualify_label : Location.t -> Path.t -> label_description -> 
+  Longident.t loc =
+ fun loc p ldesc ->
+  (fun lid -> Location.mkloc lid loc) (
   let lid = path_to_lid p in
   if is_external p then lid
   else if try ignore (Env.lookup_label lid Env.initial); true
@@ -192,12 +202,13 @@ let qualify_label : Path.t -> label_description -> Longident.t =
       if is_external ty_path then
         path_to_lid (path_replace_last ty_path p)
       else
-        raise (TrxError ("Label " ^ Path.name p ^
-               " cannot be used within brackets. Put into a separate file."))
+        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+          "Label %s cannot be used within brackets. Put into a separate file."
+          (Path.name p))
   | _ -> Printtyp.type_expr Format.err_formatter ldesc.lbl_res;
            failwith ("qualify_label: cannot determine type from label "^
                      Path.name p)
-
+ )
 
 (* Test if we should refer to a CSP value by name rather than by
    value
@@ -553,22 +564,47 @@ let trx_csp :
   texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
 
 (* ------------------------------------------------------------------------ *)
-(* Bindings in future stage *)
+(* Bindings in the future stage *)
 
-let gensymstring_count = ref 0
+let gensym_count = ref 0
 
-(* generates a fresh identifier *)
-let gensymstring s =
-  incr gensymstring_count;
-  s ^ "_" ^ string_of_int !gensymstring_count
+(* Generate a fresh identifier with a given base name *)
+let gensym : string -> string = fun s ->
+  incr gensym_count;
+  s ^ "_" ^ string_of_int !gensym_count
 
-(* resets the counter used to ensure unique identifiers *)
-let reset_gensymstring_counter () = gensymstring_count := 0
+let reset_gensym_counter () = gensym_count := 0
 
-let gensymlongident li =
-  match li with
-    Longident.Lident s -> Longident.Lident (gensymstring s)
-  | _ -> fatal_error ("Trx.gensymstring: not a simple id")
+(* Make a simple Longident unique *)
+let genident : Longident.t loc -> Longident.t loc = function
+  | {txt = Longident.Lident s} as li ->
+      {li with txt = Longident.Lident (gensym s)}
+  | _ -> assert false
+
+(* The names of gensym'd future stage bindings currently in scope,
+   of new_binding_region
+*)
+module BVar = Set.Make(struct
+  type t = Longident.t loc
+  let compare li1 li2 = String.compare (Longident.last li1.txt) 
+                                       (Longident.last li2.txt)
+ end)
+
+let bindings_in_scope : BVar.t ref = ref BVar.empty
+
+(* Build an Parsetree for a future-stage identifier, checking that
+   it is in scope
+*)
+let build_ident : Location.t -> Longident.t loc -> Parsetree.expression =
+ fun loc l ->
+   if BVar.mem l !bindings_in_scope then
+     {pexp_loc  = loc;
+      pexp_desc = Pexp_ident l}
+   else
+    trx_error ~loc:loc (fun ppf -> Format.fprintf ppf 
+       "Scope extrusion for the identifier %s bound at %a"
+       (Longident.last l.txt) Location.print l.loc)
+
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -1259,7 +1295,8 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
   | Some x -> Some (f x)
 
 let not_supported msg =
-  raise (TrxError (msg ^ " is not yet supported within brackets"))
+  trx_error (fun ppf -> Format.fprintf ppf 
+      "%s is not yet supported within brackets" msg)
 
 
 let rec trx_bracket : 
@@ -1281,11 +1318,16 @@ let rec trx_bracket :
        We also do the non-escaping check.
      *)
     if stage = [] then trx_csp exp p li 
-    else                                (* XXX *)
-      let ast = 
-        {pexp_loc = exp.exp_loc;
-         pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
-      in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
+    else
+      texp_apply (texp_ident "Trx.build_ident")
+        [texp_loc exp.exp_loc; 
+         (* Future-stage bound variable becomes the present-stage
+            bound-variable, but at a different type
+          *)
+         match texp_ident "Trx.sample_lid" with (* fill in the type, etc.*)
+         | {exp_desc = Texp_ident (_,_,vd); exp_type = ty}  ->
+           {exp with exp_desc = Texp_ident(p,li,vd); exp_type = ty}
+         | _ -> assert false]
 
   | Texp_constant cst ->
     let ast = 
@@ -1317,10 +1359,10 @@ let rec trx_bracket :
 	 texp_array (List.map (trx_bracket trx_exp n) el)]
 
   | Texp_construct (p, li, cdesc, args, explicit_arity) ->
-      let lid = qualify_ctor p cdesc in
+      let lid = qualify_ctor li.loc p cdesc in
       texp_apply (texp_ident "Trx.build_construct")
         [texp_loc exp.exp_loc; 
-         texp_lid (mkloc lid li.loc);
+         texp_lid lid;
 	 texp_array (List.map (trx_bracket trx_exp n) args);
          texp_bool explicit_arity]
 
@@ -1334,7 +1376,7 @@ let rec trx_bracket :
       texp_apply (texp_ident "Trx.build_record")
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (p,li,ldesc,e) ->
-           texp_tuple [texp_lid (mkloc (qualify_label p ldesc) li.loc);
+           texp_tuple [texp_lid (qualify_label li.loc p ldesc);
                        trx_bracket trx_exp n e]) lel);
          texp_option (map_option (trx_bracket trx_exp n) eo)]
 
@@ -1342,13 +1384,13 @@ let rec trx_bracket :
       texp_apply (texp_ident "Trx.build_field")
         [texp_loc exp.exp_loc; 
          trx_bracket trx_exp n e;
-         texp_lid (mkloc (qualify_label p ldesc) li.loc)]
+         texp_lid (qualify_label li.loc p ldesc)]
 
   | Texp_setfield (e1,p,li,ldesc,e2) ->
       texp_apply (texp_ident "Trx.build_setfield")
         [texp_loc exp.exp_loc; 
          trx_bracket trx_exp n e1;
-         texp_lid (mkloc (qualify_label p ldesc) li.loc);
+         texp_lid (qualify_label li.loc p ldesc);
          trx_bracket trx_exp n e2]
 
   | Texp_array el ->

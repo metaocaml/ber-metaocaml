@@ -64,6 +64,7 @@ type error =
   | Wrong_stage of (type_expr list) * (type_expr list)    (* NNN *)
   | Run_occur_check of type_expr * type_expr		  (* NNN *)
   | Run_alpha_not_generalizable of type_expr * type_expr  (* NNN *)
+  | Trx_error of (Format.formatter -> unit)               (* NNN *)
 
 exception Error of Location.t * error
 
@@ -3393,6 +3394,8 @@ let report_error ppf = function
       reset_and_mark_loops t2;
       fprintf ppf ".! error: %a not generalizable in %a\n"  
 	type_expr t1 type_expr t2
+  | Trx_error fn -> fn ppf
+      
 
 let () =
   Env.add_delayed_check_forward := add_delayed_check
