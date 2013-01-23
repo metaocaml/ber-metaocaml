@@ -120,11 +120,10 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  metaocaml # NNN
 # NNNNN otherlibraries ocamldoc
 # NNN The rest is not tried or not yet supported
 #  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
-
+# NNN make all && (cd metalib && make clean all) && (make install; cd metalib && make install)
 # Compile everything the first time
 world:
 	$(MAKE) coldstart
@@ -783,18 +782,6 @@ package-macosx:
 
 clean::
 	rm -rf package-macosx/*.pkg package-macosx/*.dmg
-
-# NNN BER MetaOCaml 
-metaocaml: ocamlc
-	cd metalib && $(MAKE) clean all
-
-clean::
-	cd metalib && $(MAKE) clean
-
-alldepend::
-	cd metalib && $(MAKE) depend
-# NNN end
-
 
 # Default rules
 
