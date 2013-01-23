@@ -419,7 +419,9 @@ f x;;
 
 (* - : float = 3.16227766016837952 *)
 
-# .<for i=1 to 5 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
+(* For-loop *)
+
+.<for i=1 to 5 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
 (*
 - : ('cl, unit) code =
 .<for i_10 = 1 to 5 do Printf.printf "ok %d %d\n" i_10 (i_10 + 1) done>.
@@ -477,6 +479,20 @@ ok 3 1
 ok 1 2
 ok 2 2
 ok 3 2
+*)
+
+(* Scope extrusion test *)
+
+let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<0>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;
+(*
+- : ('cl, unit) code = .<for i_2 = 1 to 5 do (ignore 0 done>.
+*)
+
+let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;
+(*
+Exception:
+Failure
+ "Scope extrusion at Characters 49-50:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                                   ^\n for the identifier i_3 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                             ^\n".
 *)
 
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
