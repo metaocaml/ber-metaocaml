@@ -4,8 +4,8 @@
 
 open Format
 open Parsetree
-open Pprintast
-(*
+(* open Pprintast *)
+
 open Asttypes
 open Location
 open Lexing
@@ -1808,7 +1808,6 @@ let rec toplevel_phrase = function
       pp_close_box fmt ()
 
 end
-*)
 
 (* print code as a parse tree. Useful for debugging *)
 let print_code_as_ast x =
@@ -1817,7 +1816,11 @@ let print_code_as_ast x =
      pstr_loc  = Location.none }]
 
 let inpc ppf x = 
-  fprintf ppf ".<@ "; expression ppf x; fprintf ppf ">.@ "
+  let module M = PR(struct let ppf = ppf end) in
+  fprintf ppf ".<@,"; M.expression x; fprintf ppf ">.@ ";
+  try Trx.check_scope_extrusion x 
+  with e -> fprintf ppf "\n%s" (Printexc.to_string e)
+  
 
 let inpc_string x =
   ignore (flush_str_formatter ()) ;
@@ -1825,8 +1828,9 @@ let inpc_string x =
   flush_str_formatter ()
 
 let top_phrase_pretty ppf x =
+  let module M = PR(struct let ppf = ppf end) in
   pp_print_newline ppf () ;
-  toplevel_phrase ppf x;
+  M.toplevel_phrase x;
   fprintf ppf ";;" ;
   pp_print_newline ppf ()
 

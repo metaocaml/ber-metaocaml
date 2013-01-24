@@ -535,3 +535,23 @@ eta (fun y -> .<fun x -> x + .~y>.);;
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
 
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<i>.; .<()>.) done>. in (r,!x);;
+
+
+(* testing scope extrusion *)
+let r = ref .<0>. in let _ = .<fun x -> .~(r := .<1>.; .<0>.)>. in !r ;;
+(* - : ('cl, int) code = .<1>.  *)
+let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;
+(*
+- : ('cl, int) code = .<x_2>.
+
+Failure("Scope extrusion at Characters 50-51:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                                    ^\n for the identifier x_2 bound at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n")
+*)
+
+let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;
+(*
+Exception:
+Failure
+ "Scope extrusion at Characters 58-59:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                                            ^\n for the identifier x_3 bound at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                             ^\n".
+*)
+
+let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;
