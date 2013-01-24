@@ -2,17 +2,13 @@
 (* Most of the code is authored by:  Ed Pizzi *)
 (* and simplified by Jacques Carette *)
 
-open Asttypes
 open Format
+open Parsetree
+open Pprintast
+(*
+open Asttypes
 open Location
 open Lexing
-open Parsetree
-
-(* print code as a parse tree. Useful for debugging *)
-let print_code_as_ast x =
-  Printast.implementation Format.std_formatter
-  [{ pstr_desc = Pstr_eval ((Obj.magic x) : Parsetree.expression);
-     pstr_loc  = Location.none }]
 
 (* borrowed from printast.ml *)
 let fmt_position f l =
@@ -241,8 +237,23 @@ let rec core_type x =
       end ;
       core_type ct ;
       pp_close_box fmt () ; 
-  | Ptyp_package _ ->                (* XXX Notdone *)
+  | Ptyp_package (li, []) ->
+      p (fmt_longident li.txt)
+  | Ptyp_package (li, lst) ->
+      pp_open_hovbox fmt indent ;
+      p (fmt_longident li.txt); 
+      fprintf fmt "@ with@ ";
+      list2 package_type_cstr "and" lst;
+      pp_close_box fmt () ;
       failwith "Ptyp_package printing not implemented yet"
+
+and package_type_cstr (li, typ) = 
+      pp_open_hovbox fmt indent ;
+      p "type ";
+      p (fmt_longident li.txt);
+      p " = ";
+      core_type typ;
+      pp_close_box fmt ()
 
 and class_var s = fprintf fmt "`%s" s
 
@@ -342,9 +353,10 @@ and pattern x =
           p ")" ;
           pp_close_box fmt () ;
       );
-  | Ppat_record (l,cf) ->                  (* XXX: cf, closed-flag, Notdone *)
+  | Ppat_record (l,cf) ->
       p "{" ;
       list2 longident_x_pattern ";" l;
+      if cf = Open then fprintf fmt "; _ ";
       p "}" ;
   | Ppat_array (l) ->                      (* OXX done *)
      pp_open_hovbox fmt 2 ;
@@ -376,13 +388,13 @@ and pattern x =
       p ")" ;
       pp_close_box fmt ()
   | Ppat_unpack {txt = s} ->
-      failwith "Ppat_unpack printing"   (* XXX Notdone *)
+      fprintf fmt "(module @ %s)" s;
 
 and expression x =
   match x.pexp_desc with
   | Pexp_ident ({txt=li}) -> (* was (li, b) *)
       ( match fixity_of_longident li with
-        | Infix  -> fprintf fmt "(%s)" (fmt_longident li)
+        | Infix  -> fprintf fmt "((%s))" (fmt_longident li)
         | Prefix -> p (fmt_longident li))
   | Pexp_constant (c) -> fmt_constant c;
   | Pexp_let (rf, l, e) ->
@@ -426,10 +438,8 @@ and expression x =
       | ("Array", "get"), [(_,exp1) ; (_,exp2)] ->
                pp_open_hovbox fmt indent;
                (match exp1.pexp_desc with
-                | Pexp_ident (_) ->
-                    expression exp1 ;
-                | _ ->
-                    expression_in_parens exp1 ;
+                | Pexp_ident (_) -> expression exp1
+                | _ -> expression_in_parens exp1
                );
                p ".";
                expression_in_parens exp2;
@@ -437,27 +447,25 @@ and expression x =
       | ("Array", "set"), [(_,array) ; (_,index) ; (_, value)] ->
                pp_open_hovbox fmt indent;
                (match array.pexp_desc with
-                | Pexp_ident (_) ->
-                    expression array ;
-                | _ ->
-                    expression_in_parens array ;
+                | Pexp_ident (_) -> expression array
+                | _ -> expression_in_parens array
                );
                p ".";
                expression_in_parens index;
                fprintf fmt "@ <-@ ";
                expression value;
-               pp_close_box fmt ();
+               pp_close_box fmt ()
       | ("","!"),[(_,exp1)] ->
                p "!" ;
-               expression exp1 ;
+               expression exp1
       (* | ("","raise"),[(_,exp)] ->
                p "raising [" ;
                expression exp;
                fprintf fmt "], says %s" st; *)
-      | (_,_) -> begin
+      | _,_ -> begin
           pp_open_hovbox fmt (indent + 1) ; 
           p "(" ;
-          match fixity with
+          (match fixity with
           | Prefix -> begin        
              (match e.pexp_desc with
               | Pexp_ident(_) -> expression e ;
@@ -489,7 +497,7 @@ and expression x =
                 (* p ")" ; *)
                 list2 label_x_expression_param ~breakfirst:true "" l
               end
-            end ;
+            end);
           p ")" ;
           pp_close_box fmt ()
           end )
@@ -1074,22 +1082,6 @@ and class_field {pcf_desc=x} =
       fprintf fmt " =@ " ;
       core_type ct2;
       pp_close_box fmt ();
-(* XXX No longer present
-  | Pcf_let (rf, l) ->
-      (* at the time that this was written, Pcf_let was commented out
-         of the parser, rendering this untestable. In the interest of
-         completeness, the following code is designed to print what
-         the parser seems to expect *)
-      (* todo: test this, eventually *)
-      let l1 = (List.hd l) in
-      let l2 = (List.tl l) in
-      pp_open_hvbox fmt indent ;
-      fprintf fmt "let%s " (fmt_rec_flag rf);
-      pattern_x_expression_def fmt l1;
-      pattern_x_expression_def_list fmt l2;
-      fprintf fmt " in" ;
-      pp_close_box fmt () ;
-*)
   | Pcf_init (e) ->
       pp_open_hovbox fmt indent ;
       fprintf fmt "initializer@ " ;
@@ -1816,10 +1808,16 @@ let rec toplevel_phrase = function
       pp_close_box fmt ()
 
 end
+*)
+
+(* print code as a parse tree. Useful for debugging *)
+let print_code_as_ast x =
+  Printast.implementation Format.std_formatter
+  [{ pstr_desc = Pstr_eval ((Obj.magic x) : Parsetree.expression);
+     pstr_loc  = Location.none }]
 
 let inpc ppf x = 
-  let module M = PR(struct let ppf = ppf end) in
-  M.fenced ".<" ">." M.expression x
+  fprintf ppf ".<@ "; expression ppf x; fprintf ppf ">.@ "
 
 let inpc_string x =
   ignore (flush_str_formatter ()) ;
@@ -1828,8 +1826,7 @@ let inpc_string x =
 
 let top_phrase_pretty ppf x =
   pp_print_newline ppf () ;
-  let module M = PR(struct let ppf = ppf end) in
-  M.toplevel_phrase x;
+  toplevel_phrase ppf x;
   fprintf ppf ";;" ;
   pp_print_newline ppf ()
 
