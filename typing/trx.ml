@@ -11,7 +11,7 @@
      mkApp <succ> <1> 
   and eventually to
      mkApp (mkIdent "succ") (mkConst 1)
-  One may say that we `push the brackets inside'.  We replace bracket
+  One may say that we `push the brackets inside'.  We replace brackets
   with calls to functions that will construct, at run-time, a
   Parsetree, which is the representation of values of the code type.
 
@@ -25,13 +25,13 @@
   After we construct the Parsetree at compile time, we use CSP to
   pass it over to run-time. At run-time, we merely use the compiled constant.
   This mechanism of building Parsetree at compile-time whenever possible
-  is one of the large differences from the previous versions of MetaOCaml.
+  is one of the large differences from previous versions of MetaOCaml.
 
   Future-stage Bindings.
   Future-stage bindings are introduced by patterns in let, fun,
-  match, try and for forms. Global bindings are always at present-stage;
-  since local modules in brackets are not allowed, all future bindings are
-  unqualified (simple names, without the module path).
+  match, try and for forms. Global bindings are always at present-stage.
+  Since local modules in brackets are not allowed, all future bindings are
+  unqualified (i.e., simple names, without the module path).
   The principal rule of translating binding forms is
      <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
   Emphatically, gensym cannot be generated at compile time!
@@ -85,12 +85,21 @@
   with_binding_region. Cross-stage persistent identifiers such as (+)
   or Array.get are all module-qualified. The form with_binding_region
   maintains the dynamically bound list of currently alive gensymed
-  identifiers. The check thus will scan the Parsetree and verify
+  identifiers. The check thus scans the Parsetree and verifies
   that all simply-named identifiers are alive.
 
-check_scope_extrusion: can be inserted automatically when we get rid of 
-run (and use cde instead. Whenever we close the code, to run or print it,
-we run the check_scope_extrusion).
+  It seems the best time to run the scope extrusion check is when we
+  have constructed fun, let or other binding form. First, after the form
+  is constructed, gensym'ed identifiers associated with bound variables
+  will die. It's a goot time to scan the body of the binding form to
+  check all identifiers there for being alive. Second, since we do the
+  complete check when constructing binding forms, whenever we encounter
+  a binding form during futher checks, we may assume the form to be clean.
+  That technique reduces the number of re-traversals of the Parsetree.
+
+  TODO: check_scope_extrusion: can be inserted automatically when we get rid of 
+  run (and use cde instead. Whenever we close the code, to run or print it,
+  we run the check_scope_extrusion).
 
 This file is based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
@@ -611,7 +620,7 @@ let trx_csp :
 (* ------------------------------------------------------------------------ *)
 (* Bindings in the future stage *)
 (* Recall, all bindings at the future stage are introduced by
-   patterns, and hence are simple names, without any module qualifications
+   patterns, and hence are simple names, without any module qualifications.
 *)
 let gensym_count = ref 0
 
@@ -628,6 +637,8 @@ let genident : string loc -> string loc = fun name ->
 
 (* The names of gensym'd future stage bindings currently in scope,
    of new_binding_region
+   TODO: use hash tables and compare locations as well. In that case,
+   we may reset_gensym_counter on each top-level phrase.
 *)
 module BVar = Set.Make(struct
   type t = string loc
@@ -660,10 +671,48 @@ let with_binding_region : string loc -> (string loc -> 'a) -> 'a =
     in
     bindings_in_scope := old_bindings; r
 
+(* Convert the meta-level (fun var -> body) to the Typedtree.expression
+   representing the same function, and use the result generate the call to
+   with_binding_region
+*)
+let texp_binding_simple : 
+  Ident.t * string loc -> (Typedtree.expression -> Typedtree.expression) ->
+  Typedtree.expression_desc = fun (id,name) fbody ->
+  let name_exp = texp_ident "Trx.sample_name" in
+  let base_name_exp = 
+    {name_exp with
+     exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} in
+  let pat = { pat_desc = Tpat_var (id,name);
+              pat_loc  = name.loc; pat_extra = [];
+              pat_type = name_exp.exp_type;
+              pat_env  = name_exp.exp_env }(* not including the binding to id!*)
+  in
+  let name_vd = match name_exp.exp_desc with
+                  | Texp_ident (_,_,vd) -> vd
+                  | _ -> assert false in
+  let gensymed_exp =                (* translated var *)
+    {name_exp with exp_desc = 
+       Texp_ident (Path.Pident id,
+                    (mkloc (Longident.Lident name.txt) name.loc),name_vd)} in
+  let body = fbody gensymed_exp in 
+  let fun_body_exp = 
+        { body with
+          exp_desc = Texp_function ("",[(pat,body)],Total); 
+          exp_type = Ctype.newty (Tarrow("", name_exp.exp_type, 
+                                             body.exp_type, Cok)) }
+  in
+  texp_apply (texp_ident "Trx.with_binding_region")
+    [base_name_exp; fun_body_exp]
+
 
 (* All simple Pext_ident must use alive gensym'd names  *)
 let rec check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
-  let check_xl l   = List.iter (fun (_,e) -> check_scope_extrusion e) l in
+  let check = check_scope_extrusion in
+  let check_option = function 
+    | None -> () 
+    | Some e -> check e in
+  let check_list = List.iter check in
+  let check_xl l   = List.iter (fun (_,e) -> check e) l in
   match exp.pexp_desc with
   | Pexp_ident ({txt = Longident.Lident s} as l) ->
       if not (BVar.mem (mkloc s l.loc) !bindings_in_scope) then
@@ -674,60 +723,60 @@ let rec check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
          failwith (Format.flush_str_formatter ()))
   | Pexp_ident _    -> ()
   | Pexp_constant _ -> ()
-  | Pexp_let (_,pel,e)       -> check_xl pel; check_scope_extrusion e
-  | Pexp_function (_,None,pel) -> check_xl pel
-  | Pexp_apply (e,lel)       -> check_scope_extrusion e; check_xl lel
-  | Pexp_match (e,pel)       -> check_scope_extrusion e; check_xl pel
-  | Pexp_try (e,pel)         -> check_scope_extrusion e; check_xl pel
+  | Pexp_let (_,pel,e)       -> check_xl pel; check e
+  | Pexp_function (_,None,pel) -> ()
+  | Pexp_apply (e,lel)       -> check e; check_xl lel
+  | Pexp_match (e,pel)       -> check e; check_xl pel
+  | Pexp_try (e,pel)         -> check e; check_xl pel
   | Pexp_tuple el            -> check_list el
   | Pexp_construct (_,eo,_)  -> check_option eo
   | Pexp_variant (_,eo)      -> check_option eo
   | Pexp_record (lel,eo)     -> check_xl lel; check_option eo
-  | Pexp_field (e,_)         -> check_scope_extrusion e
-  | Pexp_setfield (e1,_,e2)  -> check_scope_extrusion e1; 
-                                check_scope_extrusion e2
+  | Pexp_field (e,_)         -> check e
+  | Pexp_setfield (e1,_,e2)  -> check e1; check e2
   | Pexp_array el            -> check_list el 
-  | Pexp_ifthenelse (e1,e2,eo) -> check_scope_extrusion e1; 
-                                check_scope_extrusion e2; check_option eo
-  | Pexp_sequence (e1,e2)    -> check_scope_extrusion e1; 
-                                check_scope_extrusion e2
-  | Pexp_while (e1,e2)       -> check_scope_extrusion e1; 
-                                check_scope_extrusion e2
+  | Pexp_ifthenelse (e1,e2,eo) -> check e1; check e2; check_option eo
+  | Pexp_sequence (e1,e2)    -> check e1; check e2
+  | Pexp_while (e1,e2)       -> check e1; check e2
   | Pexp_for (_,e1,e2,_,e3)  -> ()      (* we run when construct *)
-  | Pexp_constraint (e,_,_)  -> check_scope_extrusion e
-  | Pexp_when (e1,e2)        -> check_scope_extrusion e1; 
-                                check_scope_extrusion e2
-  | Pexp_send (e,_)          -> check_scope_extrusion e
+  | Pexp_constraint (e,_,_)  -> check e
+  | Pexp_when (e1,e2)        -> check e1; check e2
+  | Pexp_send (e,_)          -> check e
   | Pexp_new _               -> ()
-  | Pexp_setinstvar (_,e)    -> check_scope_extrusion e
+  | Pexp_setinstvar (_,e)    -> check e
   | Pexp_override lel        -> check_xl lel
-  | Pexp_assert e            -> check_scope_extrusion e
+  | Pexp_assert e            -> check e
   | Pexp_assertfalse         -> ()
-  | Pexp_lazy e              -> check_scope_extrusion e
-  | Pexp_poly (e,_)          -> check_scope_extrusion e
+  | Pexp_lazy e              -> check e
+  | Pexp_poly (e,_)          -> check e
   | Pexp_object _            -> ()
-  | Pexp_newtype (_,e)       -> check_scope_extrusion e
+  | Pexp_newtype (_,e)       -> check e
   | Pexp_pack _              -> ()
-  | Pexp_open (_,e)          -> check_scope_extrusion e
-  | Pexp_bracket e           -> check_scope_extrusion e
-  | Pexp_escape e            -> check_scope_extrusion e
-  | Pexp_run e               -> check_scope_extrusion e
+  | Pexp_open (_,e)          -> check e
+  | Pexp_bracket e           -> check e
+  | Pexp_escape e            -> check e
+  | Pexp_run e               -> check e
   | Pexp_cspval _            -> ()
   | _                        -> assert false (* can't occur in generated code *)
- and check_option = function 
-  | None -> () 
-  | Some e -> check_scope_extrusion e
- and check_list l = List.iter check_scope_extrusion l
 
 let build_for : 
   Location.t -> string loc -> Parsetree.expression -> Parsetree.expression -> 
   bool -> Parsetree.expression -> Parsetree.expression =
   fun l name elo ehi dir ebody -> 
-  check_scope_extrusion elo;            (* Run the test so not tos scan for *)
-  check_scope_extrusion ehi;            (* loops again *)
+  check_scope_extrusion elo;            (* Run the test so not to scan *)
+  check_scope_extrusion ehi;            (* for-loops again *)
   check_scope_extrusion ebody;
   {pexp_loc = l; 
    pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) }
+
+let build_fun_simple : 
+  Location.t -> string -> string loc -> Parsetree.expression -> 
+  Parsetree.expression =
+  fun l label name ebody -> 
+  check_scope_extrusion ebody;
+  let pat = {ppat_loc  = l; ppat_desc = Ppat_var name} in
+  {pexp_loc = l; 
+   pexp_desc = Pexp_function (label,None,[(pat,ebody)])}
 
 (*
 (* based on code taken from typing/parmatch.ml *)
@@ -842,53 +891,6 @@ Since things like int, bool and string are going to be used all the time,
 we should just look them up eagerly.
 *)
 
-let constr_nonrecursive = lazy (find_constr "Asttypes.Nonrecursive")
-let constr_recursive = lazy (find_constr "Asttypes.Recursive")
-let constr_default = lazy (find_constr "Asttypes.Default")
-    
-let type_parsetree_expression = lazy (find_type "Parsetree.expression")
-let type_parsetree_pattern = lazy (find_type "Parsetree.pattern")
-let type_parsetree_structure_item = lazy (find_type "Parsetree.structure_item")
-let type_parsetree_core_type = lazy (find_type "Parsetree.core_type")
-let type_parsetree_expression_desc = lazy (find_type "Parsetree.expression_desc")
-let type_parsetree_pattern_desc = lazy (find_type "Parsetree.pattern_desc")
-let type_parsetree_structure_item_desc = lazy (find_type "Parsetree.structure_item_desc")
-let type_core_type_desc = lazy (find_type "Parsetree.core_type_desc")
-let type_rec_flag   = lazy (find_type "Asttypes.rec_flag")
-
-let constr_pexp_function      = lazy (find_constr "Parsetree.Pexp_function")
-let constr_pexp_match         = lazy (find_constr "Parsetree.Pexp_match")
-let constr_pexp_try           = lazy (find_constr "Parsetree.Pexp_try")
-let constr_pexp_for           = lazy (find_constr "Parsetree.Pexp_for")
-let constr_pexp_send          = lazy (find_constr "Parsetree.Pexp_send")
-let constr_pexp_let           = lazy (find_constr "Parsetree.Pexp_let")
-let constr_ppat_or            = lazy (find_constr "Parsetree.Ppat_or")
-let constr_ppat_lazy          = lazy (find_constr "Parsetree.Ppat_lazy")
-let constr_ppat_array         = lazy (find_constr "Parsetree.Ppat_array")
-let constr_ppat_var           = lazy (find_constr "Parsetree.Ppat_var")
-let constr_ppat_any           = lazy (find_constr "Parsetree.Ppat_any")
-let constr_ppat_constant      = lazy (find_constr "Parsetree.Ppat_constant")
-let constr_ppat_alias         = lazy (find_constr "Parsetree.Ppat_alias")
-let constr_ppat_variant       = lazy (find_constr "Parsetree.Ppat_variant")
-let constr_ppat_tuple         = lazy (find_constr "Parsetree.Ppat_tuple")
-
-
-let quote_rec_flag rf exp =
-  let cst = match rf with
-    Nonrecursive -> constr_nonrecursive
-  | Recursive -> constr_recursive
-  | Default -> constr_default
-  in { exp with 
-       exp_type = Lazy.force type_rec_flag;
-       exp_desc = Texp_construct(Lazy.force cst, []) } 
-
-let quote_direction_flag df exp =
-  let cst = match df with
-    Upto -> constr_upto
-  | Downto -> constr_downto
-  in { exp with exp_type = Lazy.force type_rec_flag;
-       exp_desc = Texp_construct(Lazy.force cst, []) }
-
 let mkExp exp t d = 
   { exp with exp_type = Lazy.force t;
     exp_desc = d}
@@ -896,69 +898,6 @@ let mkExp exp t d =
 let mkPat exp t d =
   { exp with pat_type = Lazy.force t;
     pat_desc = d}
-
-
-let rec quote_longident exp li =
-  match li with
-    Longident.Lident s ->
-      mkExp exp
-        type_longident_t
-        (Texp_construct(Lazy.force constr_longident_lident, 
-                        [mkString exp s]))
-  | Longident.Ldot (li',s) ->
-      mkExp exp
-        type_longident_t
-        (Texp_construct(Lazy.force constr_longident_ldot,
-                        [quote_longident exp li';
-                         mkString exp s]))
-  | Longident.Lapply (li1,li2) ->
-      mkExp exp
-        type_longident_t
-        (Texp_construct(Lazy.force constr_longident_lapply,
-                        [quote_longident exp li1;
-                         quote_longident exp li2]))
-
-let quote_label exp l =
-  { exp with 
-    exp_type = Lazy.force type_label;
-    exp_desc = Texp_constant(Const_string (l)) }
-
-let rec mkIdent exp id =
-  match id with
-    Longident.Lident s ->
-      mkExp exp type_longident_t
-        (Texp_construct(Lazy.force constr_longident_lident,
-                        [mkString exp s]))
-  |  Longident.Ldot (id', s) ->
-      let exp' = mkIdent exp id' in
-      mkExp exp type_longident_t
-        (Texp_construct(Lazy.force constr_longident_ldot,
-                        [exp'; mkString exp s]))
-  |  Longident.Lapply (id1, id2) ->
-      let exp1 = mkIdent exp id1 in
-      let exp2 = mkIdent exp id2 in
-      mkExp exp type_longident_t
-        (Texp_construct(Lazy.force constr_longident_lapply,
-                        [exp1;exp2]))
-
-let rec quote_ident exp path =
-  match path with
-    Path.Pident i -> mkExp exp
-        type_longident_t
-        (Texp_construct(Lazy.force constr_longident_lident, 
-                        [mkString exp (Ident.name i)]))
-  | Path.Pdot (path',s,k) ->
-      mkExp exp
-        type_longident_t
-        (Texp_construct(Lazy.force constr_longident_ldot,
-                        [quote_ident exp path';
-                         mkString exp s]))
-  | Path.Papply (path1,path2) ->
-      mkExp exp
-        type_longident_t
-        (Texp_construct(Lazy.force constr_longident_lapply,
-                        [quote_ident exp path1;
-                         quote_ident exp path2]))
 
 
 let mkParseTree exp d =
@@ -1003,12 +942,6 @@ let rec quote_list_as_expopt_forpats exp el =
         (mkParsePattern exp
            (Texp_construct(Lazy.force constr_ppat_tuple,
                                 [mkPexpList exp el])))
-
-
-let longidenttostring li =
-  match li with
-    Longident.Lident s -> s
-  | _ -> fatal_error ("Trx.longidenttostring: li is not a simple id")
 
 let rec boundinpattern p l = (* extend list l with ids bound in pattern p *)
   match p.pat_desc with
@@ -1255,19 +1188,6 @@ let rec trx_e n exp =
               pel', 
               transfunction))
           
-(* XXO the following is a bit hoky.  We also don't really put
-   the real type for lists right now.  We need to ask a higher
-   power.  Walid.  *)
-    | Texp_apply (e,eool) ->
-        let eol = List.map fst eool in
-        mkParseTree exp
-          (Texp_construct(Lazy.force constr_pexp_apply, 
-                               [trx_e n e;
-                                mkPexpList exp (map_strict 
-                                                  (fun x -> mkPexpTuple exp
-                                    [mkString exp "";
-                                     trx_e n x]) 
-                                                  eol)]))
     | Texp_match (e,pel,partial) ->
         let idlist =
           List.fold_right (fun (p,e) -> boundinpattern p) pel []  
@@ -1335,45 +1255,6 @@ let rec trx_e n exp =
              (Nonrecursive,
               pel', 
               transtry))
-
-    | Texp_for (id,e1,e2,df,e3) ->
-        let gensymexp id =  (* (gensym "x") *)
-          mkExp exp
-            type_longident_t
-            (Texp_apply
-               (trx_gensymlongident exp,
-                [(Some (quote_ident exp (Path.Pident id)),
-                  Required)]))
-        and idpat id =
-          {pat_desc = Tpat_var id;
-           pat_loc = exp.exp_loc;
-           pat_type = Lazy.force type_longident_t;
-           pat_env = exp.exp_env}
-        and idexp id =
-          mkExp exp
-            type_longident_t
-            (Texp_ident (Path.Pident id,
-                         {val_type = Lazy.force type_longident_t;
-                          val_kind = Val_reg}))
-        in let strexp id =
-          mkExp exp
-            (instance_def Predef.type_string)
-            (Texp_apply (trx_longidenttostring exp, [(Some (idexp id),
-                                                      Required)]))
-        in let transfor =
-          mkParseTree exp
-            (Texp_construct(Lazy.force constr_pexp_for, 
-                                 [strexp id;
-                                  trx_e n e1;
-                                  trx_e n e2; 
-                                  quote_direction_flag df exp;
-                                  trx_e n e3;]))
-        in mkExp exp
-          type_parsetree_expression
-          (Texp_let
-             (Nonrecursive,
-              [(idpat id, gensymexp id)], 
-              transfor))
   end
 *)
 
@@ -1460,6 +1341,17 @@ let rec trx_bracket :
   | Texp_let of rec_flag * (pattern * expression) list * expression
   | Texp_function of label * (pattern * expression) list * partial
 *)
+     (* The most common case of functions: fun x -> body *)
+  | Texp_function (l,[({pat_desc = Tpat_var (id,name)},ebody)],_) ->
+      texp_binding_simple (id,name) (fun gensymed_var ->
+        { exp with
+          exp_type = wrap_ty_in_code n exp.exp_type; (* lifted type of for *)
+          exp_desc = 
+            texp_apply (texp_ident "Trx.build_fun_simple") 
+            [texp_loc exp.exp_loc;
+             texp_string l;
+             gensymed_var;
+             trx_bracket trx_exp n ebody] })
 
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
@@ -1537,44 +1429,18 @@ let rec trx_bracket :
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
 
   | Texp_for (id, name, elo, ehi, dir, ebody) ->
-      let name_exp = texp_ident "Trx.sample_name" in
-      let ty = wrap_ty_in_code n exp.exp_type in (* lifted type of for *)
-      let base_name_exp = 
-            {name_exp with
-               exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} in
-      let pat = 
-         { pat_desc = Tpat_var (id,name);
-           pat_loc  = exp.exp_loc; pat_extra = [];
-           pat_type = name_exp.exp_type;
-           pat_env  = name_exp.exp_env }(* does not include the binding to id!*)
-      in
-      let name_vd = match name_exp.exp_desc with
-                     | Texp_ident (_,_,vd) -> vd
-                     | _ -> assert false in
-      let gensymed_exp =                (* translated var *)
-         {name_exp with exp_desc = 
-          Texp_ident (Path.Pident id,
-                       (mkloc (Longident.Lident name.txt) name.loc),name_vd)} in
-      let body = 
-        { exp_desc = 
+      texp_binding_simple (id,name) (fun gensymed_var ->
+        { exp with
+          exp_type = wrap_ty_in_code n exp.exp_type; (* lifted type of for *)
+          exp_desc = 
             texp_apply (texp_ident "Trx.build_for") 
             [texp_loc exp.exp_loc;
-             gensymed_exp;
+             gensymed_var;
              trx_bracket trx_exp n elo;
              trx_bracket trx_exp n ehi;
              texp_bool (dir = Upto);
-             trx_bracket trx_exp n ebody];
-          exp_type = ty;
-          exp_loc  = exp.exp_loc; exp_extra = [];
-          exp_env  = exp.exp_env } in
-      let fun_body_exp = 
-        { exp_desc = Texp_function ("",[(pat,body)],Total); 
-          exp_type = Ctype.newty (Tarrow("", name_exp.exp_type, ty, Cok));
-          exp_loc  = exp.exp_loc; exp_extra = [];
-          exp_env  = exp.exp_env }
-      in
-      texp_apply (texp_ident "Trx.with_binding_region")
-        [base_name_exp; fun_body_exp]
+             trx_bracket trx_exp n ebody] })
+
 
   | Texp_when (e1,e2) ->
       texp_apply (texp_ident "Trx.build_when")

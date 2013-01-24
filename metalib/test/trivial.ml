@@ -495,6 +495,43 @@ Failure
  "Scope extrusion at Characters 49-50:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                                   ^\n for the identifier i_3 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                             ^\n".
 *)
 
+(* Simple functions *)
+.<fun x -> x>.;;
+(*
+- : ('cl, 'a -> 'a) code = .<fun x_3 -> x_3>.
+*)
+(.! .<fun x -> x>.) 42;;
+(* - : int = 42 *)
+
+.<fun x y -> x + y>.;;
+(*
+- : ('cl, int -> int -> int) code = .<fun x_5 -> fun y_6 -> (x_5 + y_6)>.
+*)
+(.! .<fun x y -> x + y>.) 2 3;;
+(* - : int = 5 *)
+
+.<fun x -> fun x -> x + x >.;;
+(*
+- : ('cl, 'a -> int -> int) code = .<fun x_9 -> fun x_10 -> (x_10 + x_10)>.
+*)
+
+(* Testing hygiene  *)
+let eta f = .<fun x -> .~(f .<x>.)>.;;
+(*
+val eta : (('cl, 'a) code -> ('cl, 'b) code) -> ('cl, 'a -> 'b) code = <fun>
+*)
+eta (fun x -> .<1 + .~x>.);;
+(*
+- : ('cl, int -> int) code = .<fun x_11 -> (1 + x_11)>.
+*)
+eta (fun y -> .<fun x -> x + .~y>.);;
+(*
+- : ('cl, int -> int -> int) code = .<fun x_12 -> fun x_13 -> (x_13 + x_12)>.
+*)
+(.! (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
+(* - : int = 5 *)
+
+
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
 
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<i>.; .<()>.) done>. in (r,!x);;

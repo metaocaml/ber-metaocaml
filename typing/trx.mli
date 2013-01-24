@@ -87,6 +87,9 @@ val build_for :
   Location.t -> string Location.loc -> 
   Parsetree.expression -> Parsetree.expression -> 
   bool -> Parsetree.expression -> Parsetree.expression
+val build_fun_simple : 
+  Location.t -> string -> string Location.loc -> Parsetree.expression -> 
+  Parsetree.expression
 
 (*
 val longidenttostring : Longident.t -> string
