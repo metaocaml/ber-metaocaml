@@ -1355,8 +1355,10 @@ let rec trx_pattern :
       let lid = qualify_ctor li.loc p cdesc in
       let (args,acc) = map_accum trx_pattern acc args in
       (Ppat_construct (lid,
-          (if args = [] then None 
-           else Some {ppat_desc = Ppat_tuple args; ppat_loc = pat.pat_loc}),
+          (match args with
+          | []  -> None 
+          | [x] -> Some x 
+          | _   -> Some {ppat_desc = Ppat_tuple args; ppat_loc = pat.pat_loc}),
           explicit_arity),
        acc)
   | Tpat_variant (label, None, _) -> (Ppat_variant (label,None),acc)

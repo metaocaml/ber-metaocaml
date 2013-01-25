@@ -591,6 +591,33 @@ function | (1, "str") -> 1 | (2, _) -> 2>.
 (* - : int = 1 *)
 
 (.! .<function None -> 1 | Some [1] -> 2>.) (Some [1]);;
+(* - : int = 2 *)
+
+
+(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some None);;
+(* - : int = 2 *)
+(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some (Some true));;
+(* - : int = 1 *)
+(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some (Some false));;
+(* - : int = 2 *)
+(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) None;;
+(* - : int = 2 *)
+
+.<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.;;
+(*
+- : ('cl, Complex.t -> int) code = .<
+function
+| {Complex.re = 1.0} -> 1
+| {Complex.re = 2.0; Complex.im = 2.0} -> 2
+| {Complex.im = _} -> 3>. 
+*)
+
+(.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=1.0; im=2.0};;
+(* - : int = 1 *)
+(.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=2.0; im=2.0};;
+(* - : int = 2 *)
+(.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=2.0; im=3.0};;
+(* - : int = 3 *)
 
 
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
