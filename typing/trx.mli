@@ -24,6 +24,7 @@ val check_scope_extrusion : Parsetree.expression -> unit
 val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
 val sample_loc  : Location.t
 val sample_name : string Location.loc
+val sample_pat_list : Parsetree.pattern list
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> Parsetree.expression
@@ -32,8 +33,9 @@ val lift_constant_int  : int  -> Parsetree.expression
 val lift_constant_char : char -> Parsetree.expression
 val lift_constant_bool : bool -> Parsetree.expression
 
-val build_assert : Location.t -> Parsetree.expression -> Parsetree.expression
-val build_lazy   : Location.t -> Parsetree.expression -> Parsetree.expression
+(* Builders of the Parsetree *)
+val build_assert  : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_lazy    : Location.t -> Parsetree.expression -> Parsetree.expression
 val build_bracket : Location.t -> Parsetree.expression -> Parsetree.expression
 val build_escape  : Location.t -> Parsetree.expression -> Parsetree.expression
 val build_run     : Location.t -> Parsetree.expression -> Parsetree.expression
@@ -87,12 +89,12 @@ val build_for :
   Location.t -> string Location.loc -> 
   Parsetree.expression -> Parsetree.expression -> 
   bool -> Parsetree.expression -> Parsetree.expression
+
 val build_fun_simple : 
   Location.t -> string -> string Location.loc -> Parsetree.expression -> 
   Parsetree.expression
+val build_fun : 
+  Location.t -> string -> string Location.loc array -> 
+  Parsetree.pattern list -> Parsetree.expression array ->
+  Parsetree.expression
 
-(*
-val longidenttostring : Longident.t -> string
-val gensymlongident : Longident.t -> Longident.t
-val reset_gensymstring_counter : unit -> unit
-*)

@@ -531,6 +531,67 @@ eta (fun y -> .<fun x -> x + .~y>.);;
 (.! (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
 (* - : int = 5 *)
 
+(* pattern-matching, general functions *)
+
+.<fun () -> 1>.;;
+(* - : ('cl, unit -> int) code = .<fun () -> 1>. *)
+.! .<fun () -> 1>.;;
+(* - : unit -> int = <fun> *)
+(.! .<fun () -> 1>.) ();;
+(* - : int = 1  *)
+
+.<function true -> 1 | false -> 0>.;;
+(*
+- : ('cl, bool -> int) code = .<function | true -> 1 | false -> 0>. 
+*)
+(.! .<function true -> 1 | false -> 0>.) true;;
+(* - : int = 1 *)
+
+.<fun (true,[]) -> 1>.;;
+(*
+- : ('cl, bool * 'a list -> int) code = .<fun (true, []) -> 1>. 
+*)
+(.! .<fun (true,[]) -> 1>.) (true,[1]);;
+(*
+Exception: Match_failure ("//toplevel//", 1, 6).
+*)
+(.! .<fun (true,[]) -> 1>.) (true,[]);;
+(* - : int = 1 *)
+
+.<fun [|true;false;false|] -> 1>.;;
+(*
+- : ('cl, bool array -> int) code = .<fun [|true; false; false|] -> 1>. 
+*)
+.! (.<fun [|true;false;false|] -> 1>.) [|true;false;false|];;
+(* - : int = 1 *)
+
+.<function `F 1 -> true | _ -> false>.;;
+(*
+- : ('cl, [> `F of int ] -> bool) code = .<
+function | (`F 1) -> true | _ -> false>. 
+*)
+(.! .<function `F 1 -> true | _ -> false>.) (`F 1);;
+(* - : bool = true *)
+.<function `F 1 | `G 2 -> true | _ -> false>.;;
+(*
+- : ('cl, [> `F of int | `G of int ] -> bool) code = .<
+function | ((`F 1) | (`G 2)) -> true | _ -> false>. 
+*)
+
+.<function (1,"str") -> 1 | (2,_) -> 2>.;;
+(*
+- : ('cl, int * string -> int) code = .<
+function | (1, "str") -> 1 | (2, _) -> 2>. 
+*)
+(.! .<function (1,"str") -> 1 | (2,_) -> 2>.) (1,"str");;
+(* - : int = 1 *)
+(.! .<function (1,"str") -> 1 | (2,_) -> 2>.) (2,"str");;
+(* - : int = 2 *)
+(.! .<fun [1;2] -> 1>.) [1;2];;
+(* - : int = 1 *)
+
+(.! .<function None -> 1 | Some [1] -> 2>.) (Some [1]);;
+
 
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
 
