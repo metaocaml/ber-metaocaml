@@ -52,7 +52,7 @@ let x = 1.0 in .<x>.;;
 *)
 let x = true in .<x>.;;
 (*
-- : ('cl, bool) code = .<(true)>.
+- : ('cl, bool) code = .<true>.
 *)
 let x = "aaa" in .<x>.;;
 (*
@@ -84,13 +84,11 @@ l 1.0;;                  (* better printing in N100 *)
 *)
 
 .<Array.get>.;;
-22: Stage for var is set to implicit 0:Array.get
 (*
 - : ('cl, 'a array -> int -> 'a) code = .<Array.get>.
 *)
 .<(+)>.;;
 (*
-22: Stage for var is set to implicit 0:Pervasives.+
 - : ('cl, int -> int -> int) code = .<(+)>.
 *)
 
@@ -106,7 +104,7 @@ let x = true in .<assert x>.;;
 - : ('cl, int) code = .<succ 1>.
 *)
 
-! .<succ 1>.;;
+.! .<succ 1>.;;
 (* - : int = 2 *)
 
 .<1 + 2>.;;
@@ -562,7 +560,7 @@ Exception: Match_failure ("//toplevel//", 1, 6).
 (*
 - : ('cl, bool array -> int) code = .<fun [|true; false; false|] -> 1>. 
 *)
-.! (.<fun [|true;false;false|] -> 1>.) [|true;false;false|];;
+(.! .<fun [|true;false;false|] -> 1>.) [|true;false;false|];;
 (* - : int = 1 *)
 
 .<function `F 1 -> true | _ -> false>.;;
@@ -603,6 +601,7 @@ function | (1, "str") -> 1 | (2, _) -> 2>.
 (.! .<function (Some (Some true)) -> 1 | _ -> 2>.) None;;
 (* - : int = 2 *)
 
+open Complex;;
 .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.;;
 (*
 - : ('cl, Complex.t -> int) code = .<
@@ -712,27 +711,44 @@ function | (Some (x_30) as y_31) when (x_30 > 0) -> y_31 | _ -> None>.
 (* - : int option = None *)
 
 
-
-let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
-
-let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<i>.; .<()>.) done>. in (r,!x);;
-
-
 (* testing scope extrusion *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<1>.; .<0>.)>. in !r ;;
 (* - : ('cl, int) code = .<1>.  *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;
+(* shown code is a bit funny -- but instructive! *)
 (*
-- : ('cl, int) code = .<x_2>.
+- : ('cl, int) code = .<x_10 <- x_10>.
 
-Failure("Scope extrusion at Characters 50-51:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                                    ^\n for the identifier x_2 bound at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n")
+Failure("Scope extrusion at Characters 50-51:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                                    ^\n for the identifier x_10 bound at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n")
 *)
-
 let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;
 (*
 Exception:
 Failure
- "Scope extrusion at Characters 58-59:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                                            ^\n for the identifier x_3 bound at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                             ^\n".
+ "Scope extrusion at Characters 58-59:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                                            ^\n for the identifier x_11 bound at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                             ^\n".
 *)
 
 let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;
+(*
+- : ('cl, '_a -> '_a) code = .<x_13 <- fun y_14 -> x_13>.
+
+Failure("Scope extrusion at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_13 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                            ^\n")
+*)
+
+(* The test is approximate: it is sound but overflagging *)
+let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;
+(*
+- : ('cl, '_a -> '_a) code = .<x_16 <- fun y_17 -> y_17>.
+
+Failure("Scope extrusion at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_16 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                            ^\n")
+*)
+
+(* The fopllowing are OK though *)
+let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> y>.; !r)>.;;
+(*
+- : ('cl, '_a -> '_b -> '_b) code = .<fun x_22 -> fun y_23 -> y_23>. 
+*)
+let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> x>.; !r)>.;;
+(*
+- : ('cl, '_a -> '_a -> '_a) code = .<fun x_25 -> fun y_26 -> x_25>. 
+*)

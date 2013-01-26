@@ -84,7 +84,8 @@ val build_open :
 
 val build_ident : Location.t -> string Location.loc -> Parsetree.expression
 val with_binding_region : 
-    string Location.loc -> (string Location.loc -> 'a) -> 'a
+    string Location.loc -> (string Location.loc -> Parsetree.expression) -> 
+    Parsetree.expression
 val build_for : 
   Location.t -> string Location.loc -> 
   Parsetree.expression -> Parsetree.expression -> 

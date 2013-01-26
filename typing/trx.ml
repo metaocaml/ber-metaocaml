@@ -47,8 +47,8 @@
   are simple names.
 
   We now check for scope extrusion: we enforce the region discipline
-  for generated identifiers. To make it easier to impose checks, we
-  modify the translation rule as follows
+  for generated identifiers. To make it easier to impose checks,
+  the translation rule is modified as follows
      <fun x -> e> ---> with_binding_region "x" (fun x -> mkLAM x <e>)
   For more complicated binding patterns, we iterate
      <fun (x1,x2) -> e> ---> 
@@ -81,7 +81,7 @@
   scope-extruded code) means many repeated traversals of the generated
   code.
 
-  We use a different way: we mark each piece of the generated code
+  We use a different method: we mark each piece of the generated code
   with the `timestamp' of the latest free variable the code contains.
   The partial order of free variables is the partial order of their
   regions (nesting of with_binding_region calls).
@@ -90,37 +90,34 @@
   this function also checks that the generated binding form is
   timestamped with exactly the timestamp of that 
   particular with_binding_region (or the timestamp is missing).
+  After the checks, with_binding_region adjusts the time stamp
+  to that of the parent with_binding_region function.
   Every code building function ( build_* ) checks to see that the timestamps
   of incorporated fragments correspond to the timestamps of currently
   active with_binding_region.
 
-timestamp: the list of free variables. Merge time stamps and clear
-the timestamps from components.
-Or really timestamps: approx: with_binding_region timestamps the
-result with the timestamp of the parent region, even if the code
-is closed. Easier to track. 
+  Generally speaking, a single timestamp does not suffice. We should maintain
+  a full list of free variables for each piece of code. The AST building
+  functions will merge the list; with_binding_region will check the list
+  and remove the gensym that with_binding_region has created.
+  A single timestamp is a sound approximation. It presupposes that a code
+  that contains a free variable also contains all earlier free variables.
+  Therefore, the safe code
+    let r = .<0> in 
+    let _ = .<fun x -> .~(r := .<fun y -> y>.; !r)>. in !r
+  will be flagged as scope-extruding. We go with the single timestamp
+  approximation for now as being simper.
 
   Alas Parsetree doesn't have a dedicated field for marking expressions
-  with timestamps. 
-
-Use Pexp_tuple -- one-element tuple. Loc: location of the
-env.
-Pexp_newtype: most approprite: space for variable name,
-plus the expression. Otherwise, send, using particular method
-name *var_name
-
-remove_tstamp : Parsetree.expression -> 
-  Parsetree.expression * (string loc) option
- also checks that it is current.
-add_tstamp : reverse (None - no tstamp is added)
-remove_tstamp2: for two expressions;
-twice remove_tstamp and then choose the latest
-
-Or better idea? remove_tstamp also takes an arguement like fold.
-Initially, None.
-Then we need remove_tstamp_opt (the argument is opt)
-and remove_tstamp_arr (takes array, returns list).
-
+  with timestamps. Therefore, in an ad hoc and hacking way re repurpose
+  the Pexp_setinstvar node. To designate that a code expression 'e'
+  has a free variable 'x : string loc' we create a wrapper node
+   {pexp_loc = timestamp_loc;
+    pexp_desc = Pexp_setinstvar (x,e)}
+  We distinguish such special timestamp nodes by their unique pexp_loc,
+  being physically equal to timestamp_loc. Although a hack, this
+  convention avoids modifying the Parsetree data structure and makes it
+  easy to add, check and remove the timestamp.
 
 This file is based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
@@ -150,6 +147,15 @@ let trx_error ?(loc = Location.none) fn =
 let not_supported loc msg =
   trx_error ~loc:loc (fun ppf -> Format.fprintf ppf 
       "%s is not yet supported within brackets" msg)
+
+(* left-to-right accumulating map *)
+let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
+  'b list * 'accum = fun f acc -> function
+    | []   -> ([],acc)
+    | h::t -> 
+        let (h,acc) = f acc h in
+        let (t,acc) = map_accum f acc t in
+        (h::t, acc)
 
 (* ------------------------------------------------------------------------ *)
 (* Path utilities *)
@@ -405,13 +411,169 @@ let texp_array : Typedtree.expression list -> Typedtree.expression = function
       mk_texp (Texp_array el) 
 	      (Ctype.instance_def (Predef.type_array h.exp_type))
 
+(* ------------------------------------------------------------------------ *)
+(* Bindings in the future stage *)
+(* Recall, all bindings at the future stage are introduced by
+   patterns, and hence are simple names, without any module qualifications.
+*)
+let gensym_count = ref 0
+
+(* Generate a fresh name with a given base name *)
+let gensym : string -> string = fun s ->
+  incr gensym_count;
+  s ^ "_" ^ string_of_int !gensym_count
+
+let reset_gensym_counter () = gensym_count := 0
+
+(* Make a simple identifier unique *)
+let genident : string loc -> string loc = fun name ->
+  {name with txt = gensym name.txt}
+
+(* This is a run-time error, rather than translation-time error *)
+let scope_extrusion_error : Location.t -> string loc -> 'a = fun l var ->
+  Format.fprintf Format.str_formatter
+    "Scope extrusion at %a for the identifier %s bound at %a"
+    Location.print l var.txt Location.print var.loc;
+  failwith (Format.flush_str_formatter ())
+
+(* The names of gensym'd future stage bindings currently in scope,
+   of new_binding_region.
+   We use physical equality to search the list.
+   Therefore, we may reset_gensym_counter on each top-level phrase.
+*)
+let bindings_in_scope : string loc list ref = ref []
+
+(* Return the index of a given free variable in bindings_in_scope:
+   essentially the de Bruijn index.
+   Report a scope extrusion error if any.
+*)
+let fvar_dB_index : Location.t -> string loc -> int = fun l var ->
+  let rec loop n = function
+    | h::t -> if h == var then n        (* physical equality! *)
+              else loop (succ n) t
+    | []   -> scope_extrusion_error l var
+  in loop 0 !bindings_in_scope
+
+(* Dedicated Location.t for the identification of timestamp nodes 
+   We test the comparison with timestamp_loc uysing physical equality.
+*)
+let timestamp_loc =
+  let open Lexing in
+  let loc = dummy_pos in
+  let loc = {loc with pos_fname = "**timestamp**"} in
+  {Location.loc_start = loc; loc_end = loc; loc_ghost=true}
+
+
+(* check to see if an expression has a time-stamp. If so, remove it
+   and return the untimestamp expression. Return the latest of the
+   removed timestamp and the given as the argument.
+   The timestamp is just the variable name.
+*)
+let remove_tstamp : string loc option -> Parsetree.expression -> 
+  Parsetree.expression * string loc option = fun old_tstamp -> function
+  | {pexp_loc = tloc; pexp_desc = Pexp_setinstvar (var,e)} 
+    when tloc == timestamp_loc -> 
+     let vi = fvar_dB_index e.pexp_loc var in (* also checks that vi is alive *)
+     begin match old_tstamp with
+      | None      -> (e,Some var)
+      | Some var' -> 
+         if var == var' then (e,Some var) else (* common case *)
+         let vi' = fvar_dB_index e.pexp_loc var' in
+         (e, Some (if vi' > vi then var else var'))
+     end
+  |  e -> (e,old_tstamp)
+
+     
+(* Add a timestamp to an expression *)
+let add_timestamp : string loc option -> Parsetree.expression -> 
+  Parsetree.expression = fun var e ->
+  match var with 
+  | None     -> e
+  | Some var -> 
+  {pexp_loc  = timestamp_loc;
+   pexp_desc = Pexp_setinstvar (var,e)}
+
+let remove_tstamp_option : string loc option -> 
+  Parsetree.expression option -> 
+  Parsetree.expression option * string loc option = fun var -> function
+    | None   -> (None,var)
+    | Some e -> let (e,var) = remove_tstamp var e in (Some e,var)
+
+(* Generate a gensym with a given base name and enter a new region 
+   in which this gensym will live
+*)
+let with_binding_region : string loc -> 
+  (string loc -> Parsetree.expression) -> Parsetree.expression =
+  fun name_base body ->
+    let old_bindings = !bindings_in_scope in
+    let new_var = genident name_base in
+    let () = bindings_in_scope := new_var :: old_bindings in
+    try 
+      let r = body new_var in
+      let remr = remove_tstamp None r in (* checks tstamp *) 
+      let () = bindings_in_scope := old_bindings in
+      match remr with
+      | (e,None) -> e
+      | (e,Some var) when var == new_var ->
+          add_timestamp (match old_bindings with h::_ -> Some h | _ -> None) e
+      | (e,Some var) ->
+          let _ = fvar_dB_index e.pexp_loc var  (* check that var is current *)
+          in r
+    with e -> bindings_in_scope := old_bindings; raise e
+
+let check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
+  ignore (remove_tstamp None exp)
+
+(* Convert the meta-level (fun var -> body) to the Typedtree.expression
+   representing the same function, and use the result generate the call to
+   with_binding_region
+*)
+let texp_binding_simple : 
+  Ident.t * string loc -> (Typedtree.expression -> Typedtree.expression) ->
+  Typedtree.expression_desc = fun (id,name) fbody ->
+  let name_exp = texp_ident "Trx.sample_name" in
+  let base_name_exp = 
+    {name_exp with
+     exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} in
+  let pat = { pat_desc = Tpat_var (id,name);
+              pat_loc  = name.loc; pat_extra = [];
+              pat_type = name_exp.exp_type;
+              pat_env  = name_exp.exp_env }(* not including the binding to id!*)
+  in
+  let name_vd = match name_exp.exp_desc with
+                  | Texp_ident (_,_,vd) -> vd
+                  | _ -> assert false in
+  let gensymed_exp =                (* translated var *)
+    {name_exp with exp_desc = 
+       Texp_ident (Path.Pident id,
+                    (mkloc (Longident.Lident name.txt) name.loc),name_vd)} in
+  let body = fbody gensymed_exp in 
+  let fun_body_exp = 
+        { body with
+          exp_desc = Texp_function ("",[(pat,body)],Total); 
+          exp_type = Ctype.newty (Tarrow("", name_exp.exp_type, 
+                                             body.exp_type, Cok)) }
+  in
+  texp_apply (texp_ident "Trx.with_binding_region")
+    [base_name_exp; fun_body_exp]
 
 (* ------------------------------------------------------------------------ *)
 (* Building Parsetree nodes *)
 
+(* Handle timestamp for builders of the type 
+      Parsetree.expression -> Parsetree.expression
+*)
+let timestamp_wrapper : 
+    (Location.t -> Parsetree.expression -> Parsetree.expression) ->
+    (Location.t -> Parsetree.expression -> Parsetree.expression) =
+fun f l e ->
+  let (e,var) = remove_tstamp None e in
+  add_timestamp var (f l e)
+
 (* building a typical Parsetree node: Pexp_assert of expression*)
 let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  fun l e -> {pexp_loc = l; pexp_desc = Pexp_assert e}
+  timestamp_wrapper
+  (fun l e -> {pexp_loc = l; pexp_desc = Pexp_assert e})
 
 (* When we translate the typed-treee, we have to manually compile
    the above code 
@@ -444,26 +606,42 @@ Texp_record must be sorted, in their declared order!
 
 (* Other similar buiders *)
 let build_lazy : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  fun l e -> {pexp_loc = l; pexp_desc = Pexp_lazy e}
+  timestamp_wrapper
+    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_lazy e})
 let build_bracket : Location.t -> Parsetree.expression -> Parsetree.expression= 
-  fun l e -> {pexp_loc = l; pexp_desc = Pexp_bracket e}
+  timestamp_wrapper
+    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_bracket e})
 let build_escape : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  fun l e -> {pexp_loc = l; pexp_desc = Pexp_escape e}
+  timestamp_wrapper
+    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_escape e})
 let build_run : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  fun l e -> {pexp_loc = l; pexp_desc = Pexp_run e}
+  timestamp_wrapper
+    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_run e})
 
 let build_sequence : 
   Location.t -> Parsetree.expression -> Parsetree.expression -> 
   Parsetree.expression = 
-  fun l e1 e2 -> {pexp_loc = l; pexp_desc = Pexp_sequence (e1,e2) }
+  fun l e1 e2 -> 
+    let (e1,var) = remove_tstamp None e1 in
+    let (e2,var) = remove_tstamp var  e2 in
+    add_timestamp var
+    {pexp_loc = l; pexp_desc = Pexp_sequence (e1,e2) }
 let build_while : 
   Location.t -> Parsetree.expression -> Parsetree.expression -> 
   Parsetree.expression = 
-  fun l e1 e2 -> {pexp_loc = l; pexp_desc = Pexp_while (e1,e2) }
+  fun l e1 e2 -> 
+    let (e1,var) = remove_tstamp None e1 in
+    let (e2,var) = remove_tstamp var  e2 in
+    add_timestamp var
+    {pexp_loc = l; pexp_desc = Pexp_while (e1,e2) }
 let build_when : 
   Location.t -> Parsetree.expression -> Parsetree.expression -> 
   Parsetree.expression = 
-  fun l e1 e2 -> {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) }
+  fun l e1 e2 -> 
+    let (e1,var) = remove_tstamp None e1 in
+    let (e2,var) = remove_tstamp var  e2 in
+    add_timestamp var
+      {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) }
 
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
@@ -471,36 +649,51 @@ let build_apply : Location.t -> (label * Parsetree.expression) array ->
   Parsetree.expression = 
   fun l ea -> 
     assert (Array.length ea > 1);
+    let (el,var) = map_accum 
+        (fun var (l,e) -> let (e,var) = remove_tstamp var e in ((l,e),var))
+        None (Array.to_list ea) in
+    add_timestamp var
     {pexp_loc  = l; 
-     pexp_desc = Pexp_apply (snd ea.(0),List.tl (Array.to_list ea))}
+     pexp_desc = Pexp_apply (snd (List.hd el),List.tl el)}
 
 let build_tuple : 
   Location.t -> Parsetree.expression array -> Parsetree.expression =
-  fun l ea -> {pexp_loc = l; pexp_desc = Pexp_tuple (Array.to_list ea) }
+  fun l ea -> 
+    let (el,var) = map_accum remove_tstamp None (Array.to_list ea) in
+    add_timestamp var
+      {pexp_loc = l; pexp_desc = Pexp_tuple el }
 
 let build_array : 
   Location.t -> Parsetree.expression array -> Parsetree.expression =
-  fun l ea -> {pexp_loc = l; pexp_desc = Pexp_array (Array.to_list ea) }
+  fun l ea -> 
+    let (el,var) = map_accum remove_tstamp None (Array.to_list ea) in
+    add_timestamp var
+      {pexp_loc = l; pexp_desc = Pexp_array el }
 
 let build_ifthenelse : 
   Location.t -> 
   Parsetree.expression -> Parsetree.expression -> Parsetree.expression option ->
   Parsetree.expression =
   fun l e1 e2 eo -> 
-  {pexp_loc = l; pexp_desc = Pexp_ifthenelse (e1,e2,eo) }
+    let (e1,var) = remove_tstamp None e1 in
+    let (e2,var) = remove_tstamp var  e2 in
+    let (eo,var) = remove_tstamp_option var eo in
+    add_timestamp var
+      {pexp_loc = l; pexp_desc = Pexp_ifthenelse (e1,e2,eo) }
 
 let build_construct :
  Location.t -> Longident.t loc -> Parsetree.expression array -> bool ->
  Parsetree.expression =
  fun loc lid args explicit_arity ->
+   let (args,var) = map_accum remove_tstamp None (Array.to_list args) in
+   add_timestamp var
   {pexp_loc  = loc;
    pexp_desc = Pexp_construct (lid,
      begin
-      match Array.length args with
-      | 0 -> None
-      | 1 -> Some (args.(0))
-      | n -> Some { pexp_loc  = loc;
-                    pexp_desc = Pexp_tuple (Array.to_list args) }
+      match args with
+      | []  -> None
+      | [x] -> Some x
+      | xl  -> Some { pexp_loc  = loc; pexp_desc = Pexp_tuple xl }
      end,
      explicit_arity) }
 
@@ -508,39 +701,144 @@ let build_record :
  Location.t -> (Longident.t loc * Parsetree.expression) array ->
  Parsetree.expression option -> Parsetree.expression =
  fun loc lel eo ->
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_record (Array.to_list lel,eo)}
+    let (lel,var) = map_accum 
+        (fun var (l,e) -> let (e,var) = remove_tstamp var e in ((l,e),var))
+        None (Array.to_list lel) in
+   let (eo,var) = remove_tstamp_option var eo in
+   add_timestamp var
+      {pexp_loc  = loc; pexp_desc = Pexp_record (lel,eo)}
 
 let build_field :
  Location.t -> Parsetree.expression -> Longident.t loc -> Parsetree.expression =
  fun loc e lid ->
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_field (e,lid)}
+   let (e,var) = remove_tstamp None e in
+   add_timestamp var
+     {pexp_loc  = loc;
+      pexp_desc = Pexp_field (e,lid)}
 
 let build_setfield :
  Location.t -> Parsetree.expression -> Longident.t loc -> 
    Parsetree.expression -> Parsetree.expression =
  fun loc e1 lid e2 ->
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_setfield (e1,lid,e2)}
+   let (e1,var) = remove_tstamp None e1 in
+   let (e2,var) = remove_tstamp var  e2 in
+   add_timestamp var
+     {pexp_loc  = loc;
+      pexp_desc = Pexp_setfield (e1,lid,e2)}
 
 let build_variant :
  Location.t -> string -> Parsetree.expression option -> Parsetree.expression =
  fun loc l eo ->
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_variant (l,eo)}
+   let (eo,var) = remove_tstamp_option None eo in
+   add_timestamp var
+     {pexp_loc  = loc;
+      pexp_desc = Pexp_variant (l,eo)}
 
 let build_send :
  Location.t -> Parsetree.expression -> string -> Parsetree.expression =
  fun loc e l ->
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_send (e,l)}
+   let (e,var) = remove_tstamp None e in
+   add_timestamp var
+     {pexp_loc  = loc;
+      pexp_desc = Pexp_send (e,l)}
 
 let build_open :
  Location.t -> Longident.t loc -> Parsetree.expression -> Parsetree.expression =
  fun loc l e ->
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_open (l,e)}
+   let (e,var) = remove_tstamp None e in
+   add_timestamp var
+     {pexp_loc  = loc;
+      pexp_desc = Pexp_open (l,e)}
+
+
+(* Build a Parsetree for a future-stage identifier
+   It is always in scope of with_binding_region:
+   Bound variables are always in scope of their binders;
+   A well-typed code has no unbound variables.
+*)
+let build_ident : Location.t -> string loc -> Parsetree.expression =
+ fun loc l ->
+  add_timestamp (Some l)
+   {pexp_loc  = loc;
+    pexp_desc = Pexp_ident (mkloc (Longident.Lident l.txt) l.loc)}
+
+let build_for : 
+  Location.t -> string loc -> Parsetree.expression -> Parsetree.expression -> 
+  bool -> Parsetree.expression -> Parsetree.expression =
+  fun l name elo ehi dir ebody -> 
+  let (elo,var)   = remove_tstamp None elo in
+  let (ehi,var)   = remove_tstamp var  ehi in
+  let (ebody,var) = remove_tstamp var  ebody in
+  add_timestamp var
+  {pexp_loc = l; 
+   pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) }
+
+let build_fun_simple : 
+  Location.t -> string -> string loc -> Parsetree.expression -> 
+  Parsetree.expression =
+  fun l label name ebody -> 
+  let (ebody,var) = remove_tstamp None ebody in
+  let pat = {ppat_loc  = l; ppat_desc = Ppat_var name} in
+  add_timestamp var
+  {pexp_loc = l; 
+   pexp_desc = Pexp_function (label,None,[(pat,ebody)])}
+
+
+(* All simple Pext_ident must use alive gensym'd names  *)
+(*
+let rec check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
+  let check = check_scope_extrusion in
+  let check_option = function 
+    | None -> () 
+    | Some e -> check e in
+  let check_list = List.iter check in
+  let check_xl l   = List.iter (fun (_,e) -> check e) l in
+  match exp.pexp_desc with
+  | Pexp_ident ({txt = Longident.Lident s} as l) ->
+      if not (BVar.mem (mkloc s l.loc) !bindings_in_scope) then
+        (* This is a run-time error, rather than translation-time error *)
+        (Format.fprintf Format.str_formatter
+            "Scope extrusion at %a for the identifier %s bound at %a"
+             Location.print exp.pexp_loc s Location.print l.loc;
+         failwith (Format.flush_str_formatter ()))
+  | Pexp_ident _    -> ()
+  | Pexp_constant _ -> ()
+  | Pexp_let (_,pel,e)       -> check_xl pel; check e
+  | Pexp_function (_,None,pel) -> ()
+  | Pexp_apply (e,lel)       -> check e; check_xl lel
+  | Pexp_match (e,pel)       -> check e; check_xl pel
+  | Pexp_try (e,pel)         -> check e; check_xl pel
+  | Pexp_tuple el            -> check_list el
+  | Pexp_construct (_,eo,_)  -> check_option eo
+  | Pexp_variant (_,eo)      -> check_option eo
+  | Pexp_record (lel,eo)     -> check_xl lel; check_option eo
+  | Pexp_field (e,_)         -> check e
+  | Pexp_setfield (e1,_,e2)  -> check e1; check e2
+  | Pexp_array el            -> check_list el 
+  | Pexp_ifthenelse (e1,e2,eo) -> check e1; check e2; check_option eo
+  | Pexp_sequence (e1,e2)    -> check e1; check e2
+  | Pexp_while (e1,e2)       -> check e1; check e2
+  | Pexp_for (_,e1,e2,_,e3)  -> ()      (* we run when construct *)
+  | Pexp_constraint (e,_,_)  -> check e
+  | Pexp_when (e1,e2)        -> check e1; check e2
+  | Pexp_send (e,_)          -> check e
+  | Pexp_new _               -> ()
+  | Pexp_setinstvar (_,e)    -> check e
+  | Pexp_override lel        -> check_xl lel
+  | Pexp_assert e            -> check e
+  | Pexp_assertfalse         -> ()
+  | Pexp_lazy e              -> check e
+  | Pexp_poly (e,_)          -> check e
+  | Pexp_object _            -> ()
+  | Pexp_newtype (_,e)       -> check e
+  | Pexp_pack _              -> ()
+  | Pexp_open (_,e)          -> check e
+  | Pexp_bracket e           -> check e
+  | Pexp_escape e            -> check e
+  | Pexp_run e               -> check e
+  | Pexp_cspval _            -> ()
+  | _                        -> assert false (* can't occur in generated code *)
+*)
 
 
 (* ------------------------------------------------------------------------ *)
@@ -644,167 +942,6 @@ let trx_csp :
   else
   (* Otherwise, do the lifting at run-time *)
   texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
-
-(* ------------------------------------------------------------------------ *)
-(* Bindings in the future stage *)
-(* Recall, all bindings at the future stage are introduced by
-   patterns, and hence are simple names, without any module qualifications.
-*)
-let gensym_count = ref 0
-
-(* Generate a fresh name with a given base name *)
-let gensym : string -> string = fun s ->
-  incr gensym_count;
-  s ^ "_" ^ string_of_int !gensym_count
-
-let reset_gensym_counter () = gensym_count := 0
-
-(* Make a simple identifier unique *)
-let genident : string loc -> string loc = fun name ->
-  {name with txt = gensym name.txt}
-
-(* The names of gensym'd future stage bindings currently in scope,
-   of new_binding_region
-   TODO: use hash tables and compare locations as well. In that case,
-   we may reset_gensym_counter on each top-level phrase.
-*)
-module BVar = Set.Make(struct
-  type t = string loc
-  let compare li1 li2 = String.compare li1.txt li2.txt
- end)
-
-let bindings_in_scope : BVar.t ref = ref BVar.empty
-
-(* Build a Parsetree for a future-stage identifier
-   It is always in scope of with_binding_region:
-   Bound variables are always in scope of their binders;
-   A well-typed code has no unbound variables.
-*)
-let build_ident : Location.t -> string loc -> Parsetree.expression =
- fun loc l ->
-   {pexp_loc  = loc;
-    pexp_desc = Pexp_ident (mkloc (Longident.Lident l.txt) l.loc)}
-
-
-(* Generate a gensym with a given base name and enter a new region 
-   in which this gensym will live
-*)
-let with_binding_region : string loc -> (string loc -> 'a) -> 'a =
-  fun name_base body ->
-    let old_bindings = !bindings_in_scope in
-    let new_var = genident name_base in
-    let () = bindings_in_scope := BVar.add new_var old_bindings in
-    let r = 
-      try body new_var with e -> bindings_in_scope := old_bindings; raise e
-    in
-    bindings_in_scope := old_bindings; r
-
-(* Convert the meta-level (fun var -> body) to the Typedtree.expression
-   representing the same function, and use the result generate the call to
-   with_binding_region
-*)
-let texp_binding_simple : 
-  Ident.t * string loc -> (Typedtree.expression -> Typedtree.expression) ->
-  Typedtree.expression_desc = fun (id,name) fbody ->
-  let name_exp = texp_ident "Trx.sample_name" in
-  let base_name_exp = 
-    {name_exp with
-     exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} in
-  let pat = { pat_desc = Tpat_var (id,name);
-              pat_loc  = name.loc; pat_extra = [];
-              pat_type = name_exp.exp_type;
-              pat_env  = name_exp.exp_env }(* not including the binding to id!*)
-  in
-  let name_vd = match name_exp.exp_desc with
-                  | Texp_ident (_,_,vd) -> vd
-                  | _ -> assert false in
-  let gensymed_exp =                (* translated var *)
-    {name_exp with exp_desc = 
-       Texp_ident (Path.Pident id,
-                    (mkloc (Longident.Lident name.txt) name.loc),name_vd)} in
-  let body = fbody gensymed_exp in 
-  let fun_body_exp = 
-        { body with
-          exp_desc = Texp_function ("",[(pat,body)],Total); 
-          exp_type = Ctype.newty (Tarrow("", name_exp.exp_type, 
-                                             body.exp_type, Cok)) }
-  in
-  texp_apply (texp_ident "Trx.with_binding_region")
-    [base_name_exp; fun_body_exp]
-
-
-(* All simple Pext_ident must use alive gensym'd names  *)
-let rec check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
-  let check = check_scope_extrusion in
-  let check_option = function 
-    | None -> () 
-    | Some e -> check e in
-  let check_list = List.iter check in
-  let check_xl l   = List.iter (fun (_,e) -> check e) l in
-  match exp.pexp_desc with
-  | Pexp_ident ({txt = Longident.Lident s} as l) ->
-      if not (BVar.mem (mkloc s l.loc) !bindings_in_scope) then
-        (* This is a run-time error, rather than translation-time error *)
-        (Format.fprintf Format.str_formatter
-            "Scope extrusion at %a for the identifier %s bound at %a"
-             Location.print exp.pexp_loc s Location.print l.loc;
-         failwith (Format.flush_str_formatter ()))
-  | Pexp_ident _    -> ()
-  | Pexp_constant _ -> ()
-  | Pexp_let (_,pel,e)       -> check_xl pel; check e
-  | Pexp_function (_,None,pel) -> ()
-  | Pexp_apply (e,lel)       -> check e; check_xl lel
-  | Pexp_match (e,pel)       -> check e; check_xl pel
-  | Pexp_try (e,pel)         -> check e; check_xl pel
-  | Pexp_tuple el            -> check_list el
-  | Pexp_construct (_,eo,_)  -> check_option eo
-  | Pexp_variant (_,eo)      -> check_option eo
-  | Pexp_record (lel,eo)     -> check_xl lel; check_option eo
-  | Pexp_field (e,_)         -> check e
-  | Pexp_setfield (e1,_,e2)  -> check e1; check e2
-  | Pexp_array el            -> check_list el 
-  | Pexp_ifthenelse (e1,e2,eo) -> check e1; check e2; check_option eo
-  | Pexp_sequence (e1,e2)    -> check e1; check e2
-  | Pexp_while (e1,e2)       -> check e1; check e2
-  | Pexp_for (_,e1,e2,_,e3)  -> ()      (* we run when construct *)
-  | Pexp_constraint (e,_,_)  -> check e
-  | Pexp_when (e1,e2)        -> check e1; check e2
-  | Pexp_send (e,_)          -> check e
-  | Pexp_new _               -> ()
-  | Pexp_setinstvar (_,e)    -> check e
-  | Pexp_override lel        -> check_xl lel
-  | Pexp_assert e            -> check e
-  | Pexp_assertfalse         -> ()
-  | Pexp_lazy e              -> check e
-  | Pexp_poly (e,_)          -> check e
-  | Pexp_object _            -> ()
-  | Pexp_newtype (_,e)       -> check e
-  | Pexp_pack _              -> ()
-  | Pexp_open (_,e)          -> check e
-  | Pexp_bracket e           -> check e
-  | Pexp_escape e            -> check e
-  | Pexp_run e               -> check e
-  | Pexp_cspval _            -> ()
-  | _                        -> assert false (* can't occur in generated code *)
-
-let build_for : 
-  Location.t -> string loc -> Parsetree.expression -> Parsetree.expression -> 
-  bool -> Parsetree.expression -> Parsetree.expression =
-  fun l name elo ehi dir ebody -> 
-  check_scope_extrusion elo;            (* Run the test so not to scan *)
-  check_scope_extrusion ehi;            (* for-loops again *)
-  check_scope_extrusion ebody;
-  {pexp_loc = l; 
-   pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) }
-
-let build_fun_simple : 
-  Location.t -> string -> string loc -> Parsetree.expression -> 
-  Parsetree.expression =
-  fun l label name ebody -> 
-  check_scope_extrusion ebody;
-  let pat = {ppat_loc  = l; ppat_desc = Ppat_var name} in
-  {pexp_loc = l; 
-   pexp_desc = Pexp_function (label,None,[(pat,ebody)])}
 
 
 (*
@@ -1186,14 +1323,6 @@ let rec trx_e n exp =
   bind exactly the same identifiers. Don't count them twice!
 *)
 
-(* left-to-right accumulating map *)
-let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
-  'b list * 'accum = fun f acc -> function
-    | []   -> ([],acc)
-    | h::t -> 
-        let (h,acc) = f acc h in
-        let (t,acc) = map_accum f acc t in
-        (h::t, acc)
 
 (* The first argument is a list of identifiers. Found identifiers are
    prepended to that list. The order of identifiers is important!
@@ -1366,15 +1495,16 @@ let build_fun :
   Parsetree.pattern list -> Parsetree.expression array ->
   Parsetree.expression =
   fun l label names pats ebodies -> 
-  let pats = 
-    if names = [||] then pats else
-    let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
-    assert (acc = []); pats
-  in
-  {pexp_loc = l; 
-   pexp_desc = Pexp_function (label,None,
-                               List.map2 (fun p e -> (p,e))
-                                pats (Array.to_list ebodies))}
+    let (ebodies,var) = map_accum remove_tstamp None (Array.to_list ebodies) in
+    let pats = 
+      if names = [||] then pats else
+      let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
+      assert (acc = []); pats
+    in
+    add_timestamp var
+      {pexp_loc = l; 
+       pexp_desc = Pexp_function (label,None,
+                                  List.map2 (fun p e -> (p,e)) pats ebodies)}
 
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
