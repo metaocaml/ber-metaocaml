@@ -619,6 +619,99 @@ function
 (.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=2.0; im=3.0};;
 (* - : int = 3 *)
 
+(* General functions *)
+
+.<fun (x,y) -> x + y>.;;
+(*
+- : ('cl, int * int -> int) code = .<fun (x_2, y_3) -> (x_2 + y_3)>. 
+*)
+(.! .<fun (x,y) -> x + y>.) (2,3);;
+(* - : int = 5 *)
+.<function (Some x) as y -> x | _ ->  2>.;;
+(*
+- : ('cl, int option -> int) code = .<
+function | (Some (x_6) as y_7) -> x_6 | _ -> 2>.
+*)
+(.! .<function (Some x) as y -> x | _ ->  2>.) (Some 1);;
+(* - : int = 1 *)
+(.! .<function (Some x) as y -> x | _ ->  2>.) None;;
+(* - : int = 2 *)
+.<function [x;y;z] -> x - y + z | [x;y] -> x - y>.;;
+(*
+- : ('cl, int list -> int) code = .<
+function
+| (x_12 :: y_13 :: z_14 :: []) -> ((x_12 - y_13) + z_14)
+| (x_15 :: y_16 :: []) -> (x_15 - y_16)>. 
+*)
+(.! .<function [x;y;z] -> x - y + z | [x;y] -> x - y>.) [1;2;3];;
+(* - : int = 2 *)
+
+ (* OR patterns *)
+.<function ([x;y] | [x;y;_]) -> x - y>.;;
+(*
+- : ('cl, int list -> int) code = .<
+fun ((x_1 :: y_2 :: []) | (x_1 :: y_2 :: _ :: [])) -> (x_1 - y_2)>. 
+*)
+(.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2];;
+(* - : int = -1 *)
+(.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2;3];;
+(* - : int = -1 *)
+(.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2;3;4];;
+(* Exception: Match_failure ("//toplevel//", 1, 6). *)
+
+.<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.;;
+(*
+- : ('cl, int list -> int) code = .<
+fun (((x_9 :: y_10 :: []) | (x_9 :: y_10 :: _ :: []))
+     | (y_10 :: x_9 :: _ :: _ :: [])) ->
+ (x_9 - y_10)>.
+*)
+(.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2];;
+(* - : int = -1 *)
+(.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3];;
+(* - : int = -1 *)
+(.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3;4];;
+(* - : int = 1 *)
+
+.<function (`F x | `G x) -> x | `E x -> x>.;;
+(*
+- : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
+function | ((`F x_17) | (`G x_17)) -> x_17 | (`E x_18) -> x_18>. 
+*)
+(.! .<function (`F x | `G x) -> x | `E x -> x>.) (`F 2);;
+(* - : int = 2 *)
+open Complex;;
+.<function {re=x} -> x | {im=x; re=y} -> x -. y>.;;
+(*
+Characters 25-37:
+  .<function {re=x} -> x | {im=x; re=y} -> x -. y>.;;
+                           ^^^^^^^^^^^^
+Warning 11: this match case is unused.
+- : ('cl, Complex.t -> float) code = .<
+function
+| {Complex.re = x_21} -> x_21
+| {Complex.re = y_22; Complex.im = x_23} -> (x_23 -. y_22)>. 
+*)
+.<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.;;
+(*
+- : ('cl, Complex.t -> float) code = .<
+function
+| {Complex.re = x_24; Complex.im = 2.0} -> x_24
+| {Complex.re = y_25; Complex.im = x_26} -> (x_26 -. y_25)>. 
+*)
+(.! .<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.) {re=1.0; im=1.0};;
+(* - : float = 0. *)
+.<function (Some x) as y when x  > 0 -> y | _ -> None>.;;
+(*
+- : ('cl, int option -> int option) code = .<
+function | (Some (x_30) as y_31) when (x_30 > 0) -> y_31 | _ -> None>. 
+*)
+(.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.) (Some 1);;
+(* - : int option = Some 1 *)
+(.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.) (Some 0);;
+(* - : int option = None *)
+
+
 
 let x = ref .<0>. in let r = .<for i = 1 to 5 do .~(x:=.<1>.; .<()>.) done>. in (r,!x);;
 

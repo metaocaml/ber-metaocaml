@@ -147,8 +147,8 @@ let debug_print : string -> unit = fun msg ->
 let trx_error ?(loc = Location.none) fn =
   raise (Typecore.Error (loc, Typecore.Trx_error fn))
 
-let not_supported msg =
-  trx_error (fun ppf -> Format.fprintf ppf 
+let not_supported loc msg =
+  trx_error ~loc:loc (fun ppf -> Format.fprintf ppf 
       "%s is not yet supported within brackets" msg)
 
 (* ------------------------------------------------------------------------ *)
@@ -806,104 +806,8 @@ let build_fun_simple :
   {pexp_loc = l; 
    pexp_desc = Pexp_function (label,None,[(pat,ebody)])}
 
-let build_fun : 
-  Location.t -> string -> string loc array -> 
-  Parsetree.pattern list -> Parsetree.expression array ->
-  Parsetree.expression =
-  fun l label names pats ebodies -> 
-  let pats = if names = [||] then pats else
-                failwith "subst not yet implemented" in
-  {pexp_loc = l; 
-   pexp_desc = Pexp_function (label,None,
-                               List.map2 (fun p e -> (p,e))
-                                pats (Array.to_list ebodies))}
 
 (*
-(* based on code taken from typing/parmatch.ml *)
-
-let clean_copy ty =
-  if ty.level = Btype.generic_level then ty
-  else Subst.type_expr Subst.identity ty
-
-let get_type_path ty tenv =
-  let ty = Ctype.repr (Ctype.expand_head tenv (clean_copy ty)) in
-  match ty.desc with
-  | Tconstr (path,_,_) -> path
-  | _ -> fatal_error "Parmatch.get_type_path"
-
-let rec get_type_descr ty tenv =
-  match (Ctype.repr ty).desc with
-  | Tconstr (path,_,_) -> Env.find_type path tenv
-  | _ -> fatal_error "Parmatch.get_type_descr"
-
-let rec get_constr tag ty tenv =
-  match get_type_descr ty tenv with
-  | {type_kind=Type_variant constr_list} ->
-      Datarepr.find_constr_by_tag tag constr_list
-  | {type_manifest = Some _} ->
-      get_constr tag (Ctype.expand_head_once tenv (clean_copy ty)) tenv
-  | _ -> fatal_error "Parmatch.get_constr"
-
-let find_label lbl lbls =
-  try
-    let name,_,_ = List.nth lbls lbl.lbl_pos in
-    name
-  with Failure "nth" -> "*Unkown label*"
-
-let rec get_record_labels ty tenv =
-  match get_type_descr ty tenv with
-  | {type_kind = Type_record(lbls, rep)} -> lbls
-  | {type_manifest = Some _} ->
-      get_record_labels (Ctype.expand_head_once tenv (clean_copy ty)) tenv
-  | _ -> fatal_error "Parmatch.get_record_labels"
-
-let get_constr_name tag ty tenv  = match tag with
-| Cstr_exception path -> Path.name path
-| _ ->
-  try
-    let name,_ = get_constr tag ty tenv in name
-  with
-  | Datarepr.Constr_not_found -> "*Unknown constructor*"
-
-XXX use:	check_path_quotable p;
-
-let get_constr_lid tag ty tenv = 
- match tag with
- | Cstr_exception path -> path_to_lid path
- | _ -> let name = get_constr_name tag ty tenv
-        and type_path = get_type_path ty tenv
-        in update_lid (path_to_lid type_path) name
-
-XXX use: 	check_path_quotable p;
-
-let get_record_lids ty tenv =
-  let lbls = get_record_labels ty tenv in
-  let type_lid = path_to_lid (get_type_path ty tenv) in
-  let label_lid (name,_,_) = update_lid type_lid name
-  in List.map label_lid lbls
-
-let rec map_strict f l =
-  match l with
-    [] -> []
-  | (None::xs) -> map_strict f xs
-  | ((Some a):: xs) -> (f a)::(map_strict f xs)
-                                
-let map_pi2 f p =
-  match p with
-    (x,y) -> (x, f y)
-
-let map_pi1 f p =
-  match p with
-    (x,y) -> (f x, y)
-
-let add_ifnew x l =
-  if List.mem x l then l else x::l
-
-(* Unqualified indetifiers are looked up in the initial
-   environment. Qualified identifiers are looked into (external)
-   modules, which are loaded by demand, in Env.find *)
-let env0 = Env.initial
-
 let find_type name =
   try
     let lid = Longident.parse name in
@@ -911,25 +815,6 @@ let find_type name =
     newty (Tconstr(path, [], ref Mnil))
   with Not_found ->
     fatal_error ("Trx.find_type: " ^ name)
-let find_constr name =
-  try
-    let lid = Longident.parse name in
-    Env.lookup_constructor lid env0
-  with Not_found ->
-    fatal_error ("Trx.find_constr: " ^ name)
-let find_label name =
-  try
-    let lid = Longident.parse name in
-    Env.lookup_label lid env0
-  with Not_found ->
-    fatal_error ("Trx.find_label: " ^ name)
-
-(* 
-I guess the point of lazy is to memoize repeated searches, and avoid
-searches for infrequent things.
-Since things like int, bool and string are going to be used all the time,
-we should just look them up eagerly.
-*)
 
 let mkExp exp t d = 
   { exp with exp_type = Lazy.force t;
@@ -982,23 +867,6 @@ let rec quote_list_as_expopt_forpats exp el =
         (mkParsePattern exp
            (Texp_construct(Lazy.force constr_ppat_tuple,
                                 [mkPexpList exp el])))
-
-let rec boundinpattern p l = (* extend list l with ids bound in pattern p *)
-  match p.pat_desc with
-    Tpat_any -> l
-  | Tpat_var i -> add_ifnew i l
-  | Tpat_alias (p,i) -> boundinpattern p (add_ifnew i l)
-  | Tpat_constant c -> l
-  | Tpat_tuple pl -> List.fold_right boundinpattern pl l
-  | Tpat_construct (cd,pl) -> 
-      List.fold_right boundinpattern pl l
-  | Tpat_variant (_,po,_) -> (match po with
-      None -> l
-    | Some p -> boundinpattern p l)
-  | Tpat_record dpl -> List.fold_right (fun (d,p) -> boundinpattern p) dpl l
-  | Tpat_array pl -> List.fold_right boundinpattern pl l
-  | Tpat_or (p1,p2,_) -> boundinpattern p2 (boundinpattern p1 l)
-  | Tpat_lazy p -> boundinpattern p l
 
 let rec mkPattern exp p =
   let idexp id = mkExp exp type_longident_t
@@ -1300,22 +1168,21 @@ let rec trx_e n exp =
 
 (* Analyze and translate a pattern:
          Typedtree.pattern -> Parsetree.pattern
-  The function is somewhat similar to tools/untypeast.ml.untype_pattern
+  The function is somewhat similar to tools/untypeast.ml;untype_pattern
 
   However, we also determine and return the list of bound variables.
-  The list is the reverse of the order the variables occur in the pattern.
+  The list is in the reverse of the order of variables occurring in the pattern.
   Finally, we check that labels and constructors may be quoted.
 
   The algorithm of determining the names of bound variables is based
   on Typedtree.pat_bound_idents. There is one subtle issue.
   Normally all variables within a pattern are unique (patterns are
-  always linear). Indentically named variables within a list of patterns, like 
-  in
+  always linear). Identically named variables within a list of patterns, like 
       match ... with
       | [x] -> 
       | [x;y] ->
-  are _distinct_ variables (the have different Ident.t values, even though
-  their names may be the same). However, components of an OR pattern 
+  are _distinct_ variables. They have different Ident.t values, even though
+  their names may be the same. However, components of an OR pattern 
   bind exactly the same identifiers. Don't count them twice!
 *)
 
@@ -1330,13 +1197,14 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
 
 (* The first argument is a list of identifiers. Found identifiers are
    prepended to that list. The order of identifiers is important!
+   If you change the traversal order, be sure to modify pattern_subst below!
 *)
 let rec trx_pattern : 
     (Ident.t * string loc) list -> Typedtree.pattern -> 
      Parsetree.pattern * (Ident.t * string loc) list = fun acc pat ->
  if not (pat.pat_extra = []) then
-   trx_error ~loc:pat.pat_loc (fun ppf -> Format.fprintf ppf 
-    "patterns with unpack, constraints, and other pat_extra are not supported");
+   not_supported pat.pat_loc
+    "patterns with unpack, constraints, and other pat_extra";
   let (pd,acc) = match pat.pat_desc with
   | Tpat_any -> (Ppat_any, acc)
   | Tpat_var (id, name) when 
@@ -1398,6 +1266,115 @@ let trx_pel :
      Parsetree.pattern list * (Ident.t * string loc) list = 
    map_accum (fun acc (p,_) -> trx_pattern acc p)
 
+(* Substitute the names of bound variables in the pattern.
+   The new names are given in the string loc list. We
+   take advantage of the fact that patterns are linear and
+   the list of new names is ordered, in the order the bound
+   variables occur in the pattern. Therefore, we substitute based
+   on position.
+   OR-patterns bring complexity however: both branches of an OR
+   pattern bind exactly the same variables (but the order of
+   variable occurrence withon branches may be different).
+   So for OR patterns we subsutute by name, taking advantage
+   of the fact the new names differ from the old ones in _nnn
+   suffix. OR patterns are uncommon, so the complication of their processing
+   is not that bad.
+
+   This function is closely related to trx_pattern; It relies on the
+   same pattern traversal order as trx_pattern.
+ *)
+
+         (* two strings are same up to (and including) n *)
+let rec same_upto s1 s2 n =
+  n < 0 || (s1.[n] = s2.[n] && same_upto s1 s2 (n-1))
+
+let rec pattern_subst : ?by_name:bool ->
+    string loc list -> Parsetree.pattern -> 
+     Parsetree.pattern * string loc list = fun ?(by_name=false) acc pat ->
+ if acc = [] then (pat,acc) else           (* no more variables to subst *)
+ let subst old_name acc =
+   if by_name then begin
+     let new_name =
+       try List.find (fun n -> 
+         same_upto old_name.txt n.txt (String.rindex n.txt '_' - 1)) acc 
+       with _ ->
+         begin
+           Format.fprintf Format.str_formatter "old_name %s %a\n"
+             old_name.txt Location.print old_name.loc;
+           List.iter (fun n -> Format.fprintf Format.str_formatter
+               "new name %s %a\n" n.txt Location.print n.loc) acc;
+           failwith (Format.flush_str_formatter ())
+         end
+     in
+     (new_name, acc)                       (* don't bother removing from acc*)
+   end
+   else match acc with
+   | h::t -> (h,t)
+   | _    -> assert false
+ in
+ let (desc,acc) = match pat.ppat_desc with
+  | Ppat_any as x -> (x,acc)
+  | Ppat_var old_name ->
+      let (new_name,acc) = subst old_name acc in (Ppat_var new_name,acc)
+  | Ppat_alias (p,old_name) ->
+     let (p,acc) = pattern_subst ~by_name acc p in
+     let (new_name,acc) = subst old_name acc in 
+     (Ppat_alias (p,new_name),acc)
+  | Ppat_constant _ as x -> (x,acc)
+  | Ppat_tuple pl ->
+      let (pl,acc) = map_accum (pattern_subst ~by_name) acc pl in
+      (Ppat_tuple pl,acc)
+  | Ppat_construct (_,None,_) as x -> (x,acc)
+  | Ppat_construct (lid,Some p,b) ->
+     let (p,acc) = pattern_subst ~by_name acc p in
+     (Ppat_construct (lid,Some p,b),acc)
+  | Ppat_variant (_,None) as x -> (x,acc)
+  | Ppat_variant (l,Some p) ->
+     let (p,acc) = pattern_subst ~by_name acc p in
+     (Ppat_variant (l,Some p),acc)
+  | Ppat_record (pl,cf) ->
+      let (pl,acc) = map_accum (fun acc (l,p) -> 
+          let (p,acc) = pattern_subst ~by_name acc p in ((l,p),acc)) acc pl in
+      (Ppat_record (pl,cf),acc)
+  | Ppat_array pl ->
+      let (pl,acc) = map_accum (pattern_subst ~by_name) acc pl in
+      (Ppat_array pl,acc)
+  | Ppat_or (p1,p2) ->
+     let (p1,acc') = pattern_subst ~by_name acc p1 in
+     let (p2,_)   = pattern_subst ~by_name:true acc p2 in
+     (Ppat_or (p1,p2), acc')
+  | Ppat_constraint (p,cty) ->
+     let (p,acc) = pattern_subst ~by_name acc p in
+     (Ppat_constraint (p,cty), acc)
+  | Ppat_type _ as x -> (x,acc)
+  | Ppat_lazy p ->
+     let (p,acc) = pattern_subst ~by_name acc p in
+     (Ppat_lazy p, acc)
+  | Ppat_unpack _ as x -> (x,acc)
+ in
+ ({pat with ppat_desc = desc}, acc)
+
+
+let pattern_subst_list :
+    string loc list -> Parsetree.pattern list -> 
+     Parsetree.pattern list * string loc list = fun acc pl ->
+ map_accum (pattern_subst ~by_name:false) acc pl
+
+
+let build_fun : 
+  Location.t -> string -> string loc array -> 
+  Parsetree.pattern list -> Parsetree.expression array ->
+  Parsetree.expression =
+  fun l label names pats ebodies -> 
+  let pats = 
+    if names = [||] then pats else
+    let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
+    assert (acc = []); pats
+  in
+  {pexp_loc = l; 
+   pexp_desc = Pexp_function (label,None,
+                               List.map2 (fun p e -> (p,e))
+                                pats (Array.to_list ebodies))}
 
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
@@ -1628,15 +1605,15 @@ let rec trx_bracket :
     in Texp_cspval (Obj.repr ast, dummy_lid "*new*")
 
   | Texp_instvar (p1,p2,s) ->
-     not_supported "Objects (Texp_instvar)"
+     not_supported exp.exp_loc "Objects (Texp_instvar)"
         (* Alternatively: since instance variables are always bound 
            at level 0 (for now)
            so this is like a csp variable 
         call_trx_mkcsp exp None (path_to_lid p2)
         *)
-  | Texp_setinstvar _ -> not_supported "Objects (Texp_setinstvar)"
-  | Texp_override  _  -> not_supported "Objects (Texp_override)"
-  | Texp_letmodule (id,s,me,e) -> not_supported "let module"
+  | Texp_setinstvar _ -> not_supported exp.exp_loc "Objects (Texp_setinstvar)"
+  | Texp_override  _  -> not_supported exp.exp_loc "Objects (Texp_override)"
+  | Texp_letmodule (id,s,me,e) -> not_supported exp.exp_loc "let module"
 
   | Texp_assert e ->
       texp_apply (texp_ident "Trx.build_assert")
@@ -1651,8 +1628,8 @@ let rec trx_bracket :
       texp_apply (texp_ident "Trx.build_lazy")
         [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
 
-  | Texp_object (cl,fl) -> not_supported "Objects"
-  | Texp_pack _         -> not_supported "First-class modules"
+  | Texp_object (cl,fl) -> not_supported exp.exp_loc "Objects"
+  | Texp_pack _         -> not_supported exp.exp_loc "First-class modules"
 
   | Texp_bracket e ->
       texp_apply (texp_ident "Trx.build_bracket")
@@ -1679,7 +1656,8 @@ let rec trx_bracket :
       (* Should check that cty1 and cty2 contain only globally declared
          type components
        *)
-    | Texp_constraint (cty1, cty2) -> not_supported "Texp_constraint"
+    | Texp_constraint (cty1, cty2) -> 
+        not_supported loc "Texp_constraint"
 
     | Texp_open (path, lid, _) -> 
        check_path_quotable "Texp_open" path;
@@ -1688,8 +1666,8 @@ let rec trx_bracket :
          texp_lid (mkloc (path_to_lid path) lid.loc);
          exp]      (* exp is the result of trx_bracket *)
 
-    | Texp_poly cto  -> not_supported "Texp_poly"
-    | Texp_newtype s -> not_supported "Texp_newtype"
+    | Texp_poly cto  -> not_supported loc "Texp_poly"
+    | Texp_newtype s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
   in
   List.fold_right trx_extra exp.exp_extra
