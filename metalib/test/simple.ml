@@ -87,4 +87,50 @@ val tg2 : '_a list ref = {contents = []}
    should not be polymorphic!
 *)
 
- (* First-class polymorphism *)
+(* First-class polymorphism *)
+
+(* Recall, in runcode.mli:
+
+type 'a cde = {cde : 'c. ('c,'a) code}  (* Type of the closed code *)
+
+*)
+
+(* In all previous versions of MetaOCaml, up to BER N004:
+
+# Runcode.run;;
+- : 'a Runcode.cde -> 'a = <fun>
+# {Runcode.cde = .<1>.};;
+- : int Runcode.cde = .<1>.
+# Runcode.run {Runcode.cde = .<1>.};;
+- : int = 1
+# .<{Runcode.cde = .<1>.}>.;;
+- : ('a, int Runcode.cde) code = .<{Runcode.cde = .<1>.}>.
+# .! .<{Runcode.cde = .<1>.}>.;;
+Characters 22-23:
+  .! .<{Runcode.cde = .<1>.}>.;;
+                        ^
+Error: This expression has type ('a, int) code
+       but an expression was expected of type ('b, int) code
+
+Exception: Trx.TypeCheckingError.
+*)
+
+(* Now *)
+let tfc1 = {Runcode.cde = .<1>.};;
+(* - : int Runcode.cde = .<1>. *)
+let 1 = Runcode.run {Runcode.cde = .<1>.};;
+
+let tfc2 = .<{Runcode.cde = .<1>.}>.;;
+(*
+- : ('cl, int Runcode.cde) code = .<{Runcode.cde = .<1>.}>. 
+*)
+let tfc3 = .! .<{Runcode.cde = .<1>.}>.;;
+(* - : int Runcode.cde = .<1>.  *)
+let tfc4 = {Runcode.cde= .<{Runcode.cde = .<1>.}>.};;
+(* - : int Runcode.cde Runcode.cde = .<{Runcode.cde = .<1>.}>.  *)
+let tfc5 = Runcode.run {Runcode.cde= .<{Runcode.cde = .<1>.}>.};;
+(* - : int Runcode.cde = .<1>.  *)
+let 1 = Runcode.run (Runcode.run {Runcode.cde= .<{Runcode.cde = .<1>.}>.});;
+(* - : int = 1 *)
+
+Printf.printf "\nAll Done\n";;
