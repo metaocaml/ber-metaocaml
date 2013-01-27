@@ -83,6 +83,7 @@ clean::
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
 test:
+	$(BINDIR)/metaocaml test/simple_true.ml
 	$(BINDIR)/metaocaml test/quick_test.ml
 	$(BINDIR)/metaocaml test/t4.ml
 	$(BINDIR)/metaocaml test/test21.ml
@@ -91,6 +92,8 @@ test:
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top
 
 test-compile:
+	$(BINDIR)/metaocamlc -o simple_true test/simple_true.ml
+	./simple_true
 # 	$(BINDIR)/metaocamlc -o quick_test test/quick_test.ml
 # 	./quick_test
 	$(BINDIR)/metaocamlc -dparsetree -drawlambda -dinstr -c test/test21.ml
@@ -101,7 +104,7 @@ test-compile:
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
 
 clean::
-	rm -f quick_test t4 pt
+	rm -f simple_true quick_test t4 pt simple_true
 
 # Patch the OCaml distribution
 patch:
