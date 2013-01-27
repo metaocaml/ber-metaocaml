@@ -148,6 +148,12 @@ have problems with generalizing second-stage let. Since the let-form
 will be replaced with a function call, generalization won't be
 performed!
 
+The problem with first-class polymorhism (records with polymorphic
+fields inside brackets) has fixed itself. See the file
+tests/simple.txt. Therefore, we can really remove run from the core
+of MetaOCaml and use the type cde of closed code.
+
+
 
 * Installation notes
 When linking the first time, beware!
