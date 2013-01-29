@@ -16,10 +16,32 @@ let rec power : int -> ('a,int) code -> ('a,int) code =
            then .< (*csp*)square .~(power (n/2) x)>.
            else .<.~x * .~(power (n-1) x)>.
 ;;
-let power7 : int -> int =
-  .! .<fun x -> .~(Printf.printf "power\n"; power 7 .<x>.)>.;;
+let power7_cde = .<fun x -> .~(Printf.printf "power\n"; power 7 .<x>.)>.;;
 (* "power" printed once *)
+(*
+val power7_cde : ('cl, int -> int) code = .<
+  fun x_41 ->
+   (x_41 *
+     (((* cross-stage persistent value (id: square) *))
+       (x_41 *
+         (((* cross-stage persistent value (id: square) *)) (x_41 * 1)))))>.
+*)
+let power7 : int -> int = .! power7_cde;;
+let (128, 2187) = (power7 2, power7 3);;
+(* nothing is printed...
+  val res : int * int = (128, 2187)
+*)
 
+(* The following won't work, 
+let power7 : int -> int = 
+  .! .<fun x -> .~(Printf.printf "power\n"; power 7 .<x>.)>.;;
+*)
+
+(* But the following does. It will become the standard *)
+let power7 : int -> int = 
+  Runcode.run {Runcode.cde= 
+               .<fun x -> .~(Printf.printf "power\n"; power 7 .<x>.)>.};;
+(* "power" printed once *)
 let (128, 2187) = (power7 2, power7 3);;
 (* nothing is printed...
   val res : int * int = (128, 2187)
@@ -50,14 +72,17 @@ let 10 = (.! ef2) 2 3 4;; (* 10 *)
 
 let (5,10,34) = 
   let eta f = .<fun x -> .~(f .<x>.)>. in
-    (.! .< fun y ->         
-             .~(eta (fun z -> .< .~z + y   >.)) >.)
+    (Runcode.run 
+       {Runcode.cde= .< fun y ->         
+             .~(eta (fun z -> .< .~z + y   >.)) >.})
     2 3,
-    (.! .< fun y -> fun w -> 
-             .~(eta (fun z -> .< .~z + y*w >.)) >.)
+    (Runcode.run
+       {Runcode.cde= .< fun y -> fun w -> 
+             .~(eta (fun z -> .< .~z + y*w >.)) >.})
     2 3 4,
-    (.! .< fun x u -> 
-             .~(eta (fun z -> .<fun y -> .~z + u*x*y >.)) >.)
+    (Runcode.run
+       {Runcode.cde= .< fun x u -> 
+             .~(eta (fun z -> .<fun y -> .~z + u*x*y >.)) >.})
     2 3 4 5
  ;;
 
@@ -73,7 +98,7 @@ let cspe =
      (.! .<fun y -> .<.~u>.>.) ()) >.;;
 
 (*
-    val cspe : ('a, 'b -> 'b) code = .<fun x_1 -> x_1>.
+    val cspe : ('cl, 'a -> 'a) code = .<fun x_1 -> x_1>.
 *)
 
 let 42 = (.! cspe) 42;;
@@ -95,17 +120,54 @@ let 10 = .! (scspe 10);;
 (* ---------------------------------------------------------------------- *)
 (* Scope extrusion via mutable state *)
 
+(*
 let extr = let x = ref .<1>. in
     let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
     !x;;
-(* It does type-check ...*)
 
-(*
+(* It does type-check ... but printing it produces an error *)
+
+Failure("Scope extrusion at Characters 65-66:\n      let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in\n                                   ^\n for the identifier v_64 bound at Characters 50-51:\n      let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in\n                    ^\n")
+*)
+
+(* Previously:
     val extr : ('a, int) code = .<v_1>.
 
     # .! extr ;;
     Unbound value v_1
     Exception: Trx.TypeCheckingError.
+*)
+
+(* The run-time error is reported on an attempt to run the code *)
+let true = 
+ try .! (let x = ref .<1>. in
+    let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
+    !x); false
+ with Failure e -> print_string e; true
+;;
+(*
+Scope extrusion at Characters 75-76:
+      let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
+                                   ^
+ for the identifier v_66 bound at Characters 60-61:
+      let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
+                    ^
+*)
+
+(* The run-time error is reported on an attempt to splice the code *)
+let true = 
+ try let x = ref .<1>. in
+     let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
+     .<1 + .~(!x)>.; false     (* triggers an error with the message below *)
+ with Failure e -> print_string e; true
+;;
+(*
+Scope extrusion at Characters 72-73:
+       let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
+                                    ^
+ for the identifier v_67 bound at Characters 57-58:
+       let _ = .<fun v -> .~(x := .<v>.; .<()>.)>. in
+                     ^
 *)
 
 
@@ -150,8 +212,8 @@ val testc : int = 32
 let mul x y = .<.<.~.~x * .~.~y>.>.;;
 (*
 val mul :
-  ('a, ('b, int) code) code ->
-  ('a, ('b, int) code) code -> ('a, ('b, int) code) code = <fun>
+  ('cl, ('cl0, int) code) code ->
+  ('cl, ('cl0, int) code) code -> ('cl, ('cl0, int) code) code = <fun>
 *)
 
 let rec powerd = function
@@ -161,10 +223,10 @@ let rec powerd = function
            (.<fun x -> .~(mul .<.~c x>. .<x>.)>.,succ n1)
 ;;
 (*
- val powerd : int -> ('a, ('b, int) code -> ('b, int) code) code * int = <fun>
+ val powerd : int -> ('cl, ('cl0, int) code -> ('cl0, int) code) code * int
 *)
 
-let test1 () = powerd 5;;
+let test1 = powerd 5;;
 (*
 val test1 : ('a, ('_b, int) code -> ('_b, int) code) code * int =
   (.<fun x_5 ->
@@ -196,7 +258,7 @@ let rec powerd1 = function
            (.<fun x -> .~(mull .<.~c x>. .<x>.)>.,succ n1)
 ;;
 (*
-  val powerd1 : int -> ('a, ('b, int) code -> ('b, int) code) code * int = <fun>
+  val powerd1 : int -> ('cl, ('a, int) code -> ('a, int) code) code * int =
 *)
 
 let test11 = powerd1 5;;
@@ -215,8 +277,10 @@ val test11 : ('a, ('_b, int) code -> ('_b, int) code) code * int =
    5)
 *)
 
-let testd1 = .! (fst (powerd1 5));;
-let testdd1 = .<fun x -> .~(testd1 .<x>.)>.;;
+(*
+let testd1 () = .! (fst (powerd1 5));;
+let testdd1 = .<fun x -> .~(testd1 () .<x>.)>.;;
+*)
 (*
 val testdd1 : ('_a, int -> int) code =
   .<fun x_1 -> ((((x_1 * x_1) * x_1) * x_1) * x_1)>.
@@ -247,8 +311,7 @@ let rec gibgen x y n =
   .<.~(gibgen x y (n-1)) + .~(gibgen x y (n-2))>.
 ;;
 (* 
-  val gibgen : ('a, int) code -> ('a, int) code -> int -> ('a, int) code =
-  <fun>
+  val gibgen : ('cl, int) code -> ('cl, int) code -> int -> ('cl, int) code 
 *)
 let test_gibgen n = .<fun x y -> .~(gibgen .<x>. .<y>. n)>.;;
 (* val test_gibgen : int -> ('a, int -> int -> int) code = <fun> *)

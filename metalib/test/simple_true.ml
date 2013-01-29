@@ -79,14 +79,20 @@ let 1 =
 
 (* From Problems.txt Oct 3, 2006 Printing of records in brackets *)
 
-(*
 let t7 = 
   let open Complex in
   .<let x = {re=1.0; im=2.0} in
     let y = {x with re = 2.0} in
     y>.
  ;;
+
+(*
+val t7 : ('cl, Complex.t) code = .<
+  let x_39 = {Complex.re = 1.0; Complex.im = 2.0} in
+  let y_40 = {x_39 with Complex.re = 2.0} in y_40>. 
 *)
+
+let {Complex.re=2.0; im=2.0} = .! t7;;
 
 (* First-class polymorphism *)
 
