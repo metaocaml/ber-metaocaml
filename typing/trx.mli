@@ -25,6 +25,7 @@ val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
 val sample_loc  : Location.t
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
+val sample_rec_flag : Asttypes.rec_flag
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> Parsetree.expression
@@ -107,3 +108,8 @@ val build_try :
   Location.t -> Parsetree.expression -> string Location.loc array -> 
   Parsetree.pattern list -> Parsetree.expression array ->
   Parsetree.expression
+
+val build_let_simple : 
+  Location.t -> Asttypes.rec_flag -> string Location.loc -> 
+  Parsetree.expression -> Parsetree.expression -> Parsetree.expression
+

@@ -318,6 +318,9 @@ let sample_loc = Location.none
 (* Exported. Used as a template for constructing pattern lists expressions *)
 let sample_pat_list : Parsetree.pattern list = []
 
+(* Exported. Used as a template for passing the Asttypes.rec_flag *)
+let sample_rec_flag : Asttypes.rec_flag = Nonrecursive
+
 (* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
 (* Env.initial is used for all look-ups. Unqualified identifiers
@@ -783,6 +786,16 @@ let build_fun_simple :
   {pexp_loc = l; 
    pexp_desc = Pexp_function (label,None,[(pat,ebody)])}
 
+let build_let_simple : 
+  Location.t -> rec_flag -> string loc -> Parsetree.expression -> 
+  Parsetree.expression -> Parsetree.expression =
+  fun l recf name e ebody -> 
+  let (e,var)     = remove_tstamp None e in
+  let (ebody,var) = remove_tstamp var  ebody in
+  let pat = {ppat_loc  = l; ppat_desc = Ppat_var name} in
+  add_timestamp var
+  {pexp_loc = l; 
+   pexp_desc = Pexp_let (recf,[(pat,e)],ebody)}
 
 (* All simple Pext_ident must use alive gensym'd names  *)
 (*
@@ -1505,6 +1518,22 @@ let rec trx_bracket :
 (*
   | Texp_let of rec_flag * (pattern * expression) list * expression
 *)
+     (* The most common case of let-expressions: let x = e in body *)
+  | Texp_let (recf,[({pat_desc = Tpat_var (id,name)},e)],ebody) ->
+      let recf_exp = texp_ident "Trx.sample_rec_flag" in
+      let recf_exp = {recf_exp with exp_desc = 
+                        Texp_cspval (Obj.repr recf, dummy_lid "*recf*")} in
+      texp_binding_simple (id,name) (fun gensymed_var ->
+        { exp with
+          exp_type = wrap_ty_in_code n exp.exp_type; (* lifted type *)
+          exp_desc = 
+            texp_apply (texp_ident "Trx.build_let_simple") 
+            [texp_loc exp.exp_loc;
+             recf_exp;
+             gensymed_var;
+             trx_bracket trx_exp n e;
+             trx_bracket trx_exp n ebody] })
+
      (* The most common case of functions: fun x -> body *)
   | Texp_function (l,[({pat_desc = Tpat_var (id,name)},ebody)],_) ->
       texp_binding_simple (id,name) (fun gensymed_var ->

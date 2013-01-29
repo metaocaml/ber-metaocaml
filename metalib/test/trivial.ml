@@ -819,6 +819,62 @@ let "1" =
 let "fail scanf: bad input at char number 0: ``character 'x' is not a decimal digit''" =
 (.! .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "xxx";;
 
+(* Simple let *)
+
+.<let x = 1 in x>.;;
+(*
+- : ('cl, int) code = .<let x_1 = 1 in x_1>. 
+*)
+let 1 = 
+  .! .<let x = 1 in x>.;;
+.<let x = 1 in let x = x + 1 in x>.;;
+(*
+- : ('cl, int) code = .<let x_7 = 1 in let x_8 = (x_7 + 1) in x_8>. 
+*)
+let 2 = 
+  .! .<let x = 1 in let x = x + 1 in x>.;;
+.<let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+(*
+- : ('cl, int) code = .<
+let rec f_11 =
+ fun n_12 -> if (n_12 = 0) then 1 else (n_12 * (f_11 (n_12 - 1))) in
+(f_11 5)>. 
+*)
+let 120 =
+  .! .<let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+
+(* Recursive vs. non-recursive bindings *)
+.<let f = fun x -> x in 
+  let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+(*
+Characters 6-7:
+  .<let f = fun x -> x in let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+        ^
+Warning 26: unused variable f.
+- : ('cl, int) code = .<
+let f_19 = fun x_22 -> x_22 in
+let rec f_20 =
+ fun n_21 -> if (n_21 = 0) then 1 else (n_21 * (f_20 (n_21 - 1))) in
+(f_20 5)>. 
+*)
+
+let 120 = .! .<let f = fun x -> x in 
+               let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+
+.<let f = fun x -> x in 
+  let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+(*
+- : ('cl, int) code = .<
+let f_31 = fun x_34 -> x_34 in
+let f_32 = fun n_33 -> if (n_33 = 0) then 1 else (n_33 * (f_31 (n_33 - 1))) in
+(f_32 5)>. 
+*)
+let 20 = .! .<let f = fun x -> x in 
+              let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+- : int = 20
+
+
+
 (* testing scope extrusion *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<1>.; .<0>.)>. in !r ;;
 (* - : ('cl, int) code = .<1>.  *)
