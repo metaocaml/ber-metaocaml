@@ -169,6 +169,17 @@ let rec expression_is_terminal_list = function
   | {pexp_desc = _}
      -> false
 
+(* check if it's a fixed-length list *)
+let rec pat_fixed_len_list li po = match (li,po) with
+    | Longident.Lident("::"), Some ({ppat_desc = Ppat_tuple([_; pat2])}) ->
+        begin
+          match pat2.ppat_desc with
+          | Ppat_construct ({txt=li}, po, _) -> pat_fixed_len_list li po
+          | _ -> false
+        end
+    | Longident.Lident("[]"), None -> true
+    | _,_ -> false
+
 let rec core_type x =
   match x.ptyp_desc with
   | Ptyp_any -> p "_";         (* done *)
@@ -334,19 +345,31 @@ and pattern x =
       fprintf fmt "@])";
   | Ppat_construct ({txt=li}, po, _) -> 
       pp_open_hovbox fmt indent ;
-      (match li,po with
-       | Longident.Lident("::"),
-         Some ({ppat_desc = Ppat_tuple([pat1; pat2])}) ->
-           p "(" ;
-           pattern pat1 ;
-           fprintf fmt "@ ::@ " ;
-           pattern_list_helper fmt pat2 ;
-           p ")"; 
-       | _,_ -> p (fmt_longident li);
-          option_quiet pattern_in_parens po;);
+      ( if pat_fixed_len_list li po then
+        (match li,po with
+         | Longident.Lident("::"),
+           Some ({ppat_desc = Ppat_tuple([pat1; pat2])}) ->
+             p "[" ;
+             pattern pat1 ;
+             pattern_finlist_helper fmt pat2 ;
+             p "]"; 
+         | Longident.Lident("[]"), _ -> p "[]"
+         | _,_ -> assert false )
+      else
+        (match li,po with
+         | Longident.Lident("::"),
+           Some ({ppat_desc = Ppat_tuple([pat1; pat2])}) ->
+             p "(" ;
+             pattern pat1 ;
+             fprintf fmt "@ ::@ " ;
+             pattern_list_helper fmt pat2 ;
+             p ")"; 
+         | _,_ -> p (fmt_longident li);
+            option_quiet pattern_in_parens po ) ) ;
       pp_close_box fmt () ;
-      (* OXX what is this boolean ??   
-         bool i fmt b;               *)
+      (* OXX what is the boolean at the end?  The parser always sets it
+         to false, so ignore it since it can't be part of the external syntax
+      *)
 
   | Ppat_variant (l, po) ->
       (match po with
@@ -1580,6 +1603,18 @@ and pattern_list_helper ppf pat =
        fprintf ppf "@ ::@ " ;
        pattern_list_helper ppf pat2 ;
   | _ -> pattern pat ;
+
+(* this prints the rest of a finite-list pattern, starting with a ';' *)
+and pattern_finlist_helper ppf pat =
+  match pat with
+  | {ppat_desc = Ppat_construct ({txt=Longident.Lident("::")},
+                   Some ({ppat_desc = Ppat_tuple([pat1; pat2])}),
+                   _)}
+    -> fprintf ppf "@ ;@ " ;
+       pattern pat1 ;
+       pattern_finlist_helper ppf pat2 ;
+  | {ppat_desc = Ppat_construct ({txt=Longident.Lident("[]")}, _,_)} -> ()
+  | _ -> assert false
 
 and string_x_expression ({txt=s}, e) =
   pp_open_hovbox fmt indent ;
