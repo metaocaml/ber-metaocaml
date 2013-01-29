@@ -790,6 +790,35 @@ let 1.0 =
     {im=2.0; re=1.0};;
 
 
+(* try *)
+.<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.;;
+(*
+- : ('cl, int -> bool option) code = .<
+fun x_1 ->
+ (try Some(List.assoc x_1 [((1), (true)); ((2), (false))])) with
+  Not_found -> None)>.
+*)
+let Some true =
+  (.! .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 1;;
+let Some false =
+(.! .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 2;;
+let None =
+(.! .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 3;;
+
+.<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.;;
+(*
+- : ('cl, string -> string) code = .<
+fun x_5 ->
+ let open Scanf in
+ (try (Scanf.sscanf x_5 "%d" (fun x_7 -> (string_of_int x_7))) with
+  Scanf.Scan_failure (x_6) -> ("fail " ^ x_6))>.
+*)
+
+let "1" = 
+  (.! .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "1";;
+let "fail scanf: bad input at char number 0: ``character 'x' is not a decimal digit''" =
+(.! .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "xxx";;
+
 (* testing scope extrusion *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<1>.; .<0>.)>. in !r ;;
 (* - : ('cl, int) code = .<1>.  *)

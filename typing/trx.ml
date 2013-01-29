@@ -961,24 +961,6 @@ let mkPat exp t d =
   { exp with pat_type = Lazy.force t;
     pat_desc = d}
 
-
-let mkParseTree exp d =
-  {exp with
-   exp_desc =
-   Texp_record([Lazy.force label_pexp_desc,
-                mkExp exp type_parsetree_expression_desc d;
-                Lazy.force label_pexp_loc,
-                quote_location exp],
-               None) }
-
-let mkParsePattern exp d =
-  mkExp exp
-    type_parsetree_pattern
-    (Texp_record([Lazy.force label_ppat_desc, mkExp exp type_parsetree_pattern_desc d;
-                  Lazy.force label_ppat_loc, quote_location exp],
-                 None))
-    
-
 let rec mkPexpList exp l =
   match l with
     [] ->    mkExp exp
@@ -995,15 +977,6 @@ let mkPpatTuple exp exps =
     type_parsetree_pattern_desc
     (Texp_construct(Lazy.force constr_ppat_tuple, 
                     [mkPexpList exp exps]))
-
-let rec quote_list_as_expopt_forpats exp el =
-  match el with
-    [] -> mkNone exp
-  | [e] -> mkSome exp e
-  | _ -> mkSome exp
-        (mkParsePattern exp
-           (Texp_construct(Lazy.force constr_ppat_tuple,
-                                [mkPexpList exp el])))
 
 let rec mkPattern exp p =
   let idexp id = mkExp exp type_longident_t
@@ -1177,108 +1150,6 @@ let rec trx_e n exp =
                     translet))
         end
 
-    | Texp_function (pel, partial) ->
-        let idlist =
-          List.fold_right (fun (p,e) -> boundinpattern p) pel []  
-        and gensymexp id =  (* (gensym "x") *)
-          mkExp exp
-            type_longident_t
-            (Texp_apply
-               (trx_gensymlongident exp,
-                [(Some (quote_ident exp (Path.Pident id)),
-                  Required)]))
-        and idpat id =
-          {pat_desc = Tpat_var id;
-           pat_loc = exp.exp_loc;
-           pat_type = Lazy.force type_longident_t;
-           pat_env = exp.exp_env}
-        and transfunction =   (* LAM x trans(e) *)
-          mkParseTree exp
-            (Texp_construct
-               (Lazy.force constr_pexp_function, 
-                [mkString exp "";
-                 mkNone exp;
-                 mkPexpList exp 
-                   (mkNewPEL exp
-                      (List.map (map_pi2 (trx_e n)) pel))
-               ]
-               )
-            )
-        in let pel' = List.map (fun id -> (idpat id, gensymexp id)) idlist
-        in mkExp exp
-          type_parsetree_expression
-          (Texp_let
-             (Nonrecursive,
-              pel', 
-              transfunction))
-          
-    | Texp_match (e,pel,partial) ->
-        let idlist =
-          List.fold_right (fun (p,e) -> boundinpattern p) pel []  
-        and gensymexp id =  (* (gensym "x") *)
-          mkExp exp
-            type_longident_t
-            (Texp_apply
-               (trx_gensymlongident exp,
-                [(Some (quote_ident exp (Path.Pident id)),
-                  Required)]))
-        and idpat id =
-          {pat_desc = Tpat_var id;
-           pat_loc = exp.exp_loc;
-           pat_type = Lazy.force type_longident_t;
-           pat_env = exp.exp_env}
-        and transmatch =
-          mkParseTree exp
-            (Texp_construct
-               (Lazy.force constr_pexp_match, 
-                [trx_e n e;
-                 mkPexpList exp 
-                   (mkNewPEL exp
-                      (List.map (map_pi2 (trx_e n)) pel))
-               ]
-               )
-            )
-        in let pel' = List.map (fun id -> (idpat id, gensymexp id)) idlist
-        in mkExp exp
-          type_parsetree_expression
-          (Texp_let
-             (Nonrecursive,
-              pel', 
-              transmatch))
-          
-    | Texp_try (e,pel) ->
-        let idlist =
-          List.fold_right (fun (p,e) -> boundinpattern p) pel []  
-        and gensymexp id =  (* (gensym "x") *)
-          mkExp exp
-            type_longident_t
-            (Texp_apply
-               (trx_gensymlongident exp,
-                [(Some (quote_ident exp (Path.Pident id)),
-                  Required)]))
-        and idpat id =
-          {pat_desc = Tpat_var id;
-           pat_loc = exp.exp_loc;
-           pat_type = Lazy.force type_longident_t;
-           pat_env = exp.exp_env}
-        and transtry =
-          mkParseTree exp
-            (Texp_construct
-               (Lazy.force constr_pexp_try, 
-                [trx_e n e;
-                 mkPexpList exp 
-                   (mkNewPEL exp
-                      (List.map (map_pi2 (trx_e n)) pel))
-               ]
-               )
-            )
-        in let pel' = List.map (fun id -> (idpat id, gensymexp id)) idlist
-        in mkExp exp
-          type_parsetree_expression
-          (Texp_let
-             (Nonrecursive,
-              pel', 
-              transtry))
   end
 *)
 
@@ -1693,10 +1564,20 @@ let rec trx_bracket :
              texp_array (List.map (trx_bracket trx_exp n) exps)]
         })
 
+  | Texp_try (e,pel) ->                 (* same as Texp_match *)
+      let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
+      texp_binding_pattern pel exp
+       (fun gensyms pats exps ->
+        { exp with
+          exp_desc = 
+            texp_apply (texp_ident "Trx.build_try") 
+            [texp_loc exp.exp_loc;
+             trx_bracket trx_exp n e;
+             texp_array gensyms;
+             pats;
+             texp_array (List.map (trx_bracket trx_exp n) exps)]
+        })
 
-(*
-  | Texp_try of expression * (pattern * expression) list
-*)
   | Texp_tuple el ->
       texp_apply (texp_ident "Trx.build_tuple")
         [texp_loc exp.exp_loc; 
