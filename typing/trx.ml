@@ -94,11 +94,11 @@
   to that of the parent with_binding_region function.
   Every code building function ( build_* ) checks to see that the timestamps
   of incorporated fragments correspond to the timestamps of currently
-  active with_binding_region.
+  alive variables.
 
   Generally speaking, a single timestamp does not suffice. We should maintain
-  a full list of free variables for each piece of code. The AST building
-  functions will merge the list; with_binding_region will check the list
+  the full list of free variables for each piece of code. The AST building
+  functions will merge the lists; with_binding_region will check the list
   and remove the gensym that with_binding_region has created.
   A single timestamp is a sound approximation. It presupposes that a code
   that contains a free variable also contains all earlier free variables.
@@ -109,7 +109,7 @@
   approximation for now as being simper.
 
   Alas Parsetree doesn't have a dedicated field for marking expressions
-  with timestamps. Therefore, in an ad hoc and hacking way re repurpose
+  with timestamps. Therefore, in an ad hoc and hacking way re-purpose
   the Pexp_setinstvar node. To designate that a code expression 'e'
   has a free variable 'x : string loc' we create a wrapper node
    {pexp_loc = timestamp_loc;
@@ -429,7 +429,7 @@ let reset_gensym_counter () = gensym_count := 0
 let genident : string loc -> string loc = fun name ->
   {name with txt = gensym name.txt}
 
-(* This is a run-time error, rather than translation-time error *)
+(* This is a run-time error, rather than a translation-time error *)
 let scope_extrusion_error : Location.t -> string loc -> 'a = fun l var ->
   Format.fprintf Format.str_formatter
     "Scope extrusion at %a for the identifier %s bound at %a"
@@ -455,7 +455,7 @@ let fvar_dB_index : Location.t -> string loc -> int = fun l var ->
   in loop 0 !bindings_in_scope
 
 (* Dedicated Location.t for the identification of timestamp nodes 
-   We test the comparison with timestamp_loc uysing physical equality.
+   We test the comparison with timestamp_loc using physical equality.
 *)
 let timestamp_loc =
   let open Lexing in
@@ -1093,27 +1093,6 @@ let mkNewPEL exp pEl =
 
 (* Postprocessing expressions at level n *)
 let rec trx_e n exp =
-    match exp.exp_desc with
-      (* function is called at run time,so it gets compiled, if we can keep the information at this point *)
-      Texp_ident (i,vd) ->
-	let stage = 
-	  try Env.find_stage i exp.exp_env
-	  with Not_found ->
-	    ignore(Warnings.print Format.err_formatter 
-	      (Warnings.Camlp4 ("Stage for var is set to implicit 0:" ^ 
-	       Path.name i ^ "\n")));
-	    [] in
-        if stage = [] then              (* or stage < n? We would typecheck again*)
-            let _ = Env.make_env_pure exp.exp_env in
-            let _ = Env.update_ident_timestamp exp.exp_env in
-            let v = (Some {exp with exp_type = instance vd.val_type})
-            in call_trx_mkcsp exp v (path_to_lid i)
-        else
-            mkParseTree exp   (* construct VAR x *)
-              (Texp_construct(Lazy.force constr_pexp_ident, 
-                 [{exp with exp_type = Lazy.force type_longident_t}]))
-          
-
     | Texp_let (rf, pel, e1) ->
         begin
           match rf with
@@ -1413,7 +1392,7 @@ let trx_pel :
    same pattern traversal order as trx_pattern.
  *)
 
-         (* two strings are same up to (and including) n *)
+         (* two strings are the same up to (and including) n *)
 let rec same_upto s1 s2 n =
   n < 0 || (s1.[n] = s2.[n] && same_upto s1 s2 (n-1))
 
@@ -1490,6 +1469,36 @@ let pattern_subst_list :
  map_accum (pattern_subst ~by_name:false) acc pl
 
 
+(* Generalization of texp_binding_simple to the general binding pattern:
+   Convert the meta-level (fun vars pats exps -> body) to the 
+   Typedtree.expression
+   representing the same function, and use the result generate the call to
+   with_binding_region
+*)
+let texp_binding_pattern : 
+    (Typedtree.pattern * Typedtree.expression) list ->
+    Typedtree.expression -> (* the template for the result: the exp that fbody
+                               will construct, with correct
+                               exp_loc, exp_type slots; exp_desc will be
+                               replaced
+                             *)
+    (Typedtree.expression list -> Typedtree.expression -> 
+     Typedtree.expression list -> Typedtree.expression) ->
+  Typedtree.expression_desc = fun pel exp fbody ->
+  let (pl,idents) = trx_pel [] pel in
+  let idents = List.rev idents in (* idents ordered as pl *)
+  let pl_exp = texp_ident "Trx.sample_pat_list" in
+  let pats   = {pl_exp with
+                exp_desc = Texp_cspval (Obj.repr pl, dummy_lid "*pl*")} in
+  let rec loop acc = function
+    | [] -> fbody (List.rev acc) pats (List.map snd pel)
+    | idname::rest ->
+        {exp with exp_desc =
+         texp_binding_simple idname (fun gensymed_var ->
+           loop (gensymed_var::acc) rest)}
+  in (loop [] idents).exp_desc
+
+(* Build the general fun Parsetree *)
 let build_fun : 
   Location.t -> string -> string loc array -> 
   Parsetree.pattern list -> Parsetree.expression array ->
@@ -1505,6 +1514,47 @@ let build_fun :
       {pexp_loc = l; 
        pexp_desc = Pexp_function (label,None,
                                   List.map2 (fun p e -> (p,e)) pats ebodies)}
+
+(* The second argument to build_match is the Parsetree representing
+   the expression to match. Since the expression is evaluated
+   outside the bindings, its timestamp should be earlier than those
+   corresponding to the expressions in the branch. 
+  TODO: implement this check. So far, we don't discriminate.
+*)
+let build_match : 
+  Location.t -> Parsetree.expression -> string loc array -> 
+  Parsetree.pattern list -> Parsetree.expression array ->
+  Parsetree.expression =
+  fun l exp names pats ebodies -> 
+    let (exp,var)     = remove_tstamp None exp in (* must be an earlier tstamp*)
+    let (ebodies,var) = map_accum remove_tstamp var (Array.to_list ebodies) in
+    let pats = 
+      if names = [||] then pats else
+      let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
+      assert (acc = []); pats
+    in
+    add_timestamp var
+      {pexp_loc = l; 
+       pexp_desc = Pexp_match (exp, List.map2 (fun p e -> (p,e)) pats ebodies)}
+
+(* Essentially the same as build_match.
+   TODO: implement the same check on the timestamp of the expression to try
+*)
+let build_try : 
+  Location.t -> Parsetree.expression -> string loc array -> 
+  Parsetree.pattern list -> Parsetree.expression array ->
+  Parsetree.expression =
+  fun l exp names pats ebodies -> 
+    let (exp,var)     = remove_tstamp None exp in (* must be an earlier tstamp*)
+    let (ebodies,var) = map_accum remove_tstamp var (Array.to_list ebodies) in
+    let pats = 
+      if names = [||] then pats else
+      let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
+      assert (acc = []); pats
+    in
+    add_timestamp var
+      {pexp_loc = l; 
+       pexp_desc = Pexp_try (exp, List.map2 (fun p e -> (p,e)) pats ebodies)}
 
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
@@ -1597,29 +1647,18 @@ let rec trx_bracket :
              trx_bracket trx_exp n ebody] })
 
   | Texp_function (l,pel,_) ->
-      let (pl,idents) = trx_pel [] pel in
-      let idents = List.rev idents in (* idents ordered as pl *)
-      let pl_exp = texp_ident "Trx.sample_pat_list" in
       let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
-      let body gensyms =
+      texp_binding_pattern pel exp
+       (fun gensyms pats exps ->
         { exp with
           exp_desc = 
             texp_apply (texp_ident "Trx.build_fun") 
             [texp_loc exp.exp_loc;
              texp_string l;
              texp_array gensyms;
-             {pl_exp with
-              exp_desc = Texp_cspval (Obj.repr pl, dummy_lid "*pl*")};
-             texp_array
-               (List.map (fun (_,ebody) -> trx_bracket trx_exp n ebody) pel)]
-        } in
-      let rec loop acc = function
-        | [] -> body (List.rev acc)
-        | idname::rest ->
-            {exp with exp_desc =
-             texp_binding_simple idname (fun gensymed_var ->
-               loop (gensymed_var::acc) rest)}
-      in (loop [] idents).exp_desc
+             pats;
+             texp_array (List.map (trx_bracket trx_exp n) exps)]
+        })
 
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
@@ -1631,8 +1670,31 @@ let rec trx_bracket :
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (l,e) ->
            texp_tuple [texp_string l;trx_bracket trx_exp n e]) lel)]
+
+  (* Pretty much like a function *)
+  (* Since e and pel don't share any bindings (the type-checker appropriately
+     renamed all variables into timestamped Ident), there is no
+     harm done if we evaluate 'e' within the scope of with_binding_region.
+     Weakening is admissible. Old MetaOCaml did something similar.
+     What about the scope extrusion check? build_match should make sure
+     the expression to match has an earlier tstamp.
+   *)
+  | Texp_match (e,pel,_) ->
+      let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
+      texp_binding_pattern pel exp
+       (fun gensyms pats exps ->
+        { exp with
+          exp_desc = 
+            texp_apply (texp_ident "Trx.build_match") 
+            [texp_loc exp.exp_loc;
+             trx_bracket trx_exp n e;
+             texp_array gensyms;
+             pats;
+             texp_array (List.map (trx_bracket trx_exp n) exps)]
+        })
+
+
 (*
-  | Texp_match of expression * (pattern * expression) list * partial
   | Texp_try of expression * (pattern * expression) list
 *)
   | Texp_tuple el ->

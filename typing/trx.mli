@@ -99,3 +99,11 @@ val build_fun :
   Parsetree.pattern list -> Parsetree.expression array ->
   Parsetree.expression
 
+val build_match : 
+  Location.t -> Parsetree.expression -> string Location.loc array -> 
+  Parsetree.pattern list -> Parsetree.expression array ->
+  Parsetree.expression
+val build_try : 
+  Location.t -> Parsetree.expression -> string Location.loc array -> 
+  Parsetree.pattern list -> Parsetree.expression array ->
+  Parsetree.expression

@@ -529,6 +529,20 @@ eta (fun y -> .<fun x -> x + .~y>.);;
 (.! (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
 (* - : int = 5 *)
 
+(* new identifiers must be generated at run-time *)
+let rec fhyg = function
+  | 0 -> .<1>.
+  | n -> .<(fun x -> .~(fhyg (n-1)) + x) n>.;;
+(*
+val fhyg : int -> ('cl, int) code = <fun>
+*)
+fhyg 3;;
+(*
+- : ('a, int) code = .<
+((fun x_5 -> (((fun x_6 -> (((fun x_7 -> (1 + x_7)) 1) + x_6)) 2) + x_5)) 3)>.
+*)
+let 7 = .! (fhyg 3);;
+
 (* pattern-matching, general functions *)
 
 .<fun () -> 1>.;;
@@ -709,6 +723,71 @@ function | (Some (x_30) as y_31) when (x_30 > 0) -> y_31 | _ -> None>.
 (* - : int option = Some 1 *)
 (.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.) (Some 0);;
 (* - : int option = None *)
+
+(* pattern-matching *)
+.<match 1 with 1 -> true>.;;
+(*
+- : ('cl, bool) code = .<(match 1 with 1 -> true)>. 
+*)
+let true = .! .<match 1 with 1 -> true>.;;
+
+.<match (1,2) with (1,x) -> true | x -> false>.;;
+(*
+- : ('cl, bool) code = .<
+(match ((1), (2)) with | (1, x_3) -> true | x_4 -> false)>. 
+*)
+.<match [1;2] with [x] -> x | [x;y] -> x + y>.;;
+(*
+- : ('cl, int) code = .<
+(match [1; 2] with | (x_5 :: []) -> x_5 | (x_6 :: y_7 :: []) -> (x_6 + y_7))>.
+*)
+let 3 = 
+  .! .<match [1;2] with [x] -> x | [x;y] -> x + y>.;;
+
+(* OR patterns *)
+.<match [1;2] with [x] -> x | [x;y] | [x;y;_] -> x + y>.;;
+(*
+- : ('cl, int) code = .<
+(match [1; 2] with
+ | (x_11 :: []) -> x_11
+ | ((x_12 :: y_13 :: []) | (x_12 :: y_13 :: _ :: [])) -> (x_12 + y_13))>.
+*)
+let 3 = .! .<match [1;2] with [x] -> x | [x;y] | [x;y;_] -> x + y>.;;
+
+.<match [1;2;3;4] with [x] -> x | [x;y] | [x;y;_] | [y;x;_;_] -> x - y>.;;
+(*
+- : ('cl, int) code = .<
+(match [1; 2; 3; 4] with
+ | (x_17 :: []) -> x_17
+ | (((x_18 :: y_19 :: []) | (x_18 :: y_19 :: _ :: []))
+    | (y_19 :: x_18 :: _ :: _ :: [])) ->
+    (x_18 - y_19))>.
+*)
+let 1 =
+  .! .<match [1;2;3;4] with [x] -> x | [x;y] | [x;y;_] | [y;x;_;_] -> x - y>.;;
+
+.<fun x -> match x with (`F x | `G x) -> x | `E x -> x>.;;
+(*
+- : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
+fun x_23 ->
+ (match x_23 with | ((`F x_24) | (`G x_24)) -> x_24 | (`E x_25) -> x_25)>.
+*)
+
+let 1 = (.! .<fun x -> match x with (`F x | `G x) -> x | `E x -> x>.) (`G 1);;
+
+open Complex;;
+.<fun x -> match x with {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.;;
+(*
+- : ('cl, Complex.t -> float) code = .<
+fun x_29 ->
+ (match x_29 with
+  | {Complex.re = x_30; Complex.im = 2.0} -> x_30
+  | {Complex.re = y_31; Complex.im = x_32} -> (x_32 -. y_31))>.
+*)
+
+let 1.0 =
+  (.! .<fun x -> match x with {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.)
+    {im=2.0; re=1.0};;
 
 
 (* testing scope extrusion *)
