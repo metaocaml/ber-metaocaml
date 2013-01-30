@@ -22,6 +22,7 @@ let tr3 = .<fun x -> .~(let x = .! .<x>. in .<x>.)>.;;
                                      ^^^^^
 Error: .! error: 'a not generalizable in ('a, 'b) code
 *)
+print_endline "Error was expected";;
 
 .< fun x -> .~ (.!.< x >.) >.;;
 (*
@@ -30,6 +31,7 @@ Characters 15-26:
                  ^^^^^^^^^^^
 Error: .! occurs check error: 'cl occurs in ('cl, ('cl, 'a) code) code
 *)
+print_endline "Error was expected";;
 
 let tr4 = .<fun x -> .~(let x = .! x in .<x>.)>.;;
 (*
@@ -38,6 +40,7 @@ Characters 35-36:
                                      ^
 Error: Wrong level: variable bound at level 1 and used at level 0
 *)
+print_endline "Error was expected";;
 
 let tr5 = .<fun x -> .! .<1>.>.;;
 (*
@@ -58,6 +61,7 @@ Characters 24-25:
                           ^
 Error: .! error: 'a not generalizable in ('a, 'b) code
 *)
+print_endline "Error was expected";;
 
  (* Bizzare CSP *)
 let tr8 = .<fun x -> .~(let y = .<x>. in .<y>.)>.;;
@@ -73,6 +77,7 @@ Characters 14-17:
                 ^^^
 Error: .! occurs check error: 'a occurs in ('a, 'b -> ('a, 'b) code) code
 *)
+print_endline "Error was expected";;
 
 
 let tm1 = .<fun x -> .< x >. >.;;

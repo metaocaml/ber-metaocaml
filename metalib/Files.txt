@@ -38,12 +38,12 @@ done    ./tools/untypeast.ml     did not exist before, trivial changes
 done    ./tools/typedtreeIter.ml did not exist before, trivial changes
 
 
-		./typing/trx.mli
-		./typing/trx.ml 
+done	./typing/trx.mli
+done	./typing/trx.ml 
 
 
-		./typing/ident.ml
-		./typing/ident.mli
+		./typing/ident.ml       No longer changed
+		./typing/ident.mli      No longer changed
 		./typing/typeclass.ml   No longer changed
 
 ./typing/unused_var.ml  No longer present

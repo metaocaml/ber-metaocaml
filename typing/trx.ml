@@ -229,7 +229,7 @@ let check_path_quotable msg path =
    We have to find the fully qualified path and check
    that it is external. We do that by finding the path for the _type_
    constructor, for the type of which the data constructor is a member.
-   That type_path is fully qualified. We can assertain the later fact
+   That type_path is fully qualified. We can ascertain the later fact
    from Typecore.constructors_of_type, which puts the complete path
    into the type of the constructor, which is always of the form
    Tconstr(ty_path,_,_). The function constructors_of_type is used
@@ -468,7 +468,7 @@ let timestamp_loc =
 
 
 (* check to see if an expression has a time-stamp. If so, remove it
-   and return the untimestamp expression. Return the latest of the
+   and return the un-timestamped expression. Return the latest of the
    removed timestamp and the given as the argument.
    The timestamp is just the variable name.
 *)
@@ -578,7 +578,7 @@ let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression =
   timestamp_wrapper
   (fun l e -> {pexp_loc = l; pexp_desc = Pexp_assert e})
 
-(* When we translate the typed-treee, we have to manually compile
+(* When we translate the typed-tree, we have to manually compile
    the above code 
 First, to see the AST for the phrase, invoke the top-level with the flag
 -dparsetree. Then
@@ -607,7 +607,7 @@ If building the parsetree on our own, beware! For example, labels in
 Texp_record must be sorted, in their declared order!
 *)
 
-(* Other similar buiders *)
+(* Other similar builders *)
 let build_lazy : Location.t -> Parsetree.expression -> Parsetree.expression = 
   timestamp_wrapper
     (fun l e -> {pexp_loc = l; pexp_desc = Pexp_lazy e})
@@ -957,215 +957,6 @@ let trx_csp :
   texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
 
 
-(*
-let find_type name =
-  try
-    let lid = Longident.parse name in
-    let (path, decl) = Env.lookup_type lid env0 in
-    newty (Tconstr(path, [], ref Mnil))
-  with Not_found ->
-    fatal_error ("Trx.find_type: " ^ name)
-
-let mkExp exp t d = 
-  { exp with exp_type = Lazy.force t;
-    exp_desc = d}
-
-let mkPat exp t d =
-  { exp with pat_type = Lazy.force t;
-    pat_desc = d}
-
-let rec mkPexpList exp l =
-  match l with
-    [] ->    mkExp exp
-        type_list
-        (Texp_construct(Lazy.force constr_nil, 
-                        []))
-  | x::xs -> mkExp exp
-        type_list
-        (Texp_construct(Lazy.force constr_cons, 
-                        [x;mkPexpList exp xs]))
-
-let mkPpatTuple exp exps =
-  mkExp exp
-    type_parsetree_pattern_desc
-    (Texp_construct(Lazy.force constr_ppat_tuple, 
-                    [mkPexpList exp exps]))
-
-let rec mkPattern exp p =
-  let idexp id = mkExp exp type_longident_t
-      (Texp_ident (Path.Pident id,
-                   {val_type = Lazy.force type_longident_t;
-                    val_kind = Val_reg}))
-  in let strexp id = mkExp exp (instance_def Predef.type_string)
-      (Texp_apply (trx_longidenttostring exp, [(Some (idexp id),
-                                                Required)]))
-  in match p.pat_desc with 
-    Tpat_any -> mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_any, 
-                             []))
-  | Tpat_var id -> mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_var, 
-                             [strexp id]))
-  | Tpat_alias (p,i) ->
-      mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_alias,
-                             [mkPattern exp p;
-                              strexp i]))
-  | Tpat_constant cst ->
-      mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_constant, 
-                             [quote_constant
-                                {
-                                 exp_desc = Texp_constant cst;
-                                 exp_loc  = p.pat_loc;
-                                 exp_type = p.pat_type;
-                                 exp_env  = p.pat_env
-                               } 
-                                cst]))
-  | Tpat_tuple pl ->
-      let el = List.map (mkPattern exp) pl
-      in mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_tuple, 
-                             [mkPexpList exp el]))
-  | Tpat_construct ({cstr_tag=tag},pl) ->
-      let lid = get_constr_lid tag p.pat_type p.pat_env in
-      mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_construct,
-                             [quote_longident exp lid;
-                              quote_list_as_expopt_forpats exp
-                                (List.map (mkPattern exp) pl);
-                              mkfalse exp ])) 
-  | Tpat_variant (l,po,rd) ->
-      mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_variant,
-                             [mkString exp l;
-                              mkPexpOption exp
-                                (map_option (mkPattern exp) po)]))
-  | Tpat_record dpil ->
-      let lids = get_record_lids p.pat_type p.pat_env in
-      let dpil = List.map
-          (fun (d,p) -> (d,p,List.nth lids d.lbl_pos))
-          dpil in
-      let get_idpat =
-        fun (d,p,lid) ->
-          mkPexpTuple exp [quote_longident exp lid;
-                           mkPattern exp p]
-      in
-      mkParsePattern exp
-        (Texp_construct(Lazy.force constr_ppat_record,
-                             [mkPexpList exp
-                                (List.map get_idpat dpil)
-                            ])) 
-  | Tpat_array pl ->
-      mkParsePattern exp 
-        (Texp_construct(Lazy.force constr_ppat_array,
-                             [mkPexpList exp
-                                (List.map (mkPattern exp) pl)]))
-  | Tpat_or (p1,p2,_) ->
-      mkParsePattern exp 
-        (Texp_construct(Lazy.force constr_ppat_or,
-                             [mkPattern exp p1;
-                              mkPattern exp p2]))
-  | Tpat_lazy p ->
-      mkParsePattern exp 
-        (Texp_construct(Lazy.force constr_ppat_lazy,
-                             [mkPattern exp p]))
-
-let mkNewPEL exp pEl = 
-  List.map (fun (p,e) -> mkPexpTuple exp [mkPattern exp p;e]) pEl
-
-
-(* The preprocessing transformation proper *)
-
-(* Postprocessing expressions at level n *)
-let rec trx_e n exp =
-    | Texp_let (rf, pel, e1) ->
-        begin
-          match rf with
-            Recursive ->
-              let idlist = List.fold_right (fun (p,e) -> boundinpattern p) pel []
-              and gensymexp id =  (* (gensym "x") *)
-                mkExp exp
-                  type_longident_t
-                  (Texp_apply
-                     (trx_gensymlongident exp,
-                      [(Some (quote_ident exp (Path.Pident id)),
-                        Required)]))
-              and idpat id =
-                {pat_desc = Tpat_var id;
-                 pat_loc = exp.exp_loc;
-                 pat_type = Lazy.force type_longident_t;
-                 pat_env = exp.exp_env}
-              and translet =
-                mkParseTree exp
-                  (Texp_construct
-                     (Lazy.force constr_pexp_let, 
-                      [quote_rec_flag rf exp;
-                       mkPexpList exp 
-                         (mkNewPEL exp
-                            (List.map (map_pi2 (trx_e n)) pel));
-                       trx_e n e1
-                     ]
-                     )
-                  )
-              in let pel' = List.map (fun id -> (idpat id, gensymexp id)) idlist
-              in mkExp exp
-                type_parsetree_expression
-                (Texp_let
-                   (Nonrecursive,
-                    pel', 
-                    translet))
-
-
-          | _ ->
-              let idlist = List.fold_right (fun (p,e) -> boundinpattern p) pel []
-              and peil = let genid () = Ident.create (gensymstring "fresh")
-              in List.map (fun (p,e) -> (p,e, genid())) pel
-              and gensymexp id =  (* (gensym "x") *)
-                mkExp exp
-                  type_longident_t
-                  (Texp_apply
-                     (trx_gensymlongident exp,
-                      [(Some (quote_ident exp (Path.Pident id)),
-                        Required)]))
-              in let idpat_t id t =
-                {pat_desc = Tpat_var id;
-                 pat_loc = exp.exp_loc;
-                 pat_type = Lazy.force t;
-                 pat_env = exp.exp_env}
-              in let idpat id = idpat_t id type_longident_t
-              in let idexp e id =
-                {e with exp_desc =
-                 (Texp_ident (Path.Pident id,
-                              {val_type = e.exp_type;
-                               val_kind = Val_reg}))}
-              in let pel' = List.map (fun (p,e,i) -> (p, idexp e i)) peil
-              in let translet =
-                mkParseTree exp
-                  (Texp_construct
-                     (Lazy.force constr_pexp_let, 
-                      [quote_rec_flag rf exp;
-                       mkPexpList exp (mkNewPEL exp pel');
-                       trx_e n e1
-                     ]
-                     )
-                  )
-              in let pel1 = List.map (fun id -> (idpat id, gensymexp id)) idlist
-              in let pel2 = List.map
-                  (fun (p,e,i) -> (idpat_t i type_parsetree_expression,
-                                   trx_e n e))
-                  peil
-              in mkExp exp
-                type_parsetree_expression
-                (Texp_let
-                   (Nonrecursive,
-                    List.append pel1 pel2, 
-                    translet))
-        end
-
-  end
-*)
-
 (* Analyze and translate a pattern:
          Typedtree.pattern -> Parsetree.pattern
   The function is somewhat similar to tools/untypeast.ml;untype_pattern
@@ -1266,8 +1057,8 @@ let trx_pel :
    on position.
    OR-patterns bring complexity however: both branches of an OR
    pattern bind exactly the same variables (but the order of
-   variable occurrence withon branches may be different).
-   So for OR patterns we subsutute by name, taking advantage
+   variable occurrence within branches may be different).
+   So for OR patterns we substitute by name, taking advantage
    of the fact the new names differ from the old ones in _nnn
    suffix. OR patterns are uncommon, so the complication of their processing
    is not that bad.
@@ -1475,7 +1266,7 @@ the Parsetree node at run-time. However, of 'e' is simple (e.g., a constant)
 then we can construct the Parsetree node at compile time and pass it
 as a CSP. There are no longer any functions calls to make at run-time.
 So, we can modify the translation of <assert e> below to detect
-if the translation of e produced Texp_cspval. We exract the CSP value,
+if the translation of e produced Texp_cspval. We extract the CSP value,
 invoke build_assert (at compile time, when trx.ml is run) to build
 the Pexp_assert node, and wrap it as a CSP.
 
@@ -1484,7 +1275,7 @@ the Pexp_assert node, and wrap it as a CSP.
 (* Given a type [ty], return [ty code code ... code] (n times code).
    When we push the bracket in, expressions that had type ty before
    will have the type ('cl,ty) code.
-   Here, ('cl,ty) code is an abtract type whose concrete representation
+   Here, ('cl,ty) code is an abstract type whose concrete representation
    is Parsetree.
    Generally speaking we don't have to adjust the types since the
    type checking is finished. However, code generator may look
@@ -2020,7 +1811,7 @@ let trx_structure str =
   
 (* Obsolete: we never quite handled modules within the code
 
-and quote_me n exp me = match me.mod_desc waith
+and quote_me n exp me = match me.mod_desc with
 | Tmod_structure str -> (* @@@@ *)
     mkParseModuleExpr exp
       (Texp_construct(Lazy.force constr_pmod_structure,
@@ -2120,14 +1911,6 @@ let mkParseModuleExpr exp d =
                   Lazy.force label_pmod_loc, quote_location exp],
                  None))
 
-let type_parsetree_module_expr_desc = lazy (find_type "Parsetree.module_expr_desc")
-let type_parsetree_module_expr = lazy (find_type "Parsetree.module_expr")
-
-let label_pmod_desc = lazy (find_label "Parsetree.pmod_desc")
-let label_pmod_loc  = lazy (find_label "Parsetree.pmod_loc")
-let constr_pmod_structure     = lazy (find_constr "Parsetree.Pmod_structure")
-let constr_pstr_value         = lazy (find_constr "Parsetree.Pstr_value")
-
 let mkParseStructureItem exp d =
   mkExp exp
     type_parsetree_structure_item
@@ -2137,8 +1920,6 @@ let mkParseStructureItem exp d =
                  None))
 
 let label_pstr_desc = lazy (find_label "Parsetree.pstr_desc")
-
-
 *)
 
 (* Native mode is moved out to the `userland'

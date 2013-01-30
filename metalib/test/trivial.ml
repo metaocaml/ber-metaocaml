@@ -4,14 +4,13 @@
 (* - : int = 5 *)
 let rec fact = function | 0 -> 1 | n -> n * fact (n-1);;
 (* val fact : int -> int = <fun> *)
-fact 5;;
-(* - : int = 120 *)
+let 120 = fact 5;;
 
 .<1>.;;
 (* - : ('cl, int) code = .<1>. *)
 .<"aaa">.;;
 (* - : ('cl, string) code = .<"aaa">. *)
-.! .<1>.;;
+let 1 = .! .<1>.;;
 (* - : int = 1 *)
 
 
@@ -22,6 +21,7 @@ Characters 22-23:
                         ^
 Error: Wrong level: variable bound at level 1 and used at level 0
 *)
+print_endline "Error was expected";;
 
 .<fun x -> 1 + .~(.<true>.)>.;;
 (*
@@ -31,6 +31,7 @@ Characters 20-24:
 Error: This expression has type bool but an expression was expected of type
          int
 *)
+print_endline "Error was expected";;
 
 .<fun x -> .~(.! .<x>.; .<1>.)>.;;
 (*
@@ -39,6 +40,7 @@ Characters 14-22:
                 ^^^^^^^^
 Error: .! error: 'cl not generalizable in ('cl, 'a) code
 *)
+print_endline "Error was expected";;
 
 (* CSP *)
 
@@ -73,10 +75,12 @@ l 1;;
 (*
 - : ('a, int) code = .<(* cross-stage persistent value (as id: x) *)>.
 *)
+let 1 = .! (l 1);;
 l 1.0;;                  (* better printing in N100 *)
 (*
 - : ('a, float) code = .<1.>.
 *)
+let 1.0 = .! (l 1.0);;
 
 .<List.rev>.;;
 (*
@@ -104,36 +108,34 @@ let x = true in .<assert x>.;;
 - : ('cl, int) code = .<succ 1>.
 *)
 
-.! .<succ 1>.;;
-(* - : int = 2 *)
+let 2 = .! .<succ 1>.;;
 
 .<1 + 2>.;;
 (*
 - : ('cl, int) code = .<(1 + 2)>.
 *)
-.! .<(1 + 2)>.;;
-(* - : int = 3 *)
+let 3 = .! .<(1 + 2)>.;;
 
 .<String.length "abc">.;;
 (*
 - : ('cl, int) code = .<String.length "abc">.
 *)
-.! .<String.length "abc">.;;
-(* - : int = 3 *)
+let 3 = 
+  .! .<String.length "abc">.;;
 
 .<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
 (*
 - : ('cl, string) code = .<(StringLabels.sub "abc" ~pos:1 ~len:2>.
 *)
-.! .<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
-(* - : string = "bc" *)
+let "bc" =
+  .! .<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
 
 .<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
 (*
 - : ('cl, string) code = .<(StringLabels.sub "abc" ~pos:1 ~len:2>.
 *)
-.! .<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
-(* - : string = "bc" *)
+let "bc" =
+  .! .<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
 
 (* Nested brackets and escapes and run *)
 .<.<1>.>.;;
@@ -142,14 +144,13 @@ let x = true in .<assert x>.;;
 *)
 .! .<.<1>.>.;;
 (* - : ('cl, int) code = .<1>. *)
-.! (.! .<.<1>.>.);;)
+let 1 = .! (.! .<.<1>.>.);;)
 (* - : int = 1 *)
 .<.!.<1>.>.;;
 (*
 - : ('cl, int) code = .<.!.<1>.>.
 *)
-.! .<.!.<1>.>.;;
-(* - : int = 1 *)
+let 1 = .! .<.!.<1>.>.;;
 .<1 + .~(let x = 2 in .<x>.)>.;;
 (*
 - : ('cl, int) code = .<(1 + 2)>.
@@ -158,6 +159,7 @@ let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
 (*
 - : ('cl, int) code = .<((2 + 4) + (2 + 4))>.
 *)
+let 12 = .! (let x = .< 2 + 4 >. in .< .~ x + .~ x >. );;
 
 .<1 + .~(let x = 2 in .<.<x>.>.)>.;;
 (*
@@ -167,12 +169,12 @@ Characters 24-29:
 Error: This expression has type ('cl, 'a) code
        but an expression was expected of type int
 *)
+print_endline "Error was expected";;
 .<1 + .! .~(let x = 2 in .<.<x>.>.)>.;;
 (*
 - : ('cl, int) code = .<(1 + .!.<2>.)>.
 *)
-.! .<1 + .! .~(let x = 2 in .<.<x>.>.)>.;;
-(* - : int = 3 *)
+let 3 = .! .<1 + .! .~(let x = 2 in .<.<x>.>.)>.;;
 .! .<1 + .~ (.~(let x = 2 in .<.<x>.>.))>.;;
 (*
 Characters 12-40:
@@ -180,6 +182,7 @@ Characters 12-40:
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: Wrong level: escape at level 0
 *)
+print_endline "Error was expected";;
 
 .<.<.~(.<1>.)>.>.;;
 (*
@@ -199,8 +202,7 @@ Error: Wrong level: escape at level 0
 (*
 - : ('cl, int lazy_t) code = .<lazy 1>.
 *)
-Lazy.force (.! .<lazy 1>.);;
-(* - : int = 1 *)
+let 1 = Lazy.force (.! .<lazy 1>.);;
 
 (* Tuples *)
 .<(1,"abc")>.;;
@@ -211,8 +213,8 @@ Lazy.force (.! .<lazy 1>.);;
 (*
 - : ('cl, int * string * char) code = .<((1), ("abc"), ('d'))>.
 *)
-match .! .<(1,"abc",'d')>. with (_,x,_) -> x;;
-(* - : string = "abc" *)
+let "abc" =
+  match .! .<(1,"abc",'d')>. with (_,x,_) -> x;;
 
 (* Arrays *)
 .<[||]>.;;
@@ -236,6 +238,7 @@ Characters 8-25:
           ^^^^^^^^^^^^^^^^^
 Error: Unbound constructor Scan_failure
 *)
+print_endline "Error was expected";;
 .<raise (Scanf.Scan_failure "")>.;;
 (*
 - : ('cl, 'a) code = .<(raise (Scanf.Scan_failure (""))>.
@@ -249,6 +252,7 @@ open Scanf;;
 (*
 Exception: Scanf.Scan_failure "".
 *)
+print_endline "Exception was expected";;
 
 
 .<true>.;;
@@ -285,26 +289,28 @@ open Genlex;;
 (*
 - : ('cl, Genlex.token) code = .<(Genlex.Int (1))>.
 *)
-.! .<Int 1>.;;
-(*
-- : Genlex.token = Int 1
-*)
+let Int 1 = .! .<Int 1>.;;
 
 module Foo = struct exception E end;;
 .<raise Foo.E>.;;
 (*
 Fatal error: exception Trx.TrxError("Exception Foo.E cannot be used within brackets. Put into a separate file.")
 *)
+print_endline "Error was expected";;
+
 type foo = Bar;;
 .<Bar>.;;
 (*
 Fatal error: exception Trx.TrxError("Constructor Bar cannot be used within brackets. Put into a separate file.")
 *)
+print_endline "Error was expected";;
+
 module Foo = struct type foo = Bar end;;
 .<Foo.Bar>.;;
 (*
 Fatal error: exception Trx.TrxError("Constructor Foo.Bar cannot be used within brackets. Put into a separate file.")
 *)
+print_endline "Error was expected";;
 
 (* Records *)
 
@@ -323,20 +329,20 @@ Characters 42-46:
                                             ^^^^
 Error: Unbound record field label re
 *)
+print_endline "Error was expected";;
+
 let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.;;
 (*
 - : ('cl, float) code =
 .<((* cross-stage persistent value (as id: x) *)).Complex.re>.
 *)
-.!(let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.);;
-(* - : float = 1. *)
+let 1.0 = .!(let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.);;
 let x = ref 1 in .<x.contents>.;;       (* Pervasive record *)
 (*
 - : ('cl, int) code =
 .<((* cross-stage persistent value (as id: x) *)).contents>.
 *)
-.!(let x = ref 1 in .<x.contents>.);;
-(* - : int = 1 *)
+let 1 = .!(let x = ref 1 in .<x.contents>.);;
 let x = ref 1 in .<x.contents <- 2>.;;
 (*
 - : ('cl, unit) code =
@@ -350,33 +356,31 @@ open Complex;;
 (*
 - : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
 *)
-norm (.! .<{re = 1.0; im = 2.0}>.);;
-(* - : float = 2.23606797749979 *)
+let 5.0 = norm (.! .<{re = 3.0; im = 4.0}>.);;
 let x = {re = 1.0; im = 2.0} in .<x.re>.;;
 (*
 - : ('cl, float) code =
 .<((* cross-stage persistent value (as id: x) *)).Complex.re>.
 *)
-.!(let x = {re = 1.0; im = 2.0} in .<x.re>.);;
-(* - : float = 1. *)
+let 1.0 = .!(let x = {re = 1.0; im = 2.0} in .<x.re>.);;
 
 type foo = {fool : int};;
 .<{fool = 1}>.;;
 (*
 Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. Put into a separate file.")
 *)
+print_endline "Error was expected";;
 
 (* Conditional *)
 
 .<if true then 1 else 2>.;;
 (* - : ('cl, int) code = .<if (true) then 1 else 2>. *)
-<if Some 1 = None then print_string "weird">.;;
+.<if Some 1 = None then print_string "weird">.;;
 (*
 - : ('cl, unit) code =
 .<if ((Some (1)) = (None)) then (print_string "weird">.
 *)
-.! .<if Some 1 = None then print_string "weird">.;;
-(* - : unit = () *)
+let () = .! .<if Some 1 = None then print_string "weird">.;;
 
 (* Polymorphic variants *)
 .<`Foo>.;;
@@ -387,11 +391,10 @@ Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. 
 (*
 - : ('cl, [> `Bar of int ]) code = .<`Bar 1>.
 *)
-match .! .<`Bar 1>. with `Bar x -> x ;;
-(* - : int = 1 *)
+let 1 = match .! .<`Bar 1>. with `Bar x -> x ;;
 
 (* Some support for modules *)
-et f = fun x -> .<x # foo>.;;
+let f = fun x -> .<x # foo>.;;
 (*
 val f : < foo : 'a; .. > -> ('cl, 'a) code = <fun>
 *)
@@ -404,18 +407,12 @@ f x;;
 - : ('a, int) code =
 .<(((* cross-stage persistent value (as id: x) *))#foo)>.
 *)
-.! (f x);;
-(* - : int = 1 *)
+let 1 = .! (f x);;
 
 (* Local open *)
-.! .<Complex.(norm {re=1.0; im = 3.0})>.;;
-(*
-- : float = 3.16227766016837952
-*)
+let 5.0 = .! .<Complex.(norm {re=3.0; im = 4.0})>.;;
 
-.! .<let open Complex in norm {re=1.0; im = 3.0}>.;;
-
-(* - : float = 3.16227766016837952 *)
+let 5.0 = .! .<let open Complex in norm {re=4.0; im = 3.0}>.;;
 
 (* For-loop *)
 
@@ -453,7 +450,8 @@ ok 1 2
 .<for i_14 = 1 to 2 do
    for j_15 = 1 to 3 do (Printf.printf "ok %d %d\n" i_14 j_15 done done>.
 *)
-.! .<for i=1 to 2 do for j=1 to 3 do Printf.printf "ok %d %d\n" i j done done>.;;
+.! .<for i=1 to 2 do 
+     for j=1 to 3 do Printf.printf "ok %d %d\n" i j done done>.;;
 (*
 ok 1 1
 ok 1 2
@@ -463,7 +461,8 @@ ok 2 2
 ok 2 3
 *)
 
-let c = .<for i=1 to 2 do .~(let x = .<i>. in .<for i=1 to 3 do Printf.printf "ok %d %d\n" i .~x done>.) done>.;;
+let c = .<for i=1 to 2 do .~(let x = .<i>. in 
+             .<for i=1 to 3 do Printf.printf "ok %d %d\n" i .~x done>.) done>.;;
 (*
 val c : ('cl, unit) code =
   .<for i_20 = 1 to 2 do
@@ -481,32 +480,33 @@ ok 3 2
 
 (* Scope extrusion test *)
 
-let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<0>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;
+let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<0>.; .<()>.) done>.; 
+                     .<for i=1 to 5 do ignore (.~(!r)) done>.;;
 (*
 - : ('cl, unit) code = .<for i_2 = 1 to 5 do (ignore 0 done>.
 *)
 
-let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;
+let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; 
+                     .<for i=1 to 5 do ignore (.~(!r)) done>.;;
 (*
 Exception:
 Failure
  "Scope extrusion at Characters 49-50:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                                   ^\n for the identifier i_3 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                             ^\n".
 *)
+print_endline "Error was expected";;
 
 (* Simple functions *)
 .<fun x -> x>.;;
 (*
 - : ('cl, 'a -> 'a) code = .<fun x_3 -> x_3>.
 *)
-(.! .<fun x -> x>.) 42;;
-(* - : int = 42 *)
+let 42 = (.! .<fun x -> x>.) 42;;
 
 .<fun x y -> x + y>.;;
 (*
 - : ('cl, int -> int -> int) code = .<fun x_5 -> fun y_6 -> (x_5 + y_6)>.
 *)
-(.! .<fun x y -> x + y>.) 2 3;;
-(* - : int = 5 *)
+let 5 = (.! .<fun x y -> x + y>.) 2 3;;
 
 .<fun x -> fun x -> x + x >.;;
 (*
@@ -526,8 +526,7 @@ eta (fun y -> .<fun x -> x + .~y>.);;
 (*
 - : ('cl, int -> int -> int) code = .<fun x_12 -> fun x_13 -> (x_13 + x_12)>.
 *)
-(.! (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
-(* - : int = 5 *)
+let 5 = (.! (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
 
 (* new identifiers must be generated at run-time *)
 let rec fhyg = function
@@ -549,15 +548,13 @@ let 7 = .! (fhyg 3);;
 (* - : ('cl, unit -> int) code = .<fun () -> 1>. *)
 .! .<fun () -> 1>.;;
 (* - : unit -> int = <fun> *)
-(.! .<fun () -> 1>.) ();;
-(* - : int = 1  *)
+let 1 = (.! .<fun () -> 1>.) ();;
 
 .<function true -> 1 | false -> 0>.;;
 (*
 - : ('cl, bool -> int) code = .<function | true -> 1 | false -> 0>. 
 *)
-(.! .<function true -> 1 | false -> 0>.) true;;
-(* - : int = 1 *)
+let 1 = (.! .<function true -> 1 | false -> 0>.) true;;
 
 .<fun (true,[]) -> 1>.;;
 (*
@@ -567,23 +564,21 @@ let 7 = .! (fhyg 3);;
 (*
 Exception: Match_failure ("//toplevel//", 1, 6).
 *)
-(.! .<fun (true,[]) -> 1>.) (true,[]);;
-(* - : int = 1 *)
+print_endline "Error was expected";;
+let 1 = (.! .<fun (true,[]) -> 1>.) (true,[]);;
 
 .<fun [|true;false;false|] -> 1>.;;
 (*
 - : ('cl, bool array -> int) code = .<fun [|true; false; false|] -> 1>. 
 *)
-(.! .<fun [|true;false;false|] -> 1>.) [|true;false;false|];;
-(* - : int = 1 *)
+let 1 = (.! .<fun [|true;false;false|] -> 1>.) [|true;false;false|];;
 
 .<function `F 1 -> true | _ -> false>.;;
 (*
 - : ('cl, [> `F of int ] -> bool) code = .<
 function | (`F 1) -> true | _ -> false>. 
 *)
-(.! .<function `F 1 -> true | _ -> false>.) (`F 1);;
-(* - : bool = true *)
+let true = (.! .<function `F 1 -> true | _ -> false>.) (`F 1);;
 .<function `F 1 | `G 2 -> true | _ -> false>.;;
 (*
 - : ('cl, [> `F of int | `G of int ] -> bool) code = .<
@@ -595,25 +590,16 @@ function | ((`F 1) | (`G 2)) -> true | _ -> false>.
 - : ('cl, int * string -> int) code = .<
 function | (1, "str") -> 1 | (2, _) -> 2>. 
 *)
-(.! .<function (1,"str") -> 1 | (2,_) -> 2>.) (1,"str");;
-(* - : int = 1 *)
-(.! .<function (1,"str") -> 1 | (2,_) -> 2>.) (2,"str");;
-(* - : int = 2 *)
-(.! .<fun [1;2] -> 1>.) [1;2];;
-(* - : int = 1 *)
+let 1 = (.! .<function (1,"str") -> 1 | (2,_) -> 2>.) (1,"str");;
+let 2 = (.! .<function (1,"str") -> 1 | (2,_) -> 2>.) (2,"str");;
+let 1 = (.! .<fun [1;2] -> 1>.) [1;2];;
 
-(.! .<function None -> 1 | Some [1] -> 2>.) (Some [1]);;
-(* - : int = 2 *)
+let 2 = (.! .<function None -> 1 | Some [1] -> 2>.) (Some [1]);;
 
-
-(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some None);;
-(* - : int = 2 *)
-(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some (Some true));;
-(* - : int = 1 *)
-(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some (Some false));;
-(* - : int = 2 *)
-(.! .<function (Some (Some true)) -> 1 | _ -> 2>.) None;;
-(* - : int = 2 *)
+let 2 = (.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some None);;
+let 1 = (.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some (Some true));;
+let 2 = (.! .<function (Some (Some true)) -> 1 | _ -> 2>.) (Some (Some false));;
+let 2 = (.! .<function (Some (Some true)) -> 1 | _ -> 2>.) None;;
 
 open Complex;;
 .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.;;
@@ -625,12 +611,13 @@ function
 | {Complex.im = _} -> 3>. 
 *)
 
-(.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=1.0; im=2.0};;
-(* - : int = 1 *)
-(.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=2.0; im=2.0};;
+let 1 = (.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.)
+        {re=1.0; im=2.0};;
+let 2 = (.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.)
+        {re=2.0; im=2.0};;
 (* - : int = 2 *)
-(.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.) {re=2.0; im=3.0};;
-(* - : int = 3 *)
+let 3 = (.! .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.)
+        {re=2.0; im=3.0};;
 
 (* General functions *)
 
@@ -638,17 +625,14 @@ function
 (*
 - : ('cl, int * int -> int) code = .<fun (x_2, y_3) -> (x_2 + y_3)>. 
 *)
-(.! .<fun (x,y) -> x + y>.) (2,3);;
-(* - : int = 5 *)
+let 5 = (.! .<fun (x,y) -> x + y>.) (2,3);;
 .<function (Some x) as y -> x | _ ->  2>.;;
 (*
 - : ('cl, int option -> int) code = .<
 function | (Some (x_6) as y_7) -> x_6 | _ -> 2>.
 *)
-(.! .<function (Some x) as y -> x | _ ->  2>.) (Some 1);;
-(* - : int = 1 *)
-(.! .<function (Some x) as y -> x | _ ->  2>.) None;;
-(* - : int = 2 *)
+let 1 = (.! .<function (Some x) as y -> x | _ ->  2>.) (Some 1);;
+let 2 = (.! .<function (Some x) as y -> x | _ ->  2>.) None;;
 .<function [x;y;z] -> x - y + z | [x;y] -> x - y>.;;
 (*
 - : ('cl, int list -> int) code = .<
@@ -656,8 +640,7 @@ function
 | (x_12 :: y_13 :: z_14 :: []) -> ((x_12 - y_13) + z_14)
 | (x_15 :: y_16 :: []) -> (x_15 - y_16)>. 
 *)
-(.! .<function [x;y;z] -> x - y + z | [x;y] -> x - y>.) [1;2;3];;
-(* - : int = 2 *)
+let 2 = (.! .<function [x;y;z] -> x - y + z | [x;y] -> x - y>.) [1;2;3];;
 
  (* OR patterns *)
 .<function ([x;y] | [x;y;_]) -> x - y>.;;
@@ -665,12 +648,11 @@ function
 - : ('cl, int list -> int) code = .<
 fun ((x_1 :: y_2 :: []) | (x_1 :: y_2 :: _ :: [])) -> (x_1 - y_2)>. 
 *)
-(.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2];;
-(* - : int = -1 *)
-(.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2;3];;
-(* - : int = -1 *)
+let -1 = (.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2];;
+let -1 = (.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2;3];;
 (.! .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2;3;4];;
 (* Exception: Match_failure ("//toplevel//", 1, 6). *)
+print_endline "Error was expected";;
 
 .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.;;
 (*
@@ -679,20 +661,16 @@ fun (((x_9 :: y_10 :: []) | (x_9 :: y_10 :: _ :: []))
      | (y_10 :: x_9 :: _ :: _ :: [])) ->
  (x_9 - y_10)>.
 *)
-(.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2];;
-(* - : int = -1 *)
-(.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3];;
-(* - : int = -1 *)
-(.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3;4];;
-(* - : int = 1 *)
+let -1 = (.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2];;
+let -1 = (.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3];;
+let  1 = (.! .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3;4];;
 
 .<function (`F x | `G x) -> x | `E x -> x>.;;
 (*
 - : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
 function | ((`F x_17) | (`G x_17)) -> x_17 | (`E x_18) -> x_18>. 
 *)
-(.! .<function (`F x | `G x) -> x | `E x -> x>.) (`F 2);;
-(* - : int = 2 *)
+let 2 = (.! .<function (`F x | `G x) -> x | `E x -> x>.) (`F 2);;
 open Complex;;
 .<function {re=x} -> x | {im=x; re=y} -> x -. y>.;;
 (*
@@ -712,17 +690,18 @@ function
 | {Complex.re = x_24; Complex.im = 2.0} -> x_24
 | {Complex.re = y_25; Complex.im = x_26} -> (x_26 -. y_25)>. 
 *)
-(.! .<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.) {re=1.0; im=1.0};;
+let 0. = (.! .<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.) 
+         {re=1.0; im=1.0};;
 (* - : float = 0. *)
 .<function (Some x) as y when x  > 0 -> y | _ -> None>.;;
 (*
 - : ('cl, int option -> int option) code = .<
 function | (Some (x_30) as y_31) when (x_30 > 0) -> y_31 | _ -> None>. 
 *)
-(.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.) (Some 1);;
-(* - : int option = Some 1 *)
-(.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.) (Some 0);;
-(* - : int option = None *)
+let Some 1 = (.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.)
+             (Some 1);;
+let None = (.! .<function (Some x) as y when x  > 0 -> y | _ -> None>.)
+           (Some 0);;
 
 (* pattern-matching *)
 .<match 1 with 1 -> true>.;;
@@ -871,7 +850,6 @@ let f_32 = fun n_33 -> if (n_33 = 0) then 1 else (n_33 * (f_31 (n_33 - 1))) in
 *)
 let 20 = .! .<let f = fun x -> x in 
               let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
-- : int = 20
 
 
 (* General let *)
@@ -909,6 +887,8 @@ Here is an example of a value that is not matched:
 None
 Exception: Match_failure ("//toplevel//", 1, 19).
 *)
+print_endline "Error was expected";;
+
 .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and 
                    odd  = function 0 -> false | x -> even (x-1) in even x>.;;
 (*
@@ -932,12 +912,15 @@ let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;
 
 Failure("Scope extrusion at Characters 50-51:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                                    ^\n for the identifier x_10 bound at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n")
 *)
+print_endline "Error was expected";;
+
 let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;
 (*
 Exception:
 Failure
  "Scope extrusion at Characters 58-59:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                                            ^\n for the identifier x_11 bound at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                             ^\n".
 *)
+print_endline "Error was expected";;
 
 let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;
 (*
@@ -945,6 +928,7 @@ let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. 
 
 Failure("Scope extrusion at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_13 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                            ^\n")
 *)
+print_endline "Error was expected";;
 
 (* Error message is reported on splice *)
 let r = ref .<fun y->y>. in 
@@ -953,6 +937,7 @@ let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;
 Failure
  "Scope extrusion at Characters 58-68:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                               ^^^^^^^^^^\n for the identifier x_34 bound at Characters 43-44:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                ^\n".
 *)
+print_endline "Error was expected";;
 
 (* The test is approximate: it is sound but overflagging *)
 let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;
@@ -961,8 +946,9 @@ let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. 
 
 Failure("Scope extrusion at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_16 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                            ^\n")
 *)
+print_endline "Error was expected";;
 
-(* The fopllowing are OK though *)
+(* The following are OK though *)
 let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> y>.; !r)>.;;
 (*
 - : ('cl, '_a -> '_b -> '_b) code = .<fun x_22 -> fun y_23 -> y_23>. 
@@ -971,3 +957,5 @@ let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> x>.; !r)>.;;
 (*
 - : ('cl, '_a -> '_a -> '_a) code = .<fun x_25 -> fun y_26 -> x_25>. 
 *)
+
+print_endline "\nAll done\n";;

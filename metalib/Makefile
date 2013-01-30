@@ -83,11 +83,15 @@ clean::
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
 test:
+	$(BINDIR)/metaocaml < test/trivial.ml > trivial.out && \
+	diff -u trivial.out trivial.ref
+	$(BINDIR)/metaocaml < test/simple.ml > simple.out && \
+	diff -u simple.out simple.ref
 	$(BINDIR)/metaocaml test/simple_true.ml
 	$(BINDIR)/metaocaml test/quick_test.ml
-	$(BINDIR)/metaocaml test/t4.ml
 	$(BINDIR)/metaocaml test/test21.ml
 	$(BINDIR)/metaocaml test/pythagorian_triples.ml
+#	$(BINDIR)/metaocaml test/t4.ml
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) MOCAMLTOP="../metaocaml -I .." testv_top
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top
 
@@ -104,7 +108,7 @@ test-compile:
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
 
 clean::
-	rm -f simple_true quick_test t4 pt simple_true
+	rm -f simple_true quick_test t4 pt trivial.out simple.out
 
 # Patch the OCaml distribution
 patch:

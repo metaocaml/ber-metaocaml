@@ -1,0 +1,346 @@
+BER MetaOCaml toplevel, version N 100
+        OCaml version 4.00.1
+
+#     - : int = 5
+#   val fact : int -> int = <fun>
+#   #   - : ('cl, int) code = .<1>. 
+#   - : ('cl, string) code = .<"aaa">. 
+#   #       Characters 42-43:
+  .<fun x -> .~(let y = x in y)>.;;
+                        ^
+Error: Wrong level: variable bound at level 1 and used at level 0
+# * * * * *   Error was expected
+- : unit = ()
+#   Characters 21-25:
+  .<fun x -> 1 + .~(.<true>.)>.;;
+                      ^^^^
+Error: This expression has type bool but an expression was expected of type
+         int
+# * * * * * *   Error was expected
+- : unit = ()
+#   Characters 15-23:
+  .<fun x -> .~(.! .<x>.; .<1>.)>.;;
+                ^^^^^^^^
+Error: .! error: 'cl not generalizable in ('cl, 'a) code
+
+# * * * * *   Error was expected
+- : unit = ()
+#       - : ('cl, int) code = .<1>. 
+# * *   - : ('cl, float) code = .<1.>. 
+# * *   - : ('cl, bool) code = .<true>. 
+# * *   - : ('cl, string) code = .<"aaa">. 
+# * *   - : ('cl, char) code = .<'a'>. 
+# * *   - : ('cl, char list) code = .<(* cross-stage persistent value (id: x) *)>. 
+# * *     val l : 'a -> ('cl, 'a) code = <fun>
+#   - : ('a, int) code = .<(* cross-stage persistent value (id: x) *)>. 
+# * *   # - : ('a, float) code = .<1.>. 
+# * *   #   - : ('cl, 'a list -> 'a list) code = .<List.rev>. 
+# * *     - : ('cl, 'a array -> int -> 'a) code = .<Array.get>. 
+# * *   - : ('cl, int -> int -> int) code = .<(+)>. 
+# * *       - : ('cl, unit) code = .<assert true>. 
+# * *       - : ('cl, int) code = .<(succ 1)>. 
+# * *     #   - : ('cl, int) code = .<(1 + 2)>. 
+# * *   #   - : ('cl, int) code = .<(String.length "abc")>. 
+# * *     #   - : ('cl, string) code = .<(StringLabels.sub "abc" ~pos:1 ~len:2)>. 
+# * *     #   - : ('cl, string) code = .<(StringLabels.sub "abc" ~pos:1 ~len:2)>. 
+# * *     #     - : ('cl, ('cl0, int) code) code = .<.<1>.>. 
+# * *   - : ('cl, int) code = .<1>. 
+#   #   - : ('cl, int) code = .<.!.<1>.>. 
+# * *   # - : ('cl, int) code = .<(1 + 2)>. 
+# * *   - : ('cl, int) code = .<((2 + 4) + (2 + 4))>. 
+# * *   #   Characters 25-30:
+  .<1 + .~(let x = 2 in .<.<x>.>.)>.;;
+                          ^^^^^
+Error: This expression has type ('cl, 'a) code
+       but an expression was expected of type int
+# * * * * * *   Error was expected
+- : unit = ()
+# - : ('cl, int) code = .<(1 + .!.<2>.)>. 
+# * *   # Characters 12-40:
+  .! .<1 + .~ (.~(let x = 2 in .<.<x>.>.))>.;;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Wrong level: escape at level 0
+# * * * * *   Error was expected
+- : unit = ()
+#   - : ('cl, ('cl0, int) code) code = .<.<.~(.<1>.)>.>. 
+# * *   - : ('cl, int) code = .<1>. 
+# * *   - : ('cl, ('cl0, int) code) code = .<.<.~(.<1>.)>.>. 
+# * *       - : ('cl, int lazy_t) code = .<lazy 1>. 
+# * *   #     - : ('cl, int * string) code = .<((1), ("abc"))>. 
+# * *   - : ('cl, int * string * char) code = .<((1), ("abc"), ('d'))>. 
+# * *     #     - : ('cl, 'a array) code = .<[||]>. 
+# * *   - : ('cl, int array) code = .<[|(1 + 2); (1 + 2)|]>. 
+# * *       - : ('cl, 'a) code = .<(raise Not_found)>. 
+# * *   Characters 58-75:
+  .<raise (Scan_failure "")>.;;
+          ^^^^^^^^^^^^^^^^^
+Error: Unbound constructor Scan_failure
+# * * * * *   Error was expected
+- : unit = ()
+# - : ('cl, 'a) code = .<(raise Scanf.Scan_failure("")))>. 
+# * *   # - : ('cl, 'a) code = .<(raise Scanf.Scan_failure("")))>. 
+# * *   Exception: Scanf.Scan_failure "".
+# * *   Exception was expected
+- : unit = ()
+#     - : ('cl, bool) code = .<true>. 
+# * *   - : ('cl, int option) code = .<Some(1))>. 
+# * *   - : ('cl, int list option) code = .<Some([1]))>. 
+# * *   - : int list option = Some [1]
+# * *   - : ('cl, 'a option) code = .<None>. 
+# * *   - : 'a option = None
+# * *     - : ('cl, Genlex.token) code = .<Genlex.Int(1))>. 
+# * *   # - : ('cl, Genlex.token) code = .<Genlex.Int(1))>. 
+# * *   #   module Foo : sig exception E end
+# Characters 8-13:
+  .<raise Foo.E>.;;
+          ^^^^^
+Error: Exception Foo.E cannot be used within brackets. Put into a separate file.
+# * *   Error was expected
+- : unit = ()
+#   type foo = Bar
+# Characters 2-5:
+  .<Bar>.;;
+    ^^^
+Error: Constructor Bar cannot be used within brackets. Put into a separate file.
+# * *   Error was expected
+- : unit = ()
+#   module Foo : sig type foo = Bar end
+# Characters 2-9:
+  .<Foo.Bar>.;;
+    ^^^^^^^
+Error: Constructor Foo.Bar cannot be used within brackets. Put into a separate file.
+# * *   Error was expected
+- : unit = ()
+#       - : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>. 
+# * *   - : Complex.t = {Complex.re = 1.; Complex.im = -2.}
+# * *   Characters 100-104:
+  let x = {Complex.re = 1.0; im = 2.0} in .<x.re>.;;
+                                            ^^^^
+Error: Unbound record field label re
+# * * * * *   Error was expected
+- : unit = ()
+#   - : ('cl, float) code = .<
+((* cross-stage persistent value (id: x) *)).Complex.re>. 
+# * * *   # - : ('cl, int) code = .<
+((* cross-stage persistent value (id: x) *)).contents>. 
+# * * *   # - : ('cl, unit) code = .<
+((* cross-stage persistent value (id: x) *)).contents <- 2>. 
+# * * *   - : int ref = {contents = 2}
+#     # - : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>. 
+# * *   # - : ('cl, float) code = .<
+((* cross-stage persistent value (id: x) *)).Complex.re>. 
+# * * *   #   type foo = { fool : int; }
+# Characters 3-7:
+  .<{fool = 1}>.;;
+     ^^^^
+Error: Label fool cannot be used within brackets. Put into a separate file.
+# * *   Error was expected
+- : unit = ()
+#       - : ('cl, int) code = .<if true then 1 else 2>. 
+#   - : ('cl, unit) code = .<if (Some(1)) = None) then (print_string "weird")>. 
+# * * *   #     - : ('cl, [> `Foo ]) code = .<`Foo>. 
+# * *   - : ('cl, [> `Bar of int ]) code = .<`Bar 1>. 
+# * *   #     val f : < foo : 'a; .. > -> ('cl, 'a) code = <fun>
+# * *   val x : < foo : int > = <obj>
+# * *   - : ('a, int) code = .<(((* cross-stage persistent value (id: x) *))#foo)>. 
+# * * *   #     #   #       - : ('cl, unit) code = .<
+for i_1 = 1 to 5 do (Printf.printf "ok %d %d\n" i_1 (i_1 + 1)) done>. 
+# * * *   ok 1 2
+ok 2 3
+ok 3 4
+ok 4 5
+ok 5 6
+- : unit = ()
+# * * * * * *     - : ('cl, unit) code = .<
+for i_3 = 5 downto 1 do (Printf.printf "ok %d %d\n" i_3 (i_3 + 1)) done>. 
+# * * *   ok 5 6
+ok 4 5
+ok 3 4
+ok 2 3
+ok 1 2
+- : unit = ()
+# * * * * * *     - : ('cl, unit) code = .<
+for i_5 = 1 to 2 do
+ for j_6 = 1 to 3 do (Printf.printf "ok %d %d\n" i_5 j_6) done
+done>. 
+# * * * *     ok 1 1
+ok 1 2
+ok 1 3
+ok 2 1
+ok 2 2
+ok 2 3
+- : unit = ()
+# * * * * * * *       val c : ('cl, unit) code = .<
+  for i_9 = 1 to 2 do
+   for i_10 = 1 to 3 do (Printf.printf "ok %d %d\n" i_10 i_9) done
+  done>. 
+# * * * *   ok 1 1
+ok 2 1
+ok 3 1
+ok 1 2
+ok 2 2
+ok 3 2
+- : unit = ()
+# * * * * * * *           - : ('cl, unit) code = .<for i_12 = 1 to 5 do (ignore 0) done>. 
+# * *       Exception:
+Failure
+ "Scope extrusion at Characters 118-119:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                                                   ^\n for the identifier i_13 bound at Characters 96-97:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n".
+# * * * *   Error was expected
+- : unit = ()
+#     - : ('cl, 'a -> 'a) code = .<fun x_15 -> x_15>. 
+# * *   #   - : ('cl, int -> int -> int) code = .<fun x_17 -> fun y_18 -> (x_17 + y_18)>. 
+# * *   #   - : ('cl, 'a -> int -> int) code = .<fun x_21 -> fun x_22 -> (x_22 + x_22)>. 
+# * *       val eta : (('cl, 'a) code -> ('cl, 'b) code) -> ('cl, 'a -> 'b) code = <fun>
+# * *   - : ('cl, int -> int) code = .<fun x_23 -> (1 + x_23)>. 
+# * *   - : ('cl, int -> int -> int) code = .<fun x_24 -> fun x_25 -> (x_25 + x_24)>. 
+# * *   #         val fhyg : int -> ('cl, int) code = <fun>
+# * *   - : ('a, int) code = .<
+((fun x_28 ->
+   (((fun x_29 -> (((fun x_30 -> (1 + x_30)) 1) + x_29)) 2) + x_28)) 3)>.
+
+# * * *   #       - : ('cl, unit -> int) code = .<fun () -> 1>. 
+#   - : unit -> int = <fun>
+#   #   - : ('cl, bool -> int) code = .<function | true -> 1 | false -> 0>. 
+# * *   #   - : ('cl, bool * 'a list -> int) code = .<fun (true, []) -> 1>. 
+# * *   Exception: Match_failure ("//toplevel//", 416, 6).
+# * *   Error was expected
+- : unit = ()
+# #   - : ('cl, bool array -> int) code = .<fun [|true; false; false|] -> 1>. 
+# * *   #   - : ('cl, [> `F of int ] -> bool) code = .<
+function | (`F 1) -> true | _ -> false>. 
+# * * *   # - : ('cl, [> `F of int | `G of int ] -> bool) code = .<
+function | ((`F 1) | (`G 2)) -> true | _ -> false>. 
+# * * *     - : ('cl, int * string -> int) code = .<
+function | (1, "str") -> 1 | (2, _) -> 2>. 
+# * * *   # # #   #   # # # #   # - : ('cl, Complex.t -> int) code = .<
+function
+| {Complex.re = 1.0} -> 1
+| {Complex.re = 2.0; Complex.im = 2.0} -> 2
+| {Complex.im = _} -> 3>. 
+# * * * * * *       #   #     #       - : ('cl, int * int -> int) code = .<fun (x_34, y_35) -> (x_34 + y_35)>. 
+# * *   # - : ('cl, int option -> int) code = .<
+function | (Some (x_38) as y_39) -> x_38 | _ -> 2>. 
+# * * *   # # - : ('cl, int list -> int) code = .<
+function
+| [x_44 ; y_45 ; z_46] -> ((x_44 - y_45) + z_46)
+| [x_47 ; y_48] -> (x_47 - y_48)>. 
+# * * * * *   #     - : ('cl, int list -> int) code = .<
+fun ([x_54 ; y_55] | [x_54 ; y_55 ; _]) -> (x_54 - y_55)>. 
+# * * *   # # Exception: Match_failure ("//toplevel//", 474, -106).
+#   Error was expected
+- : unit = ()
+#   - : ('cl, int list -> int) code = .<
+fun (([x_62 ; y_63] | [x_62 ; y_63 ; _]) | [y_63 ; x_62 ; _ ; _]) ->
+ (x_62 - y_63)>.
+
+# * * * * *   # # #   - : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
+function | ((`F x_70) | (`G x_70)) -> x_70 | (`E x_71) -> x_71>. 
+# * * *   # # - : ('cl, Complex.t -> float) code = .<
+function
+| {Complex.re = x_74} -> x_74
+| {Complex.re = y_75; Complex.im = x_76} -> (x_76 -. y_75)>. 
+# * * * * * * * * *   - : ('cl, Complex.t -> float) code = .<
+function
+| {Complex.re = x_77; Complex.im = 2.0} -> x_77
+| {Complex.re = y_78; Complex.im = x_79} -> (x_79 -. y_78)>. 
+# * * * * *     #   - : ('cl, int option -> int option) code = .<
+function | (Some (x_83) as y_84) when (x_83 > 0) -> y_84 | _ -> None>. 
+# * * *     #   #     - : ('cl, bool) code = .<(match 1 with 1 -> true)>. 
+# * *   #   - : ('cl, bool) code = .<
+(match ((1), (2)) with | (1, x_89) -> true | x_90 -> false)>. 
+# * * *   - : ('cl, int) code = .<
+(match [1; 2] with | [x_91] -> x_91 | [x_92 ; y_93] -> (x_92 + y_93))>. 
+# * * *     #     - : ('cl, int) code = .<
+(match [1; 2] with
+ | [x_97] -> x_97
+ | ([x_98 ; y_99] | [x_98 ; y_99 ; _]) -> (x_98 + y_99))>.
+
+# * * * * *   #   - : ('cl, int) code = .<
+(match [1; 2; 3; 4] with
+ | [x_103] -> x_103
+ | (([x_104 ; y_105] | [x_104 ; y_105 ; _]) | [y_105 ; x_104 ; _ ; _]) ->
+    (x_104 - y_105))>.
+
+# * * * * * * *     #   - : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
+fun x_109 ->
+ (match x_109 with | ((`F x_110) | (`G x_110)) -> x_110 | (`E x_111) -> x_111)>.
+
+# * * * *     #   # - : ('cl, Complex.t -> float) code = .<
+fun x_115 ->
+ (match x_115 with
+  | {Complex.re = x_116; Complex.im = 2.0} -> x_116
+  | {Complex.re = y_117; Complex.im = x_118} -> (x_118 -. y_117))>.
+
+# * * * * * *         #       - : ('cl, int -> bool option) code = .<
+fun x_123 ->
+ (try Some(List.assoc x_123 [((1), (true)); ((2), (false))])) with
+  Not_found -> None)>.
+
+# * * * * *     #   #   #   - : ('cl, string -> string) code = .<
+fun x_127 ->
+ let open Scanf in
+ (try (Scanf.sscanf x_127 "%d" (fun x_129 -> (string_of_int x_129))) with
+  Scanf.Scan_failure (x_128) -> ("fail " ^ x_128))>.
+
+# * * * * * *       #   #       - : ('cl, int) code = .<let x_136 = 1 in x_136>. 
+# * *     # - : ('cl, int) code = .<let x_138 = 1 in let x_139 = (x_138 + 1) in x_139>. 
+# * *     # - : ('cl, int) code = .<
+let rec f_142 =
+ fun n_143 -> if (n_143 = 0) then 1 else (n_143 * (f_142 (n_143 - 1))) in
+(f_142 5)>. 
+# * * * * *     #       - : ('cl, int) code = .<
+let f_146 = fun x_149 -> x_149 in
+let rec f_147 =
+ fun n_148 -> if (n_148 = 0) then 1 else (n_148 * (f_147 (n_148 - 1))) in
+(f_147 5)>. 
+# * * * * * * * * * *       #     - : ('cl, int) code = .<
+let f_154 = fun x_157 -> x_157 in
+let f_155 =
+ fun n_156 -> if (n_156 = 0) then 1 else (n_156 * (f_154 (n_156 - 1))) in
+(f_155 5)>. 
+# * * * * *     #       - : ('cl, int) code = .<let x_162 = 1 and y_163 = 2 in (x_162 + y_163)>. 
+# * *   #   - : ('cl, int) code = .<
+let x_166 = 1 in
+let x_167 = (x_166 + 1) and y_168 = (x_166 + 1) in (x_167 + y_168)>. 
+# * * *   # * * * * * * * * * *   # Exception: Match_failure ("//toplevel//", 650, -314).
+# * * * * * * * *   Error was expected
+- : unit = ()
+#     - : ('cl, int -> bool) code = .<
+fun x_176 ->
+ let rec even_177 = function | 0 -> true | x_180 -> (odd_178 (x_180 - 1))
+ and odd_178 = function | 0 -> false | x_179 -> (even_177 (x_179 - 1)) in
+ (even_177 x_176)>.
+
+# * * * * * *   # #       - : ('cl, int) code = .<1>. 
+#   - : ('cl, int) code = .<x_192 <- x_192>.
+
+Failure("Scope extrusion at Characters 85-86:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                                    ^\n for the identifier x_192 bound at Characters 70-71:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n")
+#   * * * *   Error was expected
+- : unit = ()
+#   Exception:
+Failure
+ "Scope extrusion at Characters 59-60:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                                            ^\n for the identifier x_193 bound at Characters 44-45:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in .! c;;\n                                             ^\n".
+# * * * *   Error was expected
+- : unit = ()
+#   - : ('cl, '_a -> '_a) code = .<x_195 <- fun y_196 -> x_195>.
+
+Failure("Scope extrusion at Characters 58-68:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_195 bound at Characters 43-44:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                            ^\n")
+# * * * *   Error was expected
+- : unit = ()
+#       Exception:
+Failure
+ "Scope extrusion at Characters 101-111:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                               ^^^^^^^^^^\n for the identifier x_198 bound at Characters 86-87:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                ^\n".
+# * * *   Error was expected
+- : unit = ()
+#     - : ('cl, '_a -> '_a) code = .<x_202 <- fun y_203 -> y_203>.
+
+Failure("Scope extrusion at Characters 118-128:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_202 bound at Characters 103-104:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                            ^\n")
+# * * * *   Error was expected
+- : unit = ()
+#     - : ('cl, '_a -> '_b -> '_b) code = .<fun x_205 -> fun y_206 -> y_206>. 
+# * *   - : ('cl, '_a -> '_a -> '_a) code = .<fun x_208 -> fun y_209 -> x_208>. 
+# * *     
+All done
+
+- : unit = ()
+# 

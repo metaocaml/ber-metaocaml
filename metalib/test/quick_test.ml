@@ -277,14 +277,13 @@ val test11 : ('a, ('_b, int) code -> ('_b, int) code) code * int =
    5)
 *)
 
-(*
 let testd1 () = .! (fst (powerd1 5));;
 let testdd1 = .<fun x -> .~(testd1 () .<x>.)>.;;
-*)
 (*
-val testdd1 : ('_a, int -> int) code =
+val testdd1 : ('cl, int -> int) code =
   .<fun x_1 -> ((((x_1 * x_1) * x_1) * x_1) * x_1)>.
 *)
+let 32 = (Runcode.run {Runcode.cde= .<fun x -> .~(testd1 () .<x>.)>.}) 2;;
 
 
 (* Meta-programming with delimited continuations *)
@@ -439,10 +438,17 @@ let sgibo1_naive x y =
       in t1 + t2>.
  in loop
 ;;
-let test_sgibo1_naive5  = 
-  .<fun x y -> .~(sgibo1_naive .<x>. .<y>. 5)>.;;
+
+let true =
+ try
+ let test_sgibo1_naive5  = 
+  .<fun x y -> .~(sgibo1_naive .<x>. .<y>. 5)>.
+ in false
+ with Failure e -> print_string e; true
+;;
  
-(*
+(* Previously, it worked:
+
   val test_sgibo1_naive5 : ('a, int -> int -> int) code =
   .<fun x_1 ->
    fun y_2 ->
@@ -461,6 +467,12 @@ let test_sgibo1_naive5  =
 *)
 (* the naive version obviously doesn't do any good: It creates even bigger
    duplicated computations *)
+(* But now it raises the exception
+Scope extrusion at Characters 127-201:
+  .........................string e; true
+  ;;
+   for the identifier t2_138 bound at Characters 160-162:
+*)
   
 (* We have to change the memo table implementation. Our memo table should
    contain only those future-stage computations that are future-stage
@@ -535,9 +547,15 @@ let sgibo1_bad x y =
  in loop
 ;;
 
-let test_sgibo1_bad  = 
-  .<fun x y -> .~(sgibo1_bad .<x>. .<y>. 5)>.;;
-(*
+let true =
+ try
+   let test_sgibo1_bad  = 
+     .<fun x y -> .~(sgibo1_bad .<x>. .<y>. 5)>. in
+   false
+ with Failure e -> print_string e; true
+;;
+
+(* Previously (before version N100) it worked:
   val test_sgibo1_bad : ('a, int -> int -> int) code =
   .<fun x_1 ->
    fun y_2 ->
@@ -554,6 +572,11 @@ let test_sgibo1_bad  =
 .! test_sgibo1_bad;;
   Unbound value t_6
   Exception: Trx.TypeCheckingError.
+*)
+
+(* But now we get a scope extrusion error
+Scope extrusion at Characters 302-303:
+   for the identifier t_152 bound at Characters 242-243:
 *)
 
 (* To rely on MetaOCaml's type soundness, we must not use any side effects
