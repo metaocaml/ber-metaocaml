@@ -79,7 +79,7 @@ let load_lambda ppf lam =
 
 
 let run' exp =
-  Trx.check_scope_extrusion exp;
+  let exp = Trx.check_scope_extrusion exp in
   if !initial_env = Env.empty then initial_env := Compile.initial_env();
   Ctype.init_def(Ident.current_time()); 
   with_disabled_warnings [Warnings.Partial_match "";

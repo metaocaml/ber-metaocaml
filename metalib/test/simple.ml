@@ -6,6 +6,10 @@ let tr1 = .<fun x -> .~(.! .<.<1>.>.)>.;;
 (*
 val tr1 : ('a, 'b -> int) code = .<fun x_36 -> 1>.
 *)
+let tr1' = .<fun x -> .~(.! .<.<fun x -> x>.>.)>.;;
+(*
+val tr1' : ('cl, 'a -> 'b -> 'b) code = .<fun x_2 -> fun x_3_4 -> x_3_4>. 
+*)
 let tr2 = .<fun x -> .~(let x = .! .<1>. in .<x>.)>.;;
 (*
 val tr2 : ('a, 'b -> int) code = .<fun x_37 -> 1>.
@@ -39,11 +43,13 @@ let tr5 = .<fun x -> .! .<1>.>.;;
 (*
 val tr5 : ('a, 'b -> int) code = .<fun x_38 -> .!.<1>.>.
 *)
+let 1 = (.! tr5) true;;
 
 let tr6 = .<fun x -> .! .<x>.>.;;
 (*
 val tr6 : ('a, 'b -> 'b) code = .<fun x_39 -> .!.<x_39>.>.
 *)
+let 1 = (.! tr6) 1;;
 
 let tr7 = .<fun x -> .! x>.;;
 (*

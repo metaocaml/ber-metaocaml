@@ -13,7 +13,7 @@ val meta_version : string
 val trx_structure: Typedtree.structure -> Typedtree.structure
 
 (* Call it whenever we run or print the code *)
-val check_scope_extrusion : Parsetree.expression -> unit
+val check_scope_extrusion : Parsetree.expression -> Parsetree.expression
 
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.

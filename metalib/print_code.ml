@@ -1860,7 +1860,7 @@ let print_code_as_ast x =
 let inpc ppf x = 
   let module M = PR(struct let ppf = ppf end) in
   fprintf ppf ".<@,"; M.expression x; fprintf ppf ">.@ ";
-  try Trx.check_scope_extrusion x 
+  try ignore (Trx.check_scope_extrusion x)
   with e -> fprintf ppf "\n%s" (Printexc.to_string e)
   
 

@@ -113,4 +113,23 @@ let tfc5 = Runcode.run {Runcode.cde= .<{Runcode.cde = .<1>.}>.};;
 let 1 = Runcode.run (Runcode.run {Runcode.cde= .<{Runcode.cde = .<1>.}>.});;
 (* - : int = 1 *)
 
+(* complex runs *)
+let tr1 = .<fun x -> .~(.! .<.<1>.>.)>.;;
+let 1 = (.! tr1) 42;;
+(*
+val tr1 : ('a, 'b -> int) code = .<fun x_36 -> 1>.
+*)
+
+let tr1' = .<fun x -> .~(.! .<.<fun x -> x>.>.)>.;;
+(*
+val tr1' : ('cl, 'a -> 'b -> 'b) code = .<fun x_2 -> fun x_3_4 -> x_3_4>. 
+*)
+let 2 = (.! tr1') 1 2;;
+
+let tr2 = .<fun x -> .~(let x = .! .<1>. in .<x>.)>.;;
+(*
+val tr2 : ('a, 'b -> int) code = .<fun x_37 -> 1>.
+*)
+let 1 = (.! tr2) 42;;
+
 Printf.printf "\nAll Done\n";;

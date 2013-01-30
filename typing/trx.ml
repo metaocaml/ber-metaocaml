@@ -524,8 +524,8 @@ let with_binding_region : string loc ->
           in r
     with e -> bindings_in_scope := old_bindings; raise e
 
-let check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
-  ignore (remove_tstamp None exp)
+let check_scope_extrusion : Parsetree.expression -> Parsetree.expression = 
+  fun exp -> fst (remove_tstamp None exp)
 
 (* Convert the meta-level (fun var -> body) to the Typedtree.expression
    representing the same function, and use the result generate the call to
