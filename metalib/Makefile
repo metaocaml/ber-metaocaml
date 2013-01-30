@@ -101,7 +101,9 @@ test-compile:
 # 	$(BINDIR)/metaocamlc -o quick_test test/quick_test.ml
 # 	./quick_test
 	$(BINDIR)/metaocamlc -dparsetree -drawlambda -dinstr -c test/test21.ml
-	$(BINDIR)/metaocamlc -o t4 test/t4.ml
+	$(BINDIR)/metaocamlc -c test/t4types.mli && \
+	cp test/t4types.cmi . # .cmi file should be where the executable is
+	$(BINDIR)/metaocamlc -o t4 -I test/ test/t4.ml
 	./t4
 	$(BINDIR)/metaocamlc -o pt test/pythagorian_triples.ml
 	./pt

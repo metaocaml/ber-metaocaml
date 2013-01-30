@@ -2,16 +2,7 @@
 (* Author:  Walid Taha and Cristiano Calcagno
    Date:    Fri Aug 31 03:03:11 EDT 2001 *)
 
-type exp = I of int
-         | V of string
-         | A of exp * exp
-         | L of string * exp
-         | D of exp
-         | C of exp * exp * exp
-         | R of string * string * exp
-
-type dom = J of int
-         | F of (dom -> dom)
+open T4types;;
 
 let unJ(J i) = i
 let unF(F f) = f
