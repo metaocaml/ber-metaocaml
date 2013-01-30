@@ -1440,6 +1440,27 @@ let build_try :
       {pexp_loc = l; 
        pexp_desc = Pexp_try (exp, List.map2 (fun p e -> (p,e)) pats ebodies)}
 
+(* Build the general let-Parsetree (like the fun-Parsetree) *)
+let build_let : 
+  Location.t -> rec_flag -> string loc array -> 
+  Parsetree.pattern list -> 
+  Parsetree.expression array ->         (* the first is the body of let *)
+  Parsetree.expression =
+  fun l recf names pats ebodies -> 
+    let (ebodies,var) = map_accum remove_tstamp None (Array.to_list ebodies) in
+    let pats = 
+      if names = [||] then pats else
+      let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
+      assert (acc = []); pats
+    in
+    match ebodies with
+     | (body::el) ->
+        add_timestamp var
+          {pexp_loc = l; 
+           pexp_desc = 
+             Pexp_let (recf,List.map2 (fun p e -> (p,e)) pats el,body)}
+     | _ -> assert false
+
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
    an expression at the level n > 0.
@@ -1515,11 +1536,9 @@ let rec trx_bracket :
       {pexp_loc = exp.exp_loc;
        pexp_desc = Pexp_constant cst}
     in Texp_cspval (Obj.repr ast, dummy_lid "*cst*")
-(*
-  | Texp_let of rec_flag * (pattern * expression) list * expression
-*)
+
      (* The most common case of let-expressions: let x = e in body *)
-  | Texp_let (recf,[({pat_desc = Tpat_var (id,name)},e)],ebody) ->
+  | Texp_let (recf,[({pat_desc = Tpat_var (id,name)},e)],body) ->
       let recf_exp = texp_ident "Trx.sample_rec_flag" in
       let recf_exp = {recf_exp with exp_desc = 
                         Texp_cspval (Obj.repr recf, dummy_lid "*recf*")} in
@@ -1532,7 +1551,26 @@ let rec trx_bracket :
              recf_exp;
              gensymed_var;
              trx_bracket trx_exp n e;
-             trx_bracket trx_exp n ebody] })
+             trx_bracket trx_exp n body] })
+
+  | Texp_let (recf,pel,body) ->         (* General case. Like Texp_function *)
+      let recf_exp = texp_ident "Trx.sample_rec_flag" in
+      let recf_exp = {recf_exp with exp_desc = 
+                        Texp_cspval (Obj.repr recf, dummy_lid "*recf*")} in
+      let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
+      texp_binding_pattern pel exp
+       (fun gensyms pats exps ->
+        { exp with
+          exp_desc = 
+            texp_apply (texp_ident "Trx.build_let") 
+            [texp_loc exp.exp_loc;
+             recf_exp;
+             texp_array gensyms;
+             pats;
+             texp_array (trx_bracket trx_exp n body::
+                         (List.map (trx_bracket trx_exp n) exps))]
+        })
+
 
      (* The most common case of functions: fun x -> body *)
   | Texp_function (l,[({pat_desc = Tpat_var (id,name)},ebody)],_) ->
@@ -1750,7 +1788,6 @@ let rec trx_bracket :
        pexp_desc = Pexp_cspval(v,li)}
     in Texp_cspval (Obj.repr ast, dummy_lid "*csp*")
 
-  | _ -> failwith "not yet implemented"
   in                               
   let trx_extra (extra, loc) exp = (* See untype_extra in tools/untypeast.ml *)
    let desc =

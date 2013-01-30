@@ -874,6 +874,53 @@ let 20 = .! .<let f = fun x -> x in
 - : int = 20
 
 
+(* General let *)
+.<let x = 1 and y = 2 in x + y>.;;
+(*
+- : ('cl, int) code = .<let x_1 = 1 and y_2 = 2 in (x_1 + y_2)>. 
+*)
+let 3 = .! .<let x = 1 and y = 2 in x + y>.;;
+
+.<let x = 1 in let x = x+1 and y = x+1 in x + y>.;;
+(*
+- : ('cl, int) code = .<
+let x_3 = 1 in let x_4 = (x_3 + 1) and y_5 = (x_3 + 1) in (x_4 + y_5)>. 
+*)
+let 4 = .! .<let x = 1 in let x = x+1 and y = x+1 in x + y>.;;
+(*
+.<fun x -> let (Some x) = x in x + 1>.;;
+Characters 15-23:
+  .<fun x -> let (Some x) = x in x + 1>.;;
+                 ^^^^^^^^
+Warning 8: this pattern-matching is not exhaustive.
+Here is an example of a value that is not matched:
+None
+- : ('cl, int option -> int) code = .<
+fun x_11 -> let Some (x_12) = x_11 in (x_12 + 1)>. 
+*)
+let 3 = (.! .<fun x -> let (Some x) = x in x + 1>.) (Some 2);;
+(.! .<fun x -> let (Some x) = x in x + 1>.) None;;
+(*
+Characters 19-27:
+  (.! .<fun x -> let (Some x) = x in x + 1>.) None;;
+                     ^^^^^^^^
+Warning 8: this pattern-matching is not exhaustive.
+Here is an example of a value that is not matched:
+None
+Exception: Match_failure ("//toplevel//", 1, 19).
+*)
+.<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and 
+                   odd  = function 0 -> false | x -> even (x-1) in even x>.;;
+(*
+- : ('cl, int -> bool) code = .<
+fun x_17 ->
+ let rec even_18 = function | 0 -> true | x_21 -> (odd_19 (x_21 - 1))
+ and odd_19 = function | 0 -> false | x_20 -> (even_18 (x_20 - 1)) in
+ (even_18 x_17)>.
+*)
+let true = (.! .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and odd = function 0 -> false | x -> even (x-1) in even x>.) 42;;
+let false = (.! .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and odd = function 0 -> false | x -> even (x-1) in even x>.) 43;;
+
 
 (* testing scope extrusion *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<1>.; .<0>.)>. in !r ;;

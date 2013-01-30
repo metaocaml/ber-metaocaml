@@ -112,4 +112,8 @@ val build_try :
 val build_let_simple : 
   Location.t -> Asttypes.rec_flag -> string Location.loc -> 
   Parsetree.expression -> Parsetree.expression -> Parsetree.expression
-
+val build_let : 
+  Location.t -> Asttypes.rec_flag -> string Location.loc array -> 
+  Parsetree.pattern list -> 
+  Parsetree.expression array ->         (* the first is the body of let *)
+  Parsetree.expression
