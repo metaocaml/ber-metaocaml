@@ -7,7 +7,7 @@
 cd ..
 
 git diff 4.00.1 -- \
-./depend \
+./.depend \
 ./Makefile \
 ./ocamldoc/Makefile \
 ./parsing/lexer.mll \

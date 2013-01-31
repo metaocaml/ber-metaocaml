@@ -297,7 +297,6 @@ install:
 # into $((COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
 	cp typing/trx.cmi $(LIBDIR)
 # BTW, trx.cmo is part of ocamlcommon.cma
-	cd metalib; $(MAKE) install
 # NNN end
 	cd tools; $(MAKE) install
 	-cd man; $(MAKE) install

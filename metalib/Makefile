@@ -83,9 +83,9 @@ clean::
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
 test:
-	$(BINDIR)/metaocaml < test/trivial.ml > trivial.out && \
+	TERM=dumb $(BINDIR)/metaocaml < test/trivial.ml > trivial.out && \
 	diff -u trivial.out trivial.ref
-	$(BINDIR)/metaocaml < test/simple.ml > simple.out && \
+	TERM=dumb $(BINDIR)/metaocaml < test/simple.ml > simple.out && \
 	diff -u simple.out simple.ref
 	$(BINDIR)/metaocaml test/simple_true.ml
 	$(BINDIR)/metaocaml test/quick_test.ml
@@ -116,7 +116,8 @@ clean::
 patch:
 	cp -p patches/trx.ml $(CAMLROOT)/typing/
 	cp -p patches/trx.mli $(CAMLROOT)/typing/
-	patch -p0 -d $(CAMLROOT) < patches/patch
+#	patch -p0 -d $(CAMLROOT) < patches/patch
+	patch -p1 -d $(CAMLROOT) < patches/patch
 
 # Create the patch set
 makepatch:

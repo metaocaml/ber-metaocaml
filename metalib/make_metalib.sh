@@ -1,6 +1,6 @@
 # Make the distribution directory
 
-DEST=/tmp/ber-metaocaml-003
+DEST=/tmp/ber-metaocaml-100
 
 mkdir $DEST
 
@@ -23,15 +23,17 @@ print_code.ml \
 print_code.mli \
 runcode.ml \
 runcode.mli \
+simple.ref \
+trivial.ref \
 $DEST/
 
 mkdir $DEST/patches
 cp -p patches/* $DEST/patches
 
 mkdir $DEST/test
-cp -p test/*.ml $DEST/test
+cp -p test/*.ml test/*.mli $DEST/test
 
-mkdir $DEST/gprint
-cp -p gprint/Makefile $DEST/gprint
-cp -p gprint/*.ml  $DEST/gprint
-cp -p gprint/*.mli $DEST/gprint
+# mkdir $DEST/gprint
+# cp -p gprint/Makefile $DEST/gprint
+# cp -p gprint/*.ml  $DEST/gprint
+# cp -p gprint/*.mli $DEST/gprint
