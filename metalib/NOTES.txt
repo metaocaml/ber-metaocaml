@@ -1,143 +1,179 @@
 			BER MetaOCaml
 
-# NNNXXX Use compilerlibs as much as possible
+* Main differences from the original MetaOCaml
+
+** Substantial changes
+
+ -- Constructor restriction: all data constructors and record labels 
+ used within brackets must come from the types that are declared in 
+ separately compiled modules.
+
+ -- Scope extrusion check: attempting to build code values with
+ unbound or mistakenly bound variables (which is possible with
+ mutation or other effects) is caught early, raising an exception
+ with good diagnostics.
+
+ -- Introduced the type 'a cde of closed code values -- in preparation
+ for removing run from the `kernel' and moving it to a user-level
+ library, see below.
+
+ -- In OCaml 4.00.1 , the Core type checker was changed to use
+ type_expect. This generates better error messages. Therefore, the type
+ checking of brackets, escape, run and CSP was re-written accordingly,
+ to propagate expectations down. For example, <e> is expected to have
+ the type of (clsfier, ty) code where e has is expected to have the
+ type ty.
+
+ -- The main MetaOCaml kernel module, trx.ml, has been completely
+ re-written. Many algorithms were changed. For example, the traversal
+ of the Typedtree looking for brackets to replace is completely
+ re-written. Now we maintain sharing as much as possible. If the tree
+ has no brackets, it is returned as it was.  Previously, it was copied.
+
+ -- Applications with labeled arguments are supported now.
+
+ -- The problem with first-class polymorphism (records with polymorphic
+ fields inside brackets) has fixed itself. See the file
+ tests/simple.txt. Therefore, we can really remove run from the core
+ of MetaOCaml and use the type cde of closed code.
+
+ -- Precise type assignment when building Typedtree nodes (when
+ hand-compiling Parsetree generation)
+   
+ -- Processing of CSP has changed, split into two phases. At
+ compilation time, we know the type of the CSP and decide if values
+ of that type can be lifted. If not, we look at the CSP identifier
+ to decide if the CSP can be referred to by qualified name (that is,
+ the CSP identifier is part of a separately compiled module).
+ If all fails, we generate the call to a quotator that would build
+ the CSP at run-time, when the value to quote becomes known. Overall,
+ the procedure improves the printing of CSP.
 
 
-   How to minimize changes:
-   Strictly speaking, we don't need to change typedtree or
-   parsetree. We can just add functions with distinguished names.
-   And add printers and add to the type checker. It helps
-   if OCaml added one node to parsetree Pexp_extension
-   and a similar node to typed tree. The user may register
-   extensions, invoked by the type checker, printer, etc.
-   to type check the node, etc.
+** Separation into `kernel' and `user-level' code
 
-   Can I get rid of run as a special form? Just use first-class
-   polymorphism and check generalization.
+The kernel modifies (and is part of) the OCaml system. The user-level
+code is in a directory metalib outside the OCaml distribution. The
+user-level code can be changed and expanded without the need to hack
+and re-compile (Meta)OCaml. Changes introduced to future versions of
+OCaml will not generally affect the `user-level' code.
 
-So, a parser would just expand .! x  to {Trx.cde = x}. To really run
-the code, we write
+ -- Printing of code values --  AST pretty_printing by Ed Pizzi --
+ is moved to user-level, a dedicated file metalib/print_code.ml.
+ It is now maintained by Jacques Carette. 
+
+ -- Now BER MetaOCaml is built as a custom top-level, using the standard tool
+ ocamlmktop. We register code printers as regular top-level printers
+ of user-defined data types. Therefore, topmain is no longer modified.
+
+ -- Tag elimination is fully removed.
+
+ -- trxtime is moved to metalib.
+
+ -- Offshoring is temporarily removed; it should be re-introduced as
+ a module in metalib, a user-level code.
+
+
+** Engineering changes
+
+ -- All modified lines in the OCaml code are marked by (* NNN *)
+
+ -- There are comments now -- and lots of them
+
+ -- Added very many regression tests (which also work as examples) to test
+ every feature: see test/trivial.ml and test/simple.ml
+
+
+* What part of MetaOCaml can be moved to the OCaml proper
+Suggestions for the OCaml HQ
+
+ -- Merge metalib/print_code.ml and tools/pprintast.ml
+ Both are essentially the same. We could use optional arguments to
+ make the printing extensible and robust to AST changes.
+
+ -- Unify printing functions for various trees and make them
+ prettier. The very same fmt_longident_aux occurs three times in 
+ the OCaml code base (parsing/printast.ml, tools/pprintast.ml,
+ typing/printtyped.ml)
+
+ - Better and modular error handling. Currently, to add a new
+ error, say, to typecore.ml one has to add the error to typecore.mli,
+ make the same addition to typecore.ml, augment the printing function
+ in typecore.ml. To add a new category, one has to augment
+ driver/errors.ml. I have tried a uniform
+      exception Error of (format -> unit)
+ The error carries the function that will print out the error
+ message on the supplied ppf. Handler becomes much more extensible!
+ This approach does seem to work out.
+
+ -- On one hand, it is tempting to eliminate Const_csp_value. There
+ will no longer be a need to modify the code generator (in bytecomp/).
+ On the other hand, Const_csp_value does make sense as a structured
+ constant. Consider a constant that refers to a big array, or even 
+ array in ancient. Representing such constant in a Parsetree as a
+ string is ungainly. Syntactic extensions in particular could use
+ Const_csp_value.
+
+
+* Further plans
+
+** Get rid of .! as a kernel form
+
+The syntax .! may remain, but only as syntax. The parser would just 
+expand .! x  to {Trx.cde = x}. To really run the code, we would write
     Run.run .! .<1>.
 Incidentally, we can have Run.run_bytecode and Run.run_native.
 Since it is possible now to dynamically load native code into
 bytecode, we can separate the mode of running the generated code
 (bytecode/native) from the mode of running the generator.
-We don't have to add the record 'a cde to predef. We can add it
-to Trx. The only drawback is that pretty-printer may print
-{cde = x} with the Trx qualification. But it is easy to adjust the
-pretty-printer to omit the Trx qualification.
-Rename BER MetaOCaml to BE MetaOCaml?
 
-trx.ml -- the traversal of the entire Typedtree looking for brackets
-to replace is completely re-written. Now we maintain sharing as much
-as possible. If the tree has no brackets, it is retured as it was.
-Previously, it was copied.
+We don't have to add the record 'a cde to predef. We can add it to
+Trx. The only drawback is that pretty-printer may print {cde = x} with
+the Trx qualification. But it is easy to adjust the pretty-printer to
+omit the Trx qualification.
+
+Then BER MetaOCaml becomes BE MetaOCaml?
+
+** Optimize the construction of code values (Parsetree)
 
 When the bracket expression is run, it produces the Parsetree that
 represents the code. The tree is constructed at run-time.  In some
 cases the Parsetree can be constructed at compile time, in
-trx.ml. Constants like <1> is such a case, when we can immediately
+trx.ml. A constant like <1> is such a case, when we can immediately
 construct the Parsetree: Pexp_constant (Constant_int 1).  After we
 construct the Parsetree at compile time, we use CSP to pass it over to
 run-time. When run, the program will use the compiled constant. This
 mechanism of building Parsetree at compile-time whenever possible is
 one of the large differences from the previous versions of MetaOCaml.
 
-Future work:
-   TODO: lists, arrays, option types of liftable types are themselves
-   liftable. We can lift many more types. For arrays, check their length.
-   If the array is short, it should be lifted. For long arrays,
-   building a CSP is better (although it make take a bit longer since
-   we will have to invoke dyn_quote at run-time).
+This approach can be extended, by constructing large Parsetree
+subtrees at compile time, and passing them as CSP. See ``TODO: an
+optimization idea. Consider <assert e> as a typical expression.'' in
+trx.ml
 
-   When lifting int, bool, etc. values, we generate calls to run-time
+** Improve processing CSP
+
+When lifting int, bool, etc. values, we generate calls to run-time
 functions like lift_constant_int to do the Parsetree generation. In
 the future we should `inline' those functions -- that is, obtain the
 Typedtree for them and use the tree for building Texp_apply.
 
-The main trx.ml algorithm (translation of brackets) can be greatly
-improved and sped-up, by constructing as large Parsetree subtrees as
-possible at compile time, and passing them as CSP. See
-``TODO: an optimization idea. Consider <assert e> as a typical
-expression.'' in trx.ml
+Lists, arrays, option types of liftable types are themselves
+liftable. We can lift many more types. For arrays, check their length.
+If the array is short, it should be lifted. For long arrays, building
+a CSP is better (although it make take a bit longer since we will have
+to invoke dyn_quote at run-time).
 
+** Minimize changes to OCaml
 
+Strictly speaking, we don't need to change typedtree or parsetree. We
+can just add functions with distinguished names.  And add printers and
+add to the type checker. It helps if OCaml added one node to parsetree
+Pexp_extension and a similar node to typed tree. The user may register
+extensions, invoked by the type checker, printer, etc.  to type check
+the node.
 
-(generally, search for TODO in trx.ml)
-
-Better quotation (which results in better printing of CSP *)
-# let l x = .<x>.;;
-val l : 'a -> ('cl, 'a) code = <fun>  (* Polymorphic! *)
-# l 1;;
-- : ('a, int) code = .<(* cross-stage persistent value (as id: x) *)>.
-# l 1.0;;
-- : ('a, float) code = .<1.>.   (* Now it prints as a constant *)
-
--- Added very many regression tests (which also work as examples) to test
-every feature: see test/trivial.ml and test/simple.ml
-
--- Applications with labeled arguments are supported now.
-
--- Precise type assignment when building Typedtree nodes (when
-   hand-compiling Parsetree generation).
-   
-  * Main differences from the original MetaOCaml
-
--- Added metalib (aka ber-metaocaml) directory: the MetaOCaml library, 
-   for the `user-level' MetaOCaml code (as contrasted with the 
-   `kernel-level' code, which modifies the OCaml system).
-
--- Printing of code values --  AST pretty_printing by Ed Pizzi --
-   is moved to a dedicated file metalib/print_code.ml.
-
--- trxtime is moved to metalib.
-
--- Tag elimination is fully removed.
-
--- Offshoring is temporarily removed; it should be re-introduced as
-   a module in metalib.
-
--- Now BER MetaOCaml is built as a custom top-level, using the standard tool
-   ocamlmktop. We register code printers as regular top-level printers
-   of user-defined data types. Therefore, topmain is no longer modified.
-
--- Introduced the type 'a cde of closed code values.
-
--- All modified lines in the OCaml code are marked by (* NNN *)
-
--- There are comments now -- and lots of them
-
-OCaml Core type checker was changed to use type_expect. This generates
-better error messages. Therefore, the type checking of brackets,
-escape, run and CSP was changed accordingly, to propagate expectations
-down. For example, <e> is expected to have the type of
-(clsfier, ty) code where e has is expected to have the type ty.
-
-# What can be moved to OCaml proper?
-Const_csp_value has some merit for bytecode: consider a constant
-that refers to a big array, or even array in ancient. Writing
-it as a literal is ungainly. It could also help syntactic extensions,
-
-   unify printing functions for various trees and make them
-   prettier. fmt_longident_aux occurs at least twice.
-   (And so does format_path?) Add them to longident and path
-   modules.
-
-metaib/print_code and tools/pprintast.ml
-
-Better error handling. Currently it is very unmodular! To add a new
-error, say, to typecore.ml one has to add the error to typecore.mli,
-make the same addition to typecore.ml, augment the printing function
-in typecore.ml. To add a new category, one has to augment
-driver/errors.ml. The best way is toi have the exception to be uniform
-                  exception Error of (format -> unit)
-So, the error carries the function that will print out the error
-message on the supplied ppf. Handler becomes much more extensible!
-
-
-./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
--no-camlp4 -no-graph
-
+** Type-checking of run
 Type-checking of run  (in typing/typecore.ml) can be done differently,
 using polymorphic/universally quantified variables (Tpoly/Tunivar)
 
@@ -148,12 +184,7 @@ have problems with generalizing second-stage let. Since the let-form
 will be replaced with a function call, generalization won't be
 performed!
 
-The problem with first-class polymorhism (records with polymorphic
-fields inside brackets) has fixed itself. See the file
-tests/simple.txt. Therefore, we can really remove run from the core
-of MetaOCaml and use the type cde of closed code.
-
-
+** Search for TODO in trx.ml
 
 * Installation notes
 When linking the first time, beware!
@@ -165,8 +196,12 @@ the first time, after applying the patches to OCaml, do
     make coreboot
     make all
 
+configuration line
+./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
+-no-camlp4 -no-graph
 
-* Future work
+
+* Old Future work
 
 ** The problem of the constructor environment (signature)
 
@@ -223,11 +258,6 @@ with an extra field in location record. Location is almost always used
 as an abstract type.  Thus when extending the concrete type of
 Location.t, little code needs to be patched.
 
-
-
-Fields ppat_ext pexp_ext of Pattern and Exp record seem to be used for
-CSP...
-
 Here is the idea how to simplify trx code. As we discussed earlier,
 the code expression produces Parsedtree, which contains only the names
 of the constructors. We need to know the constructor description.  In
@@ -273,7 +303,7 @@ of identically named constructors.
 See env.ml (and mtype.ml) for functions to export Env.t as a signature
 (and to merge an old signature with the current Env.t -- open).
 There is code for renaming and qualifying all identifiers by a path.
-So, when we generate the code for braket, maintain the list of
+So, when we generate the code for bracket, maintain the list of
 constructors used in the code. Then build the declarations.
 
 Since we won't store the env any more (as part of pexp_ext, ppat_ext),
@@ -282,12 +312,13 @@ to maintain extra time-stamps (which we currently do). The generated
 code becomes self-contained, with all needed constructors, which
 are explicit -- rather than hidden in *_ext fields.
 
-As the intitial approximation, to make porting to OCaml 4, require
+As the initial approximation, to make porting to OCaml 4, require
 that all constructors to be in separate modules (the corresponding
 .cmi must be available at run-time, and, properly, we should record
 their CRC). Later on, save the needed .cmi as part of the code (for
 native compilation). Later, we eliminate that restriction by
-building proper declarations.
+building proper declarations. [BER MetaOCaml N100 implements this
+idea.]
 
 A code value should be a module, struct type t = ... let term = xxx
 end.  That nodule defines all type constructors/types that are used
@@ -306,46 +337,140 @@ let y = <Foo>
 type foo1 = Foo1
 let x = quote (struct type t1 = foo1 = Foo
    let res = Foo end)
-Hmm, has to be a functor... from the env.. We rely
-on contra-variance (env may contain many more
-types...) Since the env should only contain types,
-its run-time representation is empty.
-But splicing is a bit more expensive since we have
-to apply env. All identifiers in the env are
-alpha-renamed to contain the explicit tstamp.
-The main benefit is that we don't need to modify the
-AST to contain the type env.
 
+It has to be a functor, from the env. We rely on contra-variance (env
+may contain many more types), Since the env should only contain
+types, its run-time representation is empty.  But splicing is a bit
+more expensive since we have to apply env. All identifiers in the env
+are alpha-renamed to contain the explicit tstamp.  The main benefit is
+that we don't need to modify the AST to contain the type env.
 
-idea for the constructor calculus
-MetaOCaml:
-datatype definitions can be represented in System Fw:
-data T = Foo | Bar
-is equivalent to the type T, functions foo :: T and
-bar :: T and deconstructor T -> w -> w -> w
-so, the body of the program in the scope of
+An idea for the constructor calculus
+
+Datatype definitions can be represented in System Fw:
+        data T = Foo | Bar
+
+is equivalent to the type T, functions foo :: T and bar :: T and 
+the deconstructor T -> w -> w -> w. The body of the program in the scope of
 T can be represented as
-Lam(t) l fam (foo:t) lam(bar:t)
- lam(decon:forall w. t->w->w) ...
-Now, we assume that Lam and lam are special
-in that they bind `special identifiers' 
-(constructors). We can evaluate under
-such lam. If c is a special identifier, then
-c v is a value. (check CRWL; I think we don't
-need to do anything about not-fully-applied
-constructors, which are values anyway.)
-We need Fw so we can bind types of teh kind
- *->*, etc. needed for defining list-like
-types. The main advantage: we don't need
-to introduce constants, and we get the regular
-scoping, substitution rules. So, constants
-(constructors) and identifiers are pretty much the
-same, with respect to alpha renaming and substitution.
-That simplifies the calculus as we introduce staging.
+  Lam(t) lam(foo:t) lam(bar:t) lam(decon:forall w. t->w->w) ...
+
+Assume that Lam and lam are special in that they bind `special
+identifiers' (constructors) and that we can evaluate under such
+lam. If c is a special identifier, then c v is a value. (check CRWL; I
+think we don't need to do anything about not-fully-applied
+constructors, which are values anyway.)  We need Fw so we can bind
+types of the kind *->*, etc. needed for defining list-like types. The
+main advantage: we don't need to introduce constants, and we get the
+regular scoping, substitution rules. So, constants (constructors) and
+identifiers are pretty much the same, with respect to alpha renaming
+and substitution.  That simplifies the calculus as we introduce
+staging.
 
 
-** CSP
-In trx.ml, check to see if ident_can_be_quoted and path_to_lid
+** Other
+Think about moving the predefined type ('a,'b) code from
+typing/predef.ml[i] into trx.mli Do we really need the code type
+predefined? Can we consider it pervasive instead? There would be no
+need to modify typecore to add a special rule to process the code
+type.
+
+A conversation with Chung-chieh Shan brought up another issue:
+generalization is not at all clear staged languages. Consider
+    .<let f = fun x -> x in (f 1, f true)>.
+The code is OK. When we type-check it at level 0, we have to
+type-check the body of the bracket at level 1
+	   let f = fun x -> x in (f 1, f true)
+and it is certainly OK, since f is generalizable as being bound to a
+value. Now consider this:
+    .<let f = .~(.<fun x -> x>.) in (f 1, f true)>.
+Is this OK? MetaOCaml says yes. What about
+    .<let f = .~((fun y -> y) .<fun x -> x>.) in (f 1, f true)>.
+Now it does not generalize.
+For a good reason! The following, for example, generalizes
+let lift x = .<x>.;;
+let fff =
+	.<let foo = fun x -> let t = .~(lift (ref [])) in 
+	(match !t with [] -> t := [x]; x | [y] -> t := [x]; y) in
+	(foo ("xxx"), foo(true), foo([1,2]))>.;;
+and gives the Bus error. See more description and proposed restriction
+in the file Problems.txt, the entry as of June 11, 2010.
+
+Other interesting cases:
+let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
+
+Interesting case:
+let id y = y in .<let f = fun x -> id y in (f 1, f true)>.;;
+let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
+
+
+
+
+* Done in N004 (Nov 7, 2012)
+Check to see if val_level field in the value_description structure can
+be eliminated. Quite a few patches become unnecessary.  We should
+associate the staging level with identifiers rather than values.  We
+should introduce a new map in Env.t that maps identifiers to levels.
+Global identifiers and identifiers appearing in structures and
+signatures are not in the domain of that map and are implicitly
+0-level. We don't support module expressions in the staged code.
+
+We have done that.
+
+Adding a new Texp_ident (see typecore etc) should be accompanied by
+Env.add_level ident !global_level But we don't support staging for
+objects.
+
+Before
+
+# let x = 1 in .<x>.;;
+- : ('a, int) code = .<1>.
+# let x = [] in .<x>.;;
+- : ('a, 'b list) code = .<(* cross-stage persistent value (as id: x) *)>.
+# let x = None in .<x>.;;
+- : ('a, 'b option) code = .<(* cross-stage persistent value (as id: x) *)>.
+# let x = "abc" in .<x>.;;
+- : ('a, string) code = .<(* cross-stage persistent value (as id: x) *)>.
+# let x = 123l in .<x>.;;
+- : ('a, int32) code = .<(* cross-stage persistent value (as id: x) *)>.
+
+# .<Array.get>.;;
+- : ('a, 'b array -> int -> 'b) code = .<Array.get>.
+# .<List.nth>.;;
+- : ('a, 'b list -> int -> 'b) code =
+.<(* cross-stage persistent value (as id: List.nth) *)>.
+
+Now
+# let x = 1 in .<x>.;;
+- : ('a, int) code = .<1>.
+# let x = [] in .<x>.;;
+- : ('a, 'b list) code = .<(* cross-stage persistent value (as id: x) *)>.
+# let x = None in .<x>.;;
+- : ('a, 'b option) code = .<(* cross-stage persistent value (as id: x) *)>.
+# let x = "abc" in .<x>.;;
+- : ('a, string) code = .<"abc">.
+# let x = 123l in .<x>.;;
+- : ('a, int32) code = .<123>.
+# .<Array.get>.;;
+X: Stage for var is set to implicit 0:Array.get
+- : ('a, 'b array -> int -> 'b) code = .<Array.get>.
+# .<List.nth>.;;
+X: Stage for var is set to implicit 0:List.nth
+- : ('a, 'b list -> int -> 'b) code = .<List.nth>.
+
+More CSP are carried as literals. 
+
+When compiling code expressions, warnings should be disabled since
+they are not informative anyway.  See runcode.ml, the function
+with_disabled_warnings.
+
+
+* Done in N100 (January 2013)
+
+** trx.ml is re-written, and so most of the following has been taken
+care of
+
+In [old] trx.ml, check to see if ident_can_be_quoted and path_to_lid
 can be merged to a single function, following the idea that any path
 made of global/persistent components can be safely converted to lident
 (the time stamps are all zero anyway).  Any such path can be used to
@@ -364,17 +489,8 @@ env.mli). Annot are used for the sake of .annot files. That data could
 be useful to identify CSP that refer to external or global
 identifiers.
 
-It is tantalizing to eliminate Const_csp_value.  Then there is no
-longer a need to modify the code generator (the files in bytecomp/
-directory).  Currently, Const_csp_value is a sort of a structured
-constant. It is used only in the byte-code; it is not used at all for
-machine-code compilation.
-
-
-** Other
-
-There are a few comments in the code (in particular, the file
-trx.ml) marked by ZZZ. Think about them.
+** Re-written trx.ml now does more efficient traversal, so most
+of the following has been taken care of
 
 It seems that there is a lot of room for improvement. For example,
 run compiles and type-checks the code expression from scratch.
@@ -395,11 +511,15 @@ unnecessary traversal and hook trx processing deeper, perhaps within
 typecore.type_exp and typecore.type_binding.  These are the only cases
 that matter...
 
+** Better quotation (which results in better printing of CSP *)
+# let l x = .<x>.;;
+val l : 'a -> ('cl, 'a) code = <fun>  (* Polymorphic! *)
+# l 1;;
+- : ('a, int) code = .<(* cross-stage persistent value (as id: x) *)>.
+# l 1.0;;
+- : ('a, float) code = .<1.>.   (* Now it prints as a constant *)
 
-When compiling code expressions, warnings should be disabled since
-they are not informative anyway.  See runcode.ml, the function
-with_disabled_warnings.
-
+** Record with polymorphic fields in brackets: problem solved
 
 A new way of running the code and its problems.  Actually, the
 problems are old -- the Trx module cannot handle polymorphic
@@ -458,100 +578,3 @@ opt_sexp)' of the function type_exp of the file typecore.ml. In the
 conditional branch of (is_type_exp_second_time sexp) being true, we
 may be missing generalization (or forget to introduce fresh type
 variables).
-
-
-Configuring the system
-./configure -prefix /home/oleg/Cache/ncaml/ -no-pthread -no-tk
-
-
-Think about moving the predefined type ('a,'b) code from
-typing/predef.ml[i] into trx.mli Do we really need the code type
-predefined? Can we consider it pervasive instead? There would be no
-need to modify typecore to add a special rule to process the code
-type.
-
-
-A conversation with Chung-chieh Shan brought up another issue:
-generalization is not at all clear staged languages. Consider
-    .<let f = fun x -> x in (f 1, f true)>.
-The code is OK. When we type-check it at level 0, we have to
-type-check the body of the bracket at level 1
-	   let f = fun x -> x in (f 1, f true)
-and it is certainly OK, since f is generalizable as being bound to a
-value. Now consider this:
-    .<let f = .~(.<fun x -> x>.) in (f 1, f true)>.
-Is this OK? MetaOCaml says yes. What about
-    .<let f = .~((fun y -> y) .<fun x -> x>.) in (f 1, f true)>.
-Now it does not generalize.
-For a good reason! The following, for example, generalizes
-let lift x = .<x>.;;
-let fff =
-	.<let foo = fun x -> let t = .~(lift (ref [])) in 
-	(match !t with [] -> t := [x]; x | [y] -> t := [x]; y) in
-	(foo ("xxx"), foo(true), foo([1,2]))>.;;
-and gives the Bus error. See more description and proposed restriction
-in the file Problems.txt, the entry as of June 11, 2010.
-
-Other interesting cases:
-let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
-
-Interesting case:
-let id y = y in .<let f = fun x -> id y in (f 1, f true)>.;;
-let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
-
-
-
-
-** Done in N004 (Nov 7, 2012)
-Check to see if val_level field in the value_description structure can
-be eliminated. Quite a few patches become unnecessary.  We should
-associate the staging level with identifiers rather than values.  We
-should introduce a new map in Env.t that maps identifiers to levels.
-Global identifiers and identifiers appearing in structures and
-signatures are not in the domain of that map and are implicitly
-0-level. We don't support module expressions in the staged code.
-
-We have done that.
-
-Adding a new Texp_ident (see typecore etc) should be accompanied by
-Env.add_level ident !global_level But we don't support staging for
-objects.
-
-Before
-
-# let x = 1 in .<x>.;;
-- : ('a, int) code = .<1>.
-# let x = [] in .<x>.;;
-- : ('a, 'b list) code = .<(* cross-stage persistent value (as id: x) *)>.
-# let x = None in .<x>.;;
-- : ('a, 'b option) code = .<(* cross-stage persistent value (as id: x) *)>.
-# let x = "abc" in .<x>.;;
-- : ('a, string) code = .<(* cross-stage persistent value (as id: x) *)>.
-# let x = 123l in .<x>.;;
-- : ('a, int32) code = .<(* cross-stage persistent value (as id: x) *)>.
-
-# .<Array.get>.;;
-- : ('a, 'b array -> int -> 'b) code = .<Array.get>.
-# .<List.nth>.;;
-- : ('a, 'b list -> int -> 'b) code =
-.<(* cross-stage persistent value (as id: List.nth) *)>.
-
-Now
-# let x = 1 in .<x>.;;
-- : ('a, int) code = .<1>.
-# let x = [] in .<x>.;;
-- : ('a, 'b list) code = .<(* cross-stage persistent value (as id: x) *)>.
-# let x = None in .<x>.;;
-- : ('a, 'b option) code = .<(* cross-stage persistent value (as id: x) *)>.
-# let x = "abc" in .<x>.;;
-- : ('a, string) code = .<"abc">.
-# let x = 123l in .<x>.;;
-- : ('a, int32) code = .<123>.
-# .<Array.get>.;;
-X: Stage for var is set to implicit 0:Array.get
-- : ('a, 'b array -> int -> 'b) code = .<Array.get>.
-# .<List.nth>.;;
-X: Stage for var is set to implicit 0:List.nth
-- : ('a, 'b list -> int -> 'b) code = .<List.nth>.
-
-More CSP are carried as literals. 

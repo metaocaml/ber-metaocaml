@@ -1,3 +1,6 @@
+January 30, 2013
+	Rewritten trx.ml. Release N100.
+
 January 12, 2013
 	Importing the pretty-printing of code, greatly improved by Jacques
 	Carette.

@@ -1,7 +1,7 @@
 #!/bin/sh
 #########################################################################
 #                                                                       #
-#                            Objective Caml                             #
+#                                 OCaml                                 #
 #                                                                       #
 #            Damien Doligez, projet Para, INRIA Rocquencourt            #
 #                                                                       #
@@ -11,7 +11,6 @@
 #                                                                       #
 #########################################################################
 
-# $Id: ocamlmktop.tpl 6128 2004-02-22 14:52:50Z xleroy $
+# $Id$
 
-exec %%BINDIR%%/ocamlc -linkall toplevellib.cma \
-    metalib.cma bertop.cmo berstart.cmo "$@" topstart.cmo
+exec %%BINDIR%%/ocamlc -I +compiler-libs -linkall ocamlcommon.cma ocamlbytecomp.cma ocamltoplevel.cma metalib.cma bertop.cmo berstart.cmo "$@" topstart.cmo

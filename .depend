@@ -96,7 +96,8 @@ typing/printtyped.cmi : typing/typedtree.cmi
 typing/stypes.cmi : typing/typedtree.cmi parsing/location.cmi \
     typing/annot.cmi
 typing/subst.cmi : typing/types.cmi typing/path.cmi typing/ident.cmi
-typing/trx.cmi : typing/typedtree.cmi
+typing/trx.cmi : typing/typedtree.cmi parsing/parsetree.cmi \
+    parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi
 typing/typeclass.cmi : typing/types.cmi typing/typedtree.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
     typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi
@@ -241,14 +242,16 @@ typing/subst.cmo : typing/types.cmi utils/tbl.cmi typing/path.cmi \
 typing/subst.cmx : typing/types.cmx utils/tbl.cmx typing/path.cmx \
     utils/misc.cmx parsing/location.cmx typing/ident.cmx typing/btype.cmx \
     typing/subst.cmi
-typing/trx.cmo : typing/types.cmi typing/typedtree.cmi typing/path.cmi \
+typing/trx.cmo : utils/warnings.cmi typing/types.cmi typing/typedtree.cmi \
+    typing/typecore.cmi typing/printtyp.cmi typing/predef.cmi typing/path.cmi \
     parsing/parsetree.cmi utils/misc.cmi parsing/longident.cmi \
     parsing/location.cmi typing/ident.cmi typing/env.cmi typing/ctype.cmi \
-    parsing/asttypes.cmi typing/trx.cmi
-typing/trx.cmx : typing/types.cmx typing/typedtree.cmx typing/path.cmx \
+    typing/btype.cmi parsing/asttypes.cmi typing/trx.cmi
+typing/trx.cmx : utils/warnings.cmx typing/types.cmx typing/typedtree.cmx \
+    typing/typecore.cmx typing/printtyp.cmx typing/predef.cmx typing/path.cmx \
     parsing/parsetree.cmi utils/misc.cmx parsing/longident.cmx \
     parsing/location.cmx typing/ident.cmx typing/env.cmx typing/ctype.cmx \
-    parsing/asttypes.cmi typing/trx.cmi
+    typing/btype.cmx parsing/asttypes.cmi typing/trx.cmi
 typing/typeclass.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
     typing/typecore.cmi typing/subst.cmi typing/stypes.cmi \
@@ -497,19 +500,19 @@ bytecomp/translclass.cmx : typing/types.cmx bytecomp/typeopt.cmx \
     bytecomp/lambda.cmx typing/ident.cmx typing/env.cmx utils/clflags.cmx \
     typing/btype.cmx parsing/asttypes.cmi bytecomp/translclass.cmi
 bytecomp/translcore.cmo : typing/types.cmi bytecomp/typeopt.cmi \
-    typing/typedtree.cmi bytecomp/translobj.cmi typing/primitive.cmi \
-    typing/predef.cmi typing/path.cmi typing/parmatch.cmi utils/misc.cmi \
-    bytecomp/matching.cmi parsing/longident.cmi parsing/location.cmi \
-    bytecomp/lambda.cmi typing/ident.cmi typing/env.cmi utils/config.cmi \
-    utils/clflags.cmi typing/btype.cmi parsing/asttypes.cmi \
-    bytecomp/translcore.cmi
+    typing/typedtree.cmi bytecomp/translobj.cmi typing/printtyped.cmi \
+    typing/primitive.cmi typing/predef.cmi typing/path.cmi \
+    typing/parmatch.cmi utils/misc.cmi bytecomp/matching.cmi \
+    parsing/longident.cmi parsing/location.cmi bytecomp/lambda.cmi \
+    typing/ident.cmi typing/env.cmi utils/config.cmi utils/clflags.cmi \
+    typing/btype.cmi parsing/asttypes.cmi bytecomp/translcore.cmi
 bytecomp/translcore.cmx : typing/types.cmx bytecomp/typeopt.cmx \
-    typing/typedtree.cmx bytecomp/translobj.cmx typing/primitive.cmx \
-    typing/predef.cmx typing/path.cmx typing/parmatch.cmx utils/misc.cmx \
-    bytecomp/matching.cmx parsing/longident.cmx parsing/location.cmx \
-    bytecomp/lambda.cmx typing/ident.cmx typing/env.cmx utils/config.cmx \
-    utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
-    bytecomp/translcore.cmi
+    typing/typedtree.cmx bytecomp/translobj.cmx typing/printtyped.cmx \
+    typing/primitive.cmx typing/predef.cmx typing/path.cmx \
+    typing/parmatch.cmx utils/misc.cmx bytecomp/matching.cmx \
+    parsing/longident.cmx parsing/location.cmx bytecomp/lambda.cmx \
+    typing/ident.cmx typing/env.cmx utils/config.cmx utils/clflags.cmx \
+    typing/btype.cmx parsing/asttypes.cmi bytecomp/translcore.cmi
 bytecomp/translmod.cmo : typing/types.cmi typing/typedtree.cmi \
     bytecomp/translobj.cmi bytecomp/translcore.cmi bytecomp/translclass.cmi \
     typing/printtyp.cmi typing/primitive.cmi typing/predef.cmi \
