@@ -95,7 +95,7 @@ index e61be55..2cc4170 100644
  asmcomp/scheduling.cmo : asmcomp/schedgen.cmi asmcomp/scheduling.cmi
  asmcomp/scheduling.cmx : asmcomp/schedgen.cmx asmcomp/scheduling.cmi
 diff --git a/Makefile b/Makefile
-index c336657..abe3e73 100644
+index c336657..05e77de 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -21,6 +21,9 @@ CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
@@ -138,7 +138,7 @@ index c336657..abe3e73 100644
  # Compile everything the first time
  world:
  	$(MAKE) coldstart
-@@ -283,6 +291,14 @@ install:
+@@ -283,6 +291,13 @@ install:
  	cp compilerlibs/ocamlcommon.cma compilerlibs/ocamlbytecomp.cma compilerlibs/ocamltoplevel.cma $(BYTESTART) $(TOPLEVELSTART) $(COMPLIBDIR)
  	cp expunge $(LIBDIR)/expunge$(EXE)
  	cp toplevel/topdirs.cmi $(LIBDIR)
@@ -148,7 +148,6 @@ index c336657..abe3e73 100644
 +# into $((COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
 +	cp typing/trx.cmi $(LIBDIR)
 +# BTW, trx.cmo is part of ocamlcommon.cma
-+	cd metalib; $(MAKE) install
 +# NNN end
  	cd tools; $(MAKE) install
  	-cd man; $(MAKE) install
