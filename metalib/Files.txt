@@ -1,0 +1,54 @@
+OCaml files affected by the BER MetaOCaml. 
+Search for NNN in each files for concrete changes
+
+./Makefile
+./ocamldoc/Makefile
+
+done	./parsing/lexer.mll
+done	./parsing/parser.mly
+done	./parsing/parsetree.mli
+done	./parsing/printast.ml
+
+done	./bytecomp/lambda.ml	Only adding Const_csp_value
+done	./bytecomp/lambda.mli
+done	./bytecomp/printlambda.ml
+done	./bytecomp/translcore.ml
+done	./bytecomp/symtable.ml
+
+done	./tools/depend.ml
+done	./tools/addlabels.ml
+done	./tools/dumpobj.ml (only printing Const_csp_value)
+done	./tools/ocamlprof.ml
+
+done	./typing/typedtree.mli
+done	./typing/typedtree.ml
+done	./typing/predef.ml
+done	./typing/predef.mli
+
+done    ./typing/printtyped.ml    did not exist before, trivial changes
+done    ./typing/cmt_format.ml    did not exist before, trivial changes
+
+done	./typing/env.mli
+done	./typing/env.ml
+
+done	./typing/typecore.mli
+done	./typing/typecore.ml
+done	./typing/typemod.ml 
+
+done    ./tools/untypeast.ml     did not exist before, trivial changes
+done    ./tools/typedtreeIter.ml did not exist before, trivial changes
+
+
+done	./typing/trx.mli
+done	./typing/trx.ml 
+
+
+		./typing/ident.ml       No longer changed
+		./typing/ident.mli      No longer changed
+		./typing/typeclass.ml   No longer changed
+
+./typing/unused_var.ml  No longer present
+
+
+./asmcomp/cmmgen.ml	Not changed; Const_csp_value will cause fatal error
+			Const_csp_value must not appear in native code

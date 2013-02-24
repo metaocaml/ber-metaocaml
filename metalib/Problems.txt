@@ -1,0 +1,208 @@
+			Open and closed problems
+
+June 11, 2010.
+
+While designing a counter-example, I was too
+successful. The counter-example worked, also for OCaml
+
+let lift x = .<x>.;;
+let fff =
+	.<let foo = fun x -> let t = .~(lift (ref [])) in 
+	(match !t with [] -> t := [x]; x | [y] -> t := [x]; y) in
+	(foo ("xxx"), foo(true), foo([1,2]))>.;;
+
+So, the future-stage lambda should not be considered unexpansive by
+default. We should check the body for escapes. In principle,
+we should also check for CSP -- however MetaOCaml, unlike the
+calculus of PEPM03 paper, permits CSP of only values rather than
+expressions. And we know that we can't have a polymorphic reference
+cell bound to an identifier or as a constant.
+So, we should declare expansive those future-stage lambda whose
+bodies contain expansive escapes (that is, escapes that are not
+manifest code constants such as <0>). We should be careful of multiple-levels
+though; the problem above occurs because ``polymorphic'' reference cell can
+be a value (once created), and can be lifted to code. So, we should
+conservatively regard as potentially expansive a future-stage lambda
+that has expansive escapes to any level.
+
+
+
+May 5, 2010
+Loading test/test21.ml in top-level works fine. However, compiling
+that file gives 
+  Fatal error: exception Invalid_argument("output_value: functional value")
+
+If we pass the flags -drawlambda -dinstr to the compiler, we observe
+that the constants "" and Pervasive.^ are accompanied with
+environments (which are probably useless in that case anyway).
+If the code file has nested modules, it seems the environemnt has
+functional values. Therefore, attempting to serialize such an
+environment fails.
+
+The permanent solution requires re-thinking of building parsetree at run-time
+(see quote_constant in trx.ml)
+We shouldn't probably attach environemnt to contants. Also, we should
+get rid of location information, which is not needed and can be
+confusing.
+
+
+It turns out that the environment indeed contains functional values.
+The patch from Fabrice Le Fessant (who faced a similar problem in
+JoCaml) helped.
+
+
+
+-- Older
+
+
+
+(* CSP issues *)
+let f = fun x -> .<x>.;;
+let a = .<fun y -> .~(f .<y>.)>.;;
+let b = .! a;;
+let c = b 56;;
+let d = .! c;;
+
+let f = fun x -> .<x>.;;
+let a = .<fun y -> .~(f .<.<y>.>.)>.;;
+let b = .! a;;
+let c = b 56;;
+let d = .! c;;
+
+let f = fun x -> .<x>.;;
+let a = .<fun y -> f y>.;;
+let f2 = .! a;;
+let a2 = .<fun y -> .~(f2 .<.<y>.>.)>.;;
+let b = .! a2;;
+let c = b 56;;
+let d = .! c;;
+
+
+(* Type synonyms/aliasing bug: *)
+-- Description: Pattern matching against a value whose type is a type
+synonym, while using the pattern alias (as s) results in a
+type-checking error when applying .! to a piece of code.
+
+-- The smallest example of this bug is:
+type vect = int * int;;
+type state = State of vect;;
+let f state = .<let (State d) as s = .~state in
+               let (u,v) = d in 34>.;;
+let c = f .<State (2,3)>. in .! c;;
+
+-- error: "This expression has type vect but is here used with type 'a * 'b"
+
+-- The piece of code where this exception is raised is the call to
+(type_expect) in the function type_let in typecore.ml.
+
+-- Suspected reasons: The type synonym 'vect' is not unified with 'a *
+'b, which it should be. The problem seems the way that we handle
+environments. When type-checking run, the (initial) environment in
+which it is type-checked does not seem to contain a binding for the
+type vect.
+
+-- General note: This problem seems to be an artifact of how we
+   implement environments. Perhaps we need to deal with these things
+   more systematically.
+
+
+Oct 3, 2006
+ printing of `record with expressions'
+ type recd = {f1 : int; f2 : string};;
+
+ let foo = .<let x = {f1=1; f2="a"} in
+            let y = {x with f1 = 2} in
+            y>.
+ ;;
+
+ produces the output
+  val foo : ('a, recd) code =
+   .<let x_3 = {f1 = 1; f2 = "a"} in let y_4 = {f1 = 2} (x_3) in y_4>.
+
+ The expression "{f1 = 2} (x_3)" obviously can't be right: a record is
+ not a function and can't be applied.
+
+ That is merely a printing issue:
+  .! foo;;
+   - : recd = {f1 = 2; f2 = "a"}
+
+ which is correct.
+
+
+Tue Jan 18 14:08:52 GMTST 2005
+  BUG: type aliases are not handled correctly in code, example:
+    # type a = int;;
+    # let f (x:a) = 1;;
+    # .! .<f 1>.;;
+    This expression has type int but is here used with type a
+  PROBLEM: the type of csp constants cannot resolve type aliases
+  FIX: when typing Pexp_cspval return a fresh variable so it will type
+    check in any situation
+
+Tue Jan 11 11:19:23 GMTST 2005
+  BUG: records, constructors etc are typed once and their type is reused, same
+    bug as on Jan 10 2005.
+  FIXED: when typing e.g. a record field access (Pexp_field) the stored type
+   is still used to get the label description (used by the compiler to compute
+   the offset for field access), but the toplevel type is not reused and a
+   fresh type variable is returned instead. In this way we avoid that several
+   runs of code coming from the same field access have their types unified.
+
+Mon Jan 10 18:51:21 GMTST 2005
+  BUG: csp constants in Pervasives (and similar) are type checked only once for
+  a given occurrence.
+   # let f x  = .< ref .~ x>.
+     in (.! (f .<3>.), .! (f .<1.3>.));;
+   This expression has type int but is here used with type float
+   Exception: Trx.TypeCheckingError.
+  PROBLEM: "ref" is typechecked only once when f is declared, and the resulting
+    type is used twice in the second line
+  FIXED: typing/typecore.ml now re-createx the untyped parsetree for the
+    Pervasive identifier and type-checks it again.
+
+Tue Jan 20 12:18:00 GMTST 2004
+  BUG: typechecker broken for csp ids, e.g. we get the wrong type
+  We get the incorrect typing (inner and outer code forced to be both 'a)
+   # .<fun x -> .<x>.>.;;
+   - : ('a, 'b -> ('a, 'b) code) code = .<fun (x_2) -> .<(x_2)>.>.    
+  PROBLEM: typechecker unifies the current level with the id's level left-to-right
+   but the latest classifier is the leftmost.
+  FIXED: levels are now unified right-to-left, and get correct type:
+    # .<fun x -> .<x>.>.;;
+    - : ('a, 'b -> ('c, 'b) code) code = .<fun (x_1) -> .<(x_1)>.>.
+
+Fri May 16 14:54:22 BST 2003
+  BUG: standalone bytecode compiling does not work with tag elimination
+       e.g. ./ocamlc toplevel/toplevellib.cma mex/evaletag.mk; ./a.out
+  PROBLEM: Tooploop.etag gets a typing error because timestamp of the code is in
+  the future (similar problem in the past with run)
+  FIXED: current timestamp bumped with the timestamp of the env passed to etag
+
+Mon Nov 25 18:24:28 GMT 2002
+  BUG: error typecore.ml: Texp_construct expected
+  PROBLEM: somehow typechecked made restrictive assuptions on the contents of the pexp_ext field for the case pPexp_construct
+  FIXED: assumptions relaxed 
+
+Mon Nov 25 10:10:32 GMT 2002
+  BUG: csp of array ops gives internal errors
+  PROBLEM: arrays are treated in a special way after typechecking phase, so replacing an op with a csp val of the op changes the semantics. Use ocamlc -dlambda to see how array ops are treated internally. 
+  FIXED: csp of array is rebuilt, like a Pervasives, so it's type-checked again, and the second phase of the compiler is happy.
+
+Thu Oct 24 09:55:36 BST 2002
+  BUG: csp at level n+2 gives Segmentation fault
+  PROBLEM: now Trx.mkcsp takes 2 args and not one, forgot to change cases
+  instvar and cspval at level n+1 accordingly
+  FIXED: cases instvar and cspvar at level n+1 now pass a second argument (None)
+
+Wed Oct  2 08:39:04 BST 2002
+  BUG: occurrences of a csp value share the same instantiated type
+  APPEARED: when treating Pervasives.* in a special way for performance. The
+  type of e.g. Pervasives.! is recorded in the extra field as an instantiated
+  type, so applications of the value cause unification.
+  BACKGROUND: values' types are closed schemas (all the identifiers are generic).
+  During type checking the types are instantiated. Instantiation is idempotent,
+  so one should always carry the schema somewhere. A typed expression exp such
+  that exp.exp_desc = Texp_ident (ident,value_description) has an instantiated
+  type in exp.exp_type and the type schema in value_description.val_type.
+  FIXED: Trx.trx creates a new instantiation for csp idents; Typecore.type_exp
+  re-instantiates the type schema when type-checking a cspval
