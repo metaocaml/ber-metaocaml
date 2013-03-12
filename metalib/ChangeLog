@@ -1,3 +1,11 @@
+February 20, 2013
+	Re-enabled ocamlbuild.byte target in the Makefile, so to
+	to build ocamlbuild as part of the make all.
+	A small fix to permit compiling ocamlopt. Although at present,
+	ocamlopt can't compile code with brackets, it can compile
+	the regular OCaml code. In addition, it supports let!.
+	Thanks to Bob Zhang for suggestions.
+
 January 30, 2013
 	Rewritten trx.ml. Release N100.
 

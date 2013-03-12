@@ -120,7 +120,7 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-	otherlibraries ocamldoc
+	otherlibraries ocamlbuild.byte ocamldoc
 # NNNNN otherlibraries ocamldoc
 # NNN The rest is not tried or not yet supported
 #  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
