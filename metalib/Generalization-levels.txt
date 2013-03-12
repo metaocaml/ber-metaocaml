@@ -286,12 +286,12 @@ also at generic_level) since generic_level is the highest.
 The difference emerges in
 
             let ty1 = newvar () in
-            let list_type = Tconstr(p_list, [ty1]) in
+            let list_type = newgenty (Tconstr(p_list, [ty1])) in
             let texp = instance env list_type in
             unify env texp some_type
 
             let ty2 = newgenvar () in
-            let list_type = Tconstr(p_list, [ty2]) in
+            let list_type = newgenty (Tconstr(p_list, [ty2])) in
             let texp = instance env list_type in
             unify env texp some_type
 
