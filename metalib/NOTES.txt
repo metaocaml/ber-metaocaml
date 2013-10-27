@@ -186,6 +186,96 @@ performed!
 
 ** Search for TODO in trx.ml
 
+** Generating let rec with statically unknown number of bindings
+(suggestion by Jun Inoue)
+Use case: specialization of recursive functions, e.g., specializing
+KMP.
+
+proposed interface
+module MakeLetRecs : sig
+  type letrec_id                        (* abstract *)
+  val make_letrec : (letrec_id -> ('cl,'w) code) -> ('cl,'w) code
+
+  val add_fun_binding : letrec_id -> 
+  (('cl,'a->'b) code -> ('cl,'a->'b) code) -> 
+    (('cl,'a->'b) code -> ('cl,'w) code) -> ('cl,'w) code
+end
+
+Perhaps there should also be
+ add_lazy_binding : letrec_id -> ('a lazy code -> 'b lazy code) -> ...
+  (* classifiers omitted *)
+i.e. one that generates bindings of the form
+ a = lazy (foo a)
+
+Jun Inoue wrote:
+I wonder if it wouldn't be too limiting to restrict the interface
+slightly further, so as to ensure that we never get a "this kind of
+expression is not allowed on the right-hand side of a let rec" error?
+For instance, add_fun_binding could be restricted so that
+  add_fun_binding : letrec_id -> (('arg -> 'ret) code -> 'arg code ->
+'ret code) -> (('arg -> 'ret) code -> 'body code) -> 'body code
+and
+  add_fun_binding id (fun f x -> .<.~f .~x>.) (fun f -> .<.~f 0>.)
+produces
+  .<let rec f x = f x in f 0>.
+
+** well-formedness check for let rec
+
+  let rec x = x in x;;
+              ^
+Error: This kind of expression is not allowed as right-hand side of `let rec'
+
+It is not well-formed. But it is well-typed:
+
+let c1 = .<let rec x = x in x>.;;
+   val c1 : ('cl, 'a) code = .<let rec x_142 = x_142 in x_142>. 
+
+and it is accepted by MetaOCaml. It is only when we try to compile
+(that is, run) the generated code, we see a problem
+
+.! c1;;
+   Exception: Translcore.Error (_, 1).
+
+
+Once I knew where to look, I found another similar problem:
+
+let c2 = .<let rec [] = [] in []>.;;
+  val c2 : ('cl, 'a list) code = .<let rec [] = [] in []>. 
+
+It is well-typed and accepted. Alas,
+
+.! c2;;
+   Exception: Translcore.Error (_, 0).
+
+This problem has existed in MetaOCaml from the very beginning, as far
+as I could see.
+
+The first problem is most troubling. Consider
+
+let t1 x = .<0:: .~x>.;;
+  val t1 : ('cl, int list) code -> ('cl, int list) code = <fun>
+let t2 x = .<if true then 0:: .~x else [1]>.;;
+  val t2 : ('cl, int list) code -> ('cl, int list) code = <fun>
+
+Both t1 and t2 are well-typed and accepted. They have identical types.
+However,
+
+let r = .<let rec x = .~(t1 .<x>.) in 2>. in .!r;;
+  - : int = 2
+
+let r = .<let rec x = .~(t2 .<x>.) in 2>. in .!r;;
+  Exception: Translcore.Error (_, 1).
+
+I was thinking to check that all future-stage letrec are of the form 
+        let rec f x1 ... xn = ...
+although this is certainly restrictive since it precludes lazy
+bindings and also the following legitimate code
+
+        type stream = Stream of string * (unit -> stream);;
+        let rec f = Stream ("stream", fun () -> f) in f;;
+Perhaps it may be worth noting the issue and leave it for now?
+
+
 * Installation notes
 When linking the first time, beware!
 Since we added to predef.ml[i], we have changed the timestamps of the
