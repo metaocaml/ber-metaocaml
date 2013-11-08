@@ -1,0 +1,49 @@
+February 20, 2013
+	Re-enabled ocamlbuild.byte target in the Makefile, so to
+	to build ocamlbuild as part of the make all.
+	A small fix to permit compiling ocamlopt. Although at present,
+	ocamlopt can't compile code with brackets, it can compile
+	the regular OCaml code. In addition, it supports let!.
+	Thanks to Bob Zhang for suggestions.
+
+January 30, 2013
+	Rewritten trx.ml. Release N100.
+
+January 12, 2013
+	Importing the pretty-printing of code, greatly improved by Jacques
+	Carette.
+
+January 7-12, 2013
+	Beginning the port to OCaml 4.00.1. The basic changes to OCaml
+	are done. Started work on re-writing trx.ml
+
+December 28, 2012
+	Version N004 released
+
+November 8, 2012
+	Eliminating val_level from value_desc. Introducing Env map stage
+	to map an identifier to its stage, if not zero. Several
+	OCaml modules no longer have to be patched.
+	Simplified CSP code, removed a few patches from typecore.
+	SCP now carries strings, native_int, int32, int64 as
+	literal constants. Identifiers in List module are carried
+	by reference.
+
+October 4, 2012
+	Jacques Carette has committed Alain Frisch's patch implementing
+	the let! form proposed by Nicolas Pouillard for monadic
+	programming in Ocaml.
+	http://pauillac.inria.fr/~protzenk/let-bang.html
+	See metalib/test/pythagorian_triples.ml for an example.
+
+January 3, 2011
+	Added metaocamlmktop
+
+December 2010
+	Patch from Fabrice Le Fessant to remove functional values
+	from typing Env. See entry May 5, 2010 in Problems.txt.
+	Generic printing is now part of BER MetaOCaml.
+
+March 1, 2010
+	Version N002 released, based on OCaml 3.11
+

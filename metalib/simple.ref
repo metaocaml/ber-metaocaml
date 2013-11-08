@@ -1,0 +1,54 @@
+BER MetaOCaml toplevel, version N 100
+        OCaml version 4.00.1
+
+#         val tr1 : ('cl, 'a -> int) code = .<fun x_1 -> 1>. 
+# * *   val tr1' : ('cl, 'a -> 'b -> 'b) code = .<fun x_2 -> fun x_3_4 -> x_3_4>. 
+# * *   val tr2 : ('cl, 'a -> int) code = .<fun x_5 -> 1>. 
+# * *     Characters 90-98:
+  let tr3 = .<fun x -> .~(let x = .! .<x>. in .<x>.)>.;;
+                                  ^^^^^^^^
+Error: .! error: 'cl not generalizable in ('cl, 'a) code
+
+#   * * * *   Error was expected
+- : unit = ()
+#   Characters 16-27:
+  .< fun x -> .~ (.!.< x >.) >.;;
+                 ^^^^^^^^^^^
+Error: .! occurs check error: 'cl occurs in ('cl, ('cl, 'a) code) code
+# * * * * *   Error was expected
+- : unit = ()
+#   Characters 36-37:
+  let tr4 = .<fun x -> .~(let x = .! x in .<x>.)>.;;
+                                     ^
+Error: Wrong level: variable bound at level 1 and used at level 0
+# * * * * *   Error was expected
+- : unit = ()
+#   val tr5 : ('cl, 'a -> int) code = .<fun x_6 -> .!.<1>.>. 
+# * *   #   val tr6 : ('cl, 'a -> 'a) code = .<fun x_7 -> .!.<x_7>.>. 
+# * *   #   Characters 22-26:
+  let tr7 = .<fun x -> .! x>.;;
+                       ^^^^
+Error: .! error: 'cl not generalizable in ('cl, 'a) code
+
+# * * * * *   Error was expected
+- : unit = ()
+#     val tr8 : ('cl, 'a -> ('cl, 'a) code) code = .<
+  fun x_8 -> (* cross-stage persistent value (id: y) *)>. 
+# * * *     Characters 152-158:
+  let tr8r = .! tr8;;
+             ^^^^^^
+Error: .! occurs check error: 'cl occurs in ('cl, 'a -> ('cl, 'a) code) code
+# * * * * *   Error was expected
+- : unit = ()
+#     val tm1 : ('cl, 'a -> ('cl0, 'a) code) code = .<fun x_9 -> .<x_9>.>. 
+# * *         val tg1 : '_a list ref = {contents = []}
+# * * *   val tg2 : '_a list ref = {contents = []}
+# * * *         * * * *     * * * * * * * * * * * * * * * * * *       val tfc1 : int Runcode.cde = .<1>. 
+#   #   val tfc2 : ('cl, int Runcode.cde) code = .<{Runcode.cde = .<1>.}>. 
+# * *   val tfc3 : int Runcode.cde = .<1>. 
+#   val tfc4 : int Runcode.cde Runcode.cde = .<{Runcode.cde = .<1>.}>. 
+#   val tfc5 : int Runcode.cde = .<1>. 
+#   #     
+All Done
+- : unit = ()
+# 
