@@ -632,6 +632,23 @@ class printer  ()= object(self:'self)
           self#expression  e
     | Pexp_variant (l,Some eo) ->
         pp f "@[<2>`%s@;%a@]" l  self#simple_expr eo
+(* NNN through the end of the case *)
+    | Pexp_bracket (e) ->
+        pp f "@[<hov2>.<@ %a @ >.@]" self#expression e
+    | Pexp_escape (e) ->
+        let simple_exp = match e.pexp_desc with
+        | Pexp_ident (_) -> true
+        | _ -> false
+        in
+        pp f ".~%a" (self#paren simple_exp self#expression) e
+    | Pexp_cspval (v,li) ->
+      (* was: compiled code omitted
+         however, CSP values's are not always compiled code:
+           let f x = x in
+           let g   = .!.<fun x -> f x>. *)
+      pp f "(* cross-stage persistent value (id: %a) *)"
+          self#longident_loc li
+ (* NNN end *)
     | _ -> self#expression1 f x
   method expression1 f x =
     match x.pexp_desc with

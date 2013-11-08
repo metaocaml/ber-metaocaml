@@ -1,13 +1,15 @@
 OCaml files affected by the BER MetaOCaml. 
 Search for NNN in each files for concrete changes
 
-./Makefile
+Y./Makefile
 ./ocamldoc/Makefile
 
-done	./parsing/lexer.mll
-done	./parsing/parser.mly
-done	./parsing/parsetree.mli
-done	./parsing/printast.ml
+Ydone	./parsing/lexer.mll
+Ydone	./parsing/parser.mly
+Ydone	./parsing/parsetree.mli
+Ydone	./parsing/printast.ml       trivial
+        ./parsing/pprintast.ml      new in 4.01
+        ./parsing/ast_mapper.ml     new in 4.01, trivial 
 
 done	./bytecomp/lambda.ml	Only adding Const_csp_value
 done	./bytecomp/lambda.mli
