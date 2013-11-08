@@ -19,6 +19,9 @@ CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
 CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink
 COMPFLAGS=-strict-sequence -w +33..39 -warn-error A $(INCLUDES)
 LINKFLAGS=
+# For debugging
+# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
+# LINKFLAGS=-g #NNN
 
 CAMLYACC=boot/ocamlyacc
 YACCFLAGS=-v
@@ -45,6 +48,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/pprintast.cmo \
   parsing/ast_mapper.cmo
 
+# NNN (trx)
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \
@@ -57,6 +61,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/typedtreeIter.cmo typing/typedtreeMap.cmo typing/cmt_format.cmo \
   typing/stypes.cmo typing/typecore.cmo \
   typing/typedecl.cmo typing/typeclass.cmo \
+  typing/trx.cmo \
   typing/typemod.cmo
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
@@ -116,8 +121,11 @@ defaultentry:
 	@echo "should work.  But see the file INSTALL for more details."
 
 # Recompile the system using the bootstrap compiler
-all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
+all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml 
+# NNNN  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
+# NNN Since MetaOcaml is no binary compatible with OCaml, there is
+# no need to be rebuilding libraries
+# NNN make all && (cd metalib && make clean all) && (make install; cd metalib && make install)
 
 # Compile everything the first time
 world:
@@ -288,6 +296,13 @@ install:
 	   $(COMPLIBDIR)
 	cp expunge $(LIBDIR)/expunge$(EXE)
 	cp toplevel/topdirs.cmi $(LIBDIR)
+# NNN typing/trx.ml needs its own interface (since it looks up identifiers
+# in itself)
+# Although typing/trx.cmi is already copied, see above, it is copied
+# into $((COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
+	cp typing/trx.cmi $(LIBDIR)
+# BTW, trx.cmo is part of ocamlcommon.cma
+# NNN end
 	cd tools; $(MAKE) install
 	-cd man; $(MAKE) install
 	for i in $(OTHERLIBRARIES); do \
