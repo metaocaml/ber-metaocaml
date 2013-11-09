@@ -71,6 +71,8 @@ let rec env_from_summary sum subst =
               raise (Error (Module_not_found path'))
           in
           Env.open_signature Asttypes.Override path' (extract_sig env mty) env
+      | Env_stage(s, id, st) ->                           (* NNN *)
+          Env.add_stage id st (env_from_summary s subst)  (* NNN *)
     in
       Hashtbl.add env_cache (sum, subst) env;
       env
