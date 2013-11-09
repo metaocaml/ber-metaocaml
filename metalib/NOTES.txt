@@ -1,3 +1,12 @@
+just the standard installation: configure then make world
+binary compatibility: no need to build otherlibs (check with Anil)
+no special syntax .!
+ there is !. (prefix operation, for historical reasons)
+ There is Trx.run (using bytecode). More different runs (of the same
+ signature) are coming
+ No env calssifiers
+ Trx_error -- the single error variant for all our errors
+
 			BER MetaOCaml
 
 * Main differences from the original MetaOCaml

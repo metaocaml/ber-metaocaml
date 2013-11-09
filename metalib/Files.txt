@@ -1,55 +1,57 @@
 OCaml files affected by the BER MetaOCaml. 
 Search for NNN in each files for concrete changes
 
-Y./Makefile
+./Makefile
 ./ocamldoc/Makefile
 
-Ydone	./parsing/lexer.mll
-Ydone	./parsing/parser.mly
-Ydone	./parsing/parsetree.mli
-Ydone	./parsing/printast.ml       trivial
-        ./parsing/pprintast.ml      new in 4.01
-        ./parsing/ast_mapper.ml     new in 4.01, trivial 
+done	./parsing/lexer.mll
+done	./parsing/parser.mly
+done	./parsing/parsetree.mli
+done	./parsing/printast.ml       trivial
+done    ./parsing/pprintast.ml      new in 4.01
+done    ./parsing/ast_mapper.ml     new in 4.01, trivial 
 
-done	./bytecomp/lambda.ml	Only adding Const_csp_value
-done	./bytecomp/lambda.mli
-done	./bytecomp/printlambda.ml
-done	./bytecomp/translcore.ml
-done	./bytecomp/symtable.ml
+	./bytecomp/lambda.ml	Only adding Const_csp_value
+	./bytecomp/lambda.mli
+	./bytecomp/printlambda.ml
+	./bytecomp/translcore.ml
+	./bytecomp/symtable.ml
 
-done	./tools/depend.ml
-done	./tools/addlabels.ml
-done	./tools/dumpobj.ml (only printing Const_csp_value)
-done	./tools/ocamlprof.ml
+	./tools/depend.ml
+	./tools/addlabels.ml
+	./tools/dumpobj.ml (only printing Const_csp_value)
+	./tools/ocamlprof.ml
 
 done	./typing/typedtree.mli
 done	./typing/typedtree.ml
 done	./typing/predef.ml
 done	./typing/predef.mli
 
-done    ./typing/printtyped.ml    did not exist before, trivial changes
-done    ./typing/cmt_format.ml    did not exist before, trivial changes
+done    ./typing/printtyped.ml      did not exist before, trivial changes
+done    ./typing/typedtreeIter.ml   in 4.01, moved from tools, trivial changes
+done    ./typing/typedtreeMap.ml    new in 4.01, trivial changes
 
 done	./typing/env.mli
 done	./typing/env.ml
+done    ./typing/envaux.ml   new in 4.01, trivial changes
 
-done	./typing/typecore.mli
-done	./typing/typecore.ml
-done	./typing/typemod.ml 
+	./typing/typecore.mli
+	./typing/typecore.ml
+	./typing/typemod.ml 
 
-done    ./tools/untypeast.ml     did not exist before, trivial changes
-done    ./tools/typedtreeIter.ml did not exist before, trivial changes
+    ./tools/untypeast.ml     did not exist before, trivial changes
 
 
-done	./typing/trx.mli
-done	./typing/trx.ml 
+	./typing/trx.mli
+	./typing/trx.ml 
 
 
 		./typing/ident.ml       No longer changed
 		./typing/ident.mli      No longer changed
 		./typing/typeclass.ml   No longer changed
+                ./typing/cmt_format.ml    in 4.01, no longer changed
 
-./typing/unused_var.ml  No longer present
+                ./typing/unused_var.ml  No longer present in Ocaml 4
 
 
 ./asmcomp/cmmgen.ml	Not changed; Const_csp_value will cause fatal error
