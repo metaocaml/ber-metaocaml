@@ -322,6 +322,10 @@ module MakeIterator(Iter : IteratorArgument) : sig
             iter_class_structure cl
         | Texp_pack (mexpr) ->
             iter_module_expr mexpr
+        (* NNN: through the rest of the expression *)
+        | Texp_bracket exp -> iter_expression exp
+        | Texp_escape  exp -> iter_expression exp
+        | Texp_cspval (_, li) -> ()
       end;
       Iter.leave_expression exp;
 

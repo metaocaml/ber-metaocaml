@@ -99,6 +99,10 @@ and expression_desc =
   | Texp_lazy of expression
   | Texp_object of class_structure * string list
   | Texp_pack of module_expr
+(* NNN through the rest of the definition of expression *)
+  | Texp_bracket of expression
+  | Texp_escape of expression
+  | Texp_cspval of Obj.t * Longident.t loc
 
 and meth =
     Tmeth_name of string
