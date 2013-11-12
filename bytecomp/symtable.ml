@@ -218,6 +218,7 @@ let rec transl_const = function
       block
   | Const_float_array fields ->
       Obj.repr(Array.of_list(List.map (fun f -> float_of_string f) fields))
+  | Const_csp_value v -> v                                  (* NNN *)
 
 (* Build the initial table of globals *)
 

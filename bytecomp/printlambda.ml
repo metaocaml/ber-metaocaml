@@ -39,6 +39,8 @@ let rec struct_const ppf = function
       let floats ppf fl =
         List.iter (fun f -> fprintf ppf "@ %s" f) fl in
       fprintf ppf "@[<1>[|@[%s%a@]|]@]" f1 floats fl
+  | Const_csp_value _ ->                        (* NNN *)
+      fprintf ppf "(CSP_value)"(* NNN; or use print_obj from tools/dumpobj.ml *)
 
 let boxed_integer_name = function
   | Pnativeint -> "nativeint"

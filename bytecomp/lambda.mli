@@ -143,6 +143,7 @@ type structured_constant =
   | Const_block of int * structured_constant list
   | Const_float_array of string list
   | Const_immstring of string
+  | Const_csp_value of Obj.t                   (* NNN: immediate CSP *)
 
 type function_kind = Curried | Tupled
 
