@@ -6,7 +6,7 @@ let install_printers () =
   Topdirs.dir_install_printer Format.std_formatter
     (Ldot(Lident "Print_code", "print_code"));
   Topdirs.dir_install_printer Format.std_formatter
-    (Ldot(Lident "Print_code", "print_cde"))
+    (Ldot(Lident "Print_code", "print_closed_code"))
 
 (* Initialization function *)
 

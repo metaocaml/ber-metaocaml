@@ -1,11 +1,16 @@
 just the standard installation: configure then make world
+ no longer any bootstrap
 binary compatibility: no need to build otherlibs (check with Anil)
 no special syntax .!
  there is !. (prefix operation, for historical reasons)
  There is Trx.run (using bytecode). More different runs (of the same
  signature) are coming
- No env calssifiers
+ No env classifiers
  Trx_error -- the single error variant for all our errors
+ Different API for running code, with closed_code
+ Printing is now part of Ocaml (Pprintast, which was influenced by
+ OCaml)
+ 
 
 			BER MetaOCaml
 

@@ -3,6 +3,11 @@
 (* and simplified by Jacques Carette *)
 
 open Format
+open Runcode
+open Parsetree
+
+(*
+open Format
 open Parsetree
 (* open Pprintast *)
 
@@ -1851,38 +1856,49 @@ let rec toplevel_phrase = function
 
 end
 
+*)
+
 (* print code as a parse tree. Useful for debugging *)
-let print_code_as_ast x =
+let print_code_as_ast cde =
+  let cde = (cde : Trx.closed_code_repr :> Parsetree.expression) in
   Printast.implementation Format.std_formatter
-  [{ pstr_desc = Pstr_eval ((Obj.magic x) : Parsetree.expression);
+  [{ pstr_desc = Pstr_eval (cde);
      pstr_loc  = Location.none }]
 
-let inpc ppf x = 
+let format_code : Format.formatter -> 'a closed_code -> unit = fun ppf cde ->
+  let cde = (cde : Trx.closed_code_repr :> Parsetree.expression) in
+  Pprintast.expression ppf cde
+
+(*
   let module M = PR(struct let ppf = ppf end) in
   fprintf ppf ".<@,"; M.expression x; fprintf ppf ">.@ ";
   try ignore (Trx.check_scope_extrusion x)
   with e -> fprintf ppf "\n%s" (Printexc.to_string e)
-  
+*)
 
-let inpc_string x =
-  ignore (flush_str_formatter ()) ;
-  inpc str_formatter x ;
-  flush_str_formatter ()
 
+(*
 let top_phrase_pretty ppf x =
   let module M = PR(struct let ppf = ppf end) in
   pp_print_newline ppf () ;
   M.toplevel_phrase x;
   fprintf ppf ";;" ;
   pp_print_newline ppf ()
+*)
 
 (* These functions are suitable for installing as printers
    at the toplevel, using top-level directive install printer.
    Don't rename these functions or change their types.
-   See metatop.ml, which refers to these functions by their external
+   See bertop.ml, which refers to these functions by their external
    symbolic name.
 *)
 
-let print_code ppf (x : ('c,'a) code) = inpc ppf (Obj.magic x)
+let print_closed_code  : Format.formatter -> 'a closed_code -> unit = 
+  fun ppf cde ->  
+    Format.fprintf ppf ".<@,%a>.@ " format_code cde
 
-let print_cde ppf (x : 'a Runcode.cde) = print_code ppf x.Runcode.cde
+let print_code ppf (cde : 'a code) = 
+  let (cde, check) = close_code_delay_check cde in
+  print_closed_code ppf cde;
+  try check ()
+  with e -> fprintf ppf "\n%s" (Printexc.to_string e)

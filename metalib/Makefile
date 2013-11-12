@@ -13,10 +13,10 @@ INCLUDES=-I $(CAMLROOT)/utils \
 	-I $(CAMLROOT)/toplevel -I $(CAMLROOT)/stdlib
 COMPILER=$(CAMLROOT)/ocamlc
 CAMLC=$(RUNTIME) $(COMPILER) $(INCLUDES)
-COMPFLAGS=-g -warn-error A -nostdlib
+COMPFLAGS=-strict-sequence -w +33..39 -warn-error A -nostdlib
 OPTCOMPILER=$(CAMLROOT)/ocamlopt
 CAMLOPT=$(RUNTIME) $(OPTCOMPILER)
-OPTCOMPFLAGS=-warn-error A -nostdlib
+OPTCOMPFLAGS=-strict-sequence -w +33..39 -warn-error A -nostdlib
 CAMLDEP=$(CAMLROOT)/boot/ocamlrun $(CAMLROOT)/tools/ocamldep
 
 METALIB=metalib.cma

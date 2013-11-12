@@ -11,17 +11,6 @@ done	./parsing/printast.ml       trivial
 done    ./parsing/pprintast.ml      new in 4.01
 done    ./parsing/ast_mapper.ml     new in 4.01, trivial 
 
-	./bytecomp/lambda.ml	Only adding Const_csp_value
-	./bytecomp/lambda.mli
-	./bytecomp/printlambda.ml
-	./bytecomp/translcore.ml
-	./bytecomp/symtable.ml
-
-	./tools/depend.ml
-	./tools/addlabels.ml
-	./tools/dumpobj.ml (only printing Const_csp_value)
-	./tools/ocamlprof.ml
-
 done	./typing/typedtree.mli
 done	./typing/typedtree.ml
 done	./typing/predef.ml
@@ -35,11 +24,21 @@ done	./typing/env.mli
 done	./typing/env.ml
 done    ./typing/envaux.ml   new in 4.01, trivial changes
 
-	./typing/typecore.mli
-	./typing/typecore.ml
-	./typing/typemod.ml 
+done	./typing/typecore.mli
+done	./typing/typecore.ml
+done	./typing/typemod.ml 
 
-    ./tools/untypeast.ml     did not exist before, trivial changes
+done	./bytecomp/lambda.ml	Only adding Const_csp_value
+done	./bytecomp/lambda.mli
+done	./bytecomp/printlambda.ml
+done	./bytecomp/translcore.ml
+done	./bytecomp/symtable.ml
+
+done	./tools/depend.ml
+done	./tools/dumpobj.ml (only printing Const_csp_value)
+done	./tools/ocamlprof.ml
+done    ./tools/untypeast.ml     did not exist before, trivial changes
+done    ./tools/tast_iter.ml new in 4.01
 
 
 	./typing/trx.mli
@@ -47,6 +46,7 @@ done    ./typing/envaux.ml   new in 4.01, trivial changes
 
 
 		./typing/ident.ml       No longer changed
+	./tools/addlabels.ml not built any more?
 		./typing/ident.mli      No longer changed
 		./typing/typeclass.ml   No longer changed
                 ./typing/cmt_format.ml    in 4.01, no longer changed

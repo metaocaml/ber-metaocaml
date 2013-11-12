@@ -3,12 +3,22 @@
 open Format
 open Parsetree
 
-type 'a cde = {cde : 'c. ('c,'a) code}  (* Type of the closed code *)
+type 'a closed_code = Trx.closed_code_repr
 
-(* Cast the closed code to Typedtree.expression, 
-   revealing its representation
+
+(* Check that the code is closed and return the closed code *)
+let close_code : 'a code -> 'a closed_code = fun cde ->
+  Trx.close_code_repr (Obj.magic cde)
+
+(* The same as close_code but return the closedness check as a thunk
+   rather than performing it.
+   This is useful for debugging and for showing the code.
 *)
-let cde_repr {cde = x} = Obj.magic x
+let close_code_delay_check : 'a code -> 'a closed_code * (unit -> unit) =
+  fun cde -> Trx.close_code_delay_check (Obj.magic cde)
+
+let open_code : 'a closed_code -> 'a code = fun ccde ->
+  Obj.magic (Trx.open_code ccde)
 
 
 (* Execute a thunk (which does compilation) while disabling certain
@@ -77,10 +87,10 @@ let load_lambda ppf lam =
     Symtable.restore_state initial_symtable;
     raise x
 
+(* Patterned after toploop.ml:execute_phrase *)
 
-let run' exp =
-  let exp = Trx.check_scope_extrusion exp in
-  if !initial_env = Env.empty then initial_env := Compile.initial_env();
+let run_bytecode' exp =
+  if !initial_env = Env.empty then initial_env := Compmisc.initial_env();
   Ctype.init_def(Ident.current_time()); 
   with_disabled_warnings [Warnings.Partial_match "";
 			  Warnings.Unused_argument;
@@ -92,6 +102,8 @@ let run' exp =
     begin
        Typecore.reset_delayed_checks ();
        let (str, sg, newenv) = Typemod.type_toplevel_phrase !initial_env sstr in
+       let sg' = Typemod.simplify_signature sg in
+       ignore (Includemod.signatures !initial_env sg sg');
        Typecore.force_delayed_checks (); str
     end
    with 
@@ -104,6 +116,11 @@ let run' exp =
   load_lambda Format.std_formatter lam
  )
 
-let run exp =
-  let exp = cde_repr exp in		(* reveal concerete representation *)
-  Obj.obj (run' exp)
+let run_bytecode : 'a closed_code -> 'a = fun cde ->
+  Obj.obj (
+    run_bytecode' (cde : Trx.closed_code_repr :> Parsetree.expression))
+
+(* Abbreviations for backwards compatibility *)
+let run cde = run_bytecode (close_code cde)
+let (!.) cde = run cde
+

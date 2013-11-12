@@ -1,14 +1,18 @@
 (* Printing code expressions *)
 
+open Runcode
 
-(* low-level pretty-printers of the Ast *)
-val inpc              : Format.formatter -> Parsetree.expression -> unit
-val top_phrase_pretty : Format.formatter -> Parsetree.toplevel_phrase -> unit
-val inpc_string       : Parsetree.expression -> string
+(* Print code values, useful as formatter.
+   The code is printed with outer brackets 
+*)
+val print_code         : Format.formatter -> 'a code -> unit
+val print_closed_code  : Format.formatter -> 'a closed_code -> unit
 
-(* Print code values *)
-val print_code : Format.formatter -> ('c,'a) code -> unit
-val print_cde  : Format.formatter -> 'a Runcode.cde -> unit
+(* Like print_closed_code, but omit the outer brackets.
+   This function is useful when saving the generated code into a file,
+   to compile later.
+*)
+val format_code : Format.formatter -> 'a closed_code -> unit
 
 (* print code as a parse tree. Useful for debugging *)
-val print_code_as_ast : ('a, 'b) code -> unit
+val print_code_as_ast : 'a closed_code -> unit

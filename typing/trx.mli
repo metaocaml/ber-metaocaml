@@ -12,13 +12,18 @@ val meta_version : string
 *)
 val trx_structure: Typedtree.structure -> Typedtree.structure
 
+(* The following functions operate on untyped code_repr.
+   We cannot use the type constructor 'code' here since
+   it is not available in the bootstrap compiler.
+*)
+
 (* The representation of possibly code: abstract *)
 type code_repr
 
-type closed_code = private Parsetree.expression
+type closed_code_repr = private Parsetree.expression
 
 (* Check that the code is closed and return the closed code *)
-val close_code : code_repr -> closed_code
+val close_code_repr : code_repr -> closed_code_repr
 
 (* The same as close_code but return the closedness check as a thunk
    rather than performing it.
@@ -27,7 +32,10 @@ val close_code : code_repr -> closed_code
    to show the code with the extrusion before throwing the scope-extrusion
    exception.
 *)
-val close_code_delay_check : code_repr -> closed_code * (unit -> unit)
+val close_code_delay_check : code_repr -> closed_code_repr * (unit -> unit)
+
+(* Total: a closed code can always be used in slices, etc. *)
+val open_code : closed_code_repr -> code_repr
 
 (* YYY
 

@@ -15,7 +15,7 @@
 
 let () =
   Toploop.set_paths ();
-  Compile.init_path();
+  Compmisc.init_path true;
   Toploop.initialize_toplevel_env ()
   (* toplevel_env := Compile.initial_env();
   *)

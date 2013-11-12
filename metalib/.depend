@@ -1,5 +1,5 @@
 metatop.cmi :
-print_code.cmi : runcode.cmi
+print_code.cmi :
 reify_type.cmi :
 runcode.cmi :
 trxtime.cmi :

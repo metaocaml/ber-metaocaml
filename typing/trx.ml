@@ -502,32 +502,30 @@ let remove_top : 'v heap -> 'v heap = function
 type code_repr = Code of string loc heap * Parsetree.expression
 
 (* The closed code is AST *)
-type closed_code = Parsetree.expression
+type closed_code_repr = Parsetree.expression
 
 (* Check that the code is closed and return the closed code *)
-let close_code_check : code_repr -> unit = function
-  | Code (Nil,_) -> ()
-  | Code (HNode (_,var,_,_),{pexp_loc = l}) ->
-  Format.fprintf Format.str_formatter
-    "The code built at %a is not closed: identifier %s bound at %a is free"
-    Location.print l var.txt Location.print var.loc;
-  failwith (Format.flush_str_formatter ())
-
-let close_code : code_repr -> closed_code = function
-  Code (_,ast) as crepr -> close_code_check crepr; ast
 
 (* The same as close_code but return the closedness check as a thunk
    rather than performing it.
    This is useful for debugging and for showing the code
 *)
-let close_code_delay_check : code_repr -> closed_code * (unit -> unit) =
-  function Code (_,ast) as crepr -> (ast,fun () -> close_code_check crepr)
+let close_code_delay_check : code_repr -> closed_code_repr * (unit -> unit) =
+ function
+  | Code (Nil,ast) -> (ast,fun () -> ())
+  | Code (HNode (_,var,_,_),ast) ->
+    (ast, fun () ->
+      Format.fprintf Format.str_formatter
+      "The code built at %a is not closed: identifier %s bound at %a is free"
+      Location.print ast.pexp_loc var.txt Location.print var.loc;
+      failwith (Format.flush_str_formatter ()))
 
+let close_code_repr : code_repr -> closed_code_repr = fun cde ->
+  let (ast, check) = close_code_delay_check cde in
+  check (); ast
 
-(* ZZZZZ *)
-let foo = Code (Nil,
-  {pexp_loc  = Location.none;
-   pexp_desc = Pexp_constant (Const_char 'a')})
+let open_code : closed_code_repr -> code_repr = fun ast ->
+  Code (Nil,ast)
 
 
 (* ZZZZZ
