@@ -160,6 +160,9 @@ let expression sub exp =
       sub # class_structure cl
   | Texp_pack (mexpr) ->
       sub # module_expr mexpr
+  | Texp_bracket e -> sub # expression exp  (* NNN *)
+  | Texp_escape e  -> sub # expression exp  (* NNN *)
+  | Texp_cspval (v,li) -> ()                (* NNN *)
 
 
 let package_type sub pack =
