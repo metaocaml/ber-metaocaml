@@ -1151,10 +1151,31 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     (Cmt_format.Partial_structure str :: previous_saved_types);
   str, sg, final_env
 
+(* NNN begin
+Hook up the Trx post-processing
+old
 let type_toplevel_phrase env s =
   type_structure ~toplevel:true false None env s Location.none
+*)
+let type_toplevel_phrase env s = 
+  let (str, sg, finalenv) = 
+    type_structure ~toplevel:true false None env s Location.none
+  in 
+  (Trx.trx_structure str, sg, finalenv)
+(* NNN end *)
+
 let type_module = type_module true false None
-let type_structure = type_structure false None
+(* NNN begin
+Hook up the Trx post-processing
+old
+ let type_structure = type_structure false None
+*)
+let type_structure env sstr scope = 
+  let (str, sg, finalenv) = type_structure false None env sstr scope
+  in 
+  (Trx.trx_structure str, sg, finalenv)
+(* NNN end *)
+
 
 (* Normalize types in a signature *)
 

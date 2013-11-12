@@ -97,6 +97,10 @@ let type_object =
   alternatively; reset when beginning a new type-level
   expression or binding
   (whenever you do Typetexp.reset_type_variables();)
+
+ Check all instances of Env.add_value amd make sure that
+ we record the stage of every identifier that is added to the
+ value env (unless the stage is 0).
 *)
 let global_stage : Env.stage ref  = ref 0
 
@@ -131,6 +135,7 @@ let unify_stage env tl1 tl2 =
    | _ -> ()
    in loop (List.rev tl1, List.rev tl2)
 *)
+open Format
 
 let raise_wrong_stage_error loc env n m =
   raise (Error(loc, env, Trx_error (fun ppf ->
@@ -1243,7 +1248,6 @@ let rec iter3 f lst1 lst2 lst3 =
   | _ ->
       assert false
 
-XXX Check all Env.add_value
 
 let add_pattern_variables ?check ?check_as env =
   let pv = get_ref pattern_variables in
@@ -1881,6 +1885,9 @@ let duplicate_ident_types loc caselist env =
            I don't think this is what we want *)
         let (path, desc) = Env.lookup_value (Longident.Lident s) env in
         match path with
+        (* NNN since id is already known in the Env, its stage is
+           already recorded.
+         *)
           Path.Pident id ->
             let desc = {desc with val_type = correct_levels desc.val_type} in
             Env.add_value id desc env
@@ -2128,11 +2135,10 @@ and type_expect_ ?in_function env sexp ty_expected =
           of the expression within brackets.
         *)
   | Pexp_bracket(sexp) ->   
--      let clsfier = newvar ?name:(Some "cl") () in   (* it will be generalized later *)
       let ty = newgenvar() in     (* expected type for the bracketed sexp *)
       let to_unify = Predef.type_code ty in
       unify_exp_types loc env to_unify ty_expected;
-      with_stage_up XXXclsfier (fun () ->
+      with_stage_up (fun () ->
       let exp = type_expect env sexp ty in
         re { 
           exp_desc = Texp_bracket(exp);
@@ -2144,7 +2150,7 @@ and type_expect_ ?in_function env sexp ty_expected =
           e is expected to have the type ty code
         *)
   | Pexp_escape(sexp) ->    
-      with_stage_down loc (fun XXXclsfier ->
+      with_stage_down loc env (fun () ->
        let sexp_ty_expected = Predef.type_code ty_expected in
        let exp = type_expect env sexp sexp_ty_expected in
        re { 

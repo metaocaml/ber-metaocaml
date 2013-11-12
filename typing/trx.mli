@@ -1,6 +1,6 @@
 (* BER MetaOCaml compilation
-   Transforming the Typedtree to eliminate brackets, escapes and
-   run, replacing them with calls to ordinary OCaml functions
+   Transforming the Typedtree to eliminate brackets and escapes,
+   replacing them with calls to ordinary OCaml functions
    to build the code representation (that is, Parsetree).
 *)
 
@@ -12,8 +12,24 @@ val meta_version : string
 *)
 val trx_structure: Typedtree.structure -> Typedtree.structure
 
-(* Call it whenever we run or print the code *)
-val check_scope_extrusion : Parsetree.expression -> Parsetree.expression
+(* The representation of possibly code: abstract *)
+type code_repr
+
+type closed_code = private Parsetree.expression
+
+(* Check that the code is closed and return the closed code *)
+val close_code : code_repr -> closed_code
+
+(* The same as close_code but return the closedness check as a thunk
+   rather than performing it.
+   This is useful for debugging and for showing the code:
+   If there is a scope extrusion error, it is still useful
+   to show the code with the extrusion before throwing the scope-extrusion
+   exception.
+*)
+val close_code_delay_check : code_repr -> closed_code * (unit -> unit)
+
+(* YYY
 
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
@@ -28,92 +44,94 @@ val sample_pat_list : Parsetree.pattern list
 val sample_rec_flag : Asttypes.rec_flag
 
         (* Run-time quotator *)
-val dyn_quote  : Obj.t -> Longident.t Location.loc -> Parsetree.expression
+val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
 
-val lift_constant_int  : int  -> Parsetree.expression
-val lift_constant_char : char -> Parsetree.expression
-val lift_constant_bool : bool -> Parsetree.expression
+val lift_constant_int  : int  -> code_repr
+val lift_constant_char : char -> code_repr
+val lift_constant_bool : bool -> code_repr
 
 (* Builders of the Parsetree *)
-val build_assert  : Location.t -> Parsetree.expression -> Parsetree.expression
-val build_lazy    : Location.t -> Parsetree.expression -> Parsetree.expression
-val build_bracket : Location.t -> Parsetree.expression -> Parsetree.expression
-val build_escape  : Location.t -> Parsetree.expression -> Parsetree.expression
-val build_run     : Location.t -> Parsetree.expression -> Parsetree.expression
+val build_assert  : Location.t -> code_repr -> code_repr
+val build_lazy    : Location.t -> code_repr -> code_repr
+val build_bracket : Location.t -> code_repr -> code_repr
+val build_escape  : Location.t -> code_repr -> code_repr
+val build_run     : Location.t -> code_repr -> code_repr
 
 val build_sequence : 
-  Location.t -> Parsetree.expression -> Parsetree.expression -> 
-  Parsetree.expression
+  Location.t -> code_repr -> code_repr -> 
+  code_repr
 val build_while : 
-  Location.t -> Parsetree.expression -> Parsetree.expression -> 
-  Parsetree.expression
+  Location.t -> code_repr -> code_repr -> 
+  code_repr
 val build_when : 
-  Location.t -> Parsetree.expression -> Parsetree.expression -> 
-  Parsetree.expression
+  Location.t -> code_repr -> code_repr -> 
+  code_repr
 
 val build_apply : Location.t -> 
-                    (Asttypes.label * Parsetree.expression) array -> 
-                    Parsetree.expression
+                    (Asttypes.label * code_repr) array -> 
+                    code_repr
 
 val build_tuple : 
-  Location.t -> Parsetree.expression array -> Parsetree.expression
+  Location.t -> code_repr array -> code_repr
 val build_array : 
-  Location.t -> Parsetree.expression array -> Parsetree.expression
+  Location.t -> code_repr array -> code_repr
 val build_ifthenelse : 
   Location.t -> 
-  Parsetree.expression -> Parsetree.expression -> Parsetree.expression option ->
-  Parsetree.expression
+  code_repr -> code_repr -> code_repr option ->
+  code_repr
 val build_construct :
- Location.t -> Longident.t Location.loc -> Parsetree.expression array -> bool ->
- Parsetree.expression
+ Location.t -> Longident.t Location.loc -> code_repr array -> bool ->
+ code_repr
 val build_record :
- Location.t -> (Longident.t Location.loc * Parsetree.expression) array ->
- Parsetree.expression option -> Parsetree.expression
+ Location.t -> (Longident.t Location.loc * code_repr) array ->
+ code_repr option -> code_repr
 val build_field :
- Location.t -> Parsetree.expression -> Longident.t Location.loc -> 
- Parsetree.expression
+ Location.t -> code_repr -> Longident.t Location.loc -> 
+ code_repr
 val build_setfield :
- Location.t -> Parsetree.expression -> Longident.t Location.loc -> 
-   Parsetree.expression -> Parsetree.expression
+ Location.t -> code_repr -> Longident.t Location.loc -> 
+   code_repr -> code_repr
 val build_variant :
- Location.t -> string -> Parsetree.expression option -> Parsetree.expression
+ Location.t -> string -> code_repr option -> code_repr
 val build_send :
- Location.t -> Parsetree.expression -> string -> Parsetree.expression
+ Location.t -> code_repr -> string -> code_repr
 val build_open :
- Location.t -> Longident.t Location.loc -> Parsetree.expression -> 
- Parsetree.expression
+ Location.t -> Longident.t Location.loc -> code_repr -> 
+ code_repr
 
-val build_ident : Location.t -> string Location.loc -> Parsetree.expression
+val build_ident : Location.t -> string Location.loc -> code_repr
 val with_binding_region : 
-    string Location.loc -> (string Location.loc -> Parsetree.expression) -> 
-    Parsetree.expression
+    string Location.loc -> (string Location.loc -> code_repr) -> 
+    code_repr
 val build_for : 
   Location.t -> string Location.loc -> 
-  Parsetree.expression -> Parsetree.expression -> 
-  bool -> Parsetree.expression -> Parsetree.expression
+  code_repr -> code_repr -> 
+  bool -> code_repr -> code_repr
 
 val build_fun_simple : 
-  Location.t -> string -> string Location.loc -> Parsetree.expression -> 
-  Parsetree.expression
+  Location.t -> string -> string Location.loc -> code_repr -> 
+  code_repr
 val build_fun : 
   Location.t -> string -> string Location.loc array -> 
-  Parsetree.pattern list -> Parsetree.expression array ->
-  Parsetree.expression
+  Parsetree.pattern list -> code_repr array ->
+  code_repr
 
 val build_match : 
-  Location.t -> Parsetree.expression -> string Location.loc array -> 
-  Parsetree.pattern list -> Parsetree.expression array ->
-  Parsetree.expression
+  Location.t -> code_repr -> string Location.loc array -> 
+  Parsetree.pattern list -> code_repr array ->
+  code_repr
 val build_try : 
-  Location.t -> Parsetree.expression -> string Location.loc array -> 
-  Parsetree.pattern list -> Parsetree.expression array ->
-  Parsetree.expression
+  Location.t -> code_repr -> string Location.loc array -> 
+  Parsetree.pattern list -> code_repr array ->
+  code_repr
 
 val build_let_simple : 
   Location.t -> Asttypes.rec_flag -> string Location.loc -> 
-  Parsetree.expression -> Parsetree.expression -> Parsetree.expression
+  code_repr -> code_repr -> code_repr
 val build_let : 
   Location.t -> Asttypes.rec_flag -> string Location.loc array -> 
   Parsetree.pattern list -> 
-  Parsetree.expression array ->         (* the first is the body of let *)
-  Parsetree.expression
+  code_repr array ->         (* the first is the body of let *)
+  code_repr
+
+*)
