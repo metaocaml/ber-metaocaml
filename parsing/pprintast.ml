@@ -47,7 +47,9 @@ let fixity_of_string  = function
   | _ -> `Normal
 
 let view_fixity_of_exp = function
-  | {pexp_desc = Pexp_ident {txt=Lident l;_};_} -> fixity_of_string l
+  | {pexp_desc = Pexp_ident {txt=Lident l}} -> fixity_of_string l
+  | {pexp_desc = Pexp_ident {txt=Ldot (Lident "Pervasives",l)}} 
+    -> fixity_of_string l
   | _ -> `Normal  ;;
 
 let is_infix  = function  | `Infix _ -> true | _  -> false
