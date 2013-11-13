@@ -139,6 +139,8 @@ Check that all Trx. functions have the correct type that matches
 that in .mli
 *)
 
+(*{{{ Preliminaries, common functions *)
+
 (* BER MetaOCaml version string *)
 let meta_version  = "N 101"
 
@@ -164,6 +166,10 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
         let (t,acc) = map_accum f acc t in
         (h::t, acc)
 
+(*}}}*)
+
+
+(*{{{ Path and location utilities *)
 
 (* ------------------------------------------------------------------------ *)
 (* Path utilities *)
@@ -310,6 +316,10 @@ let qualify_label : Location.t -> Path.t -> label_description ->
 
 let ident_can_be_quoted = is_external
 
+(*}}}*)
+
+
+(*{{{ Templates for building Parsetree/Typedtree components *)
 
 let dummy_lid : string -> Longident.t loc = fun name ->
   Location.mknoloc (Longident.Lident name)
@@ -328,6 +338,8 @@ let sample_pat_list : Parsetree.pattern list = []
 
 (* Exported. Used as a template for passing the Asttypes.rec_flag *)
 let sample_rec_flag : Asttypes.rec_flag = Nonrecursive
+
+(*}}}*)
 
 (* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
@@ -527,8 +539,18 @@ let close_code_repr : code_repr -> closed_code_repr = fun cde ->
 let open_code : closed_code_repr -> code_repr = fun ast ->
   Code (Nil,ast)
 
+(* Compiling a closed code value: a structural constant of
+   type code_repr
+   This constant is transported via CSP (although we could have
+   built a Typedtree node for that purpose.
+ *)
+let texp_code : ?node_id:string ->
+  Location.t -> Parsetree.expression_desc -> Typedtree.expression_desc =
+  fun ?(node_id="") loc desc ->
+  let ast = {pexp_loc = loc; pexp_desc = desc}
+  in Texp_cspval (Obj.repr (open_code ast), dummy_lid node_id)
 
-(* ZZZZZ
+
 
 (* ------------------------------------------------------------------------ *)
 (* Bindings in the future stage *)
@@ -549,12 +571,28 @@ let genident : string loc -> string loc = fun name ->
   {name with txt = gensym name.txt}
 
 (* This is a run-time error, rather than a translation-time error *)
-let scope_extrusion_error : Location.t -> string loc -> 'a = fun l var ->
+let scope_extrusion_error : 
+  detected:Location.t -> occurred:Location.t -> string loc -> 'a = 
+  fun ~detected ~occurred var ->
   Format.fprintf Format.str_formatter
-    "Scope extrusion at %a for the identifier %s bound at %a"
-    Location.print l var.txt Location.print var.loc;
+    "Scope extrusion detected at %a for code built at %a for the identifier %s bound at %a"
+    Location.print detected Location.print occurred
+    var.txt Location.print var.loc;
   failwith (Format.flush_str_formatter ())
 
+(* Check to make sure that free variables in the potentially open
+   code fragment are valid.
+   We only check for the variable with the latest stack_mark (the
+   one corresponding to the latest binding)
+*)
+let validate_vars : Location.t -> code_repr -> code_repr = 
+  fun l -> function
+  | Code (Nil,_) as cde -> cde
+  | Code (HNode (sm,var,_,_), ast) as cde ->
+    if StackMark.is_valid sm then cde
+    else scope_extrusion_error ~detected:l ~occurred:ast.pexp_loc var 
+
+(* ZZZZZ
 (* The names of gensym'd future stage bindings currently in scope,
    of new_binding_region.
    We use physical equality to search the list.
@@ -675,6 +713,7 @@ let texp_binding_simple :
   in
   texp_apply (texp_ident "Trx.with_binding_region")
     [base_name_exp; fun_body_exp]
+*)
 
 (* ------------------------------------------------------------------------ *)
 (* Building Parsetree nodes *)
@@ -682,16 +721,16 @@ let texp_binding_simple :
 (* Handle timestamp for builders of the type 
       Parsetree.expression -> Parsetree.expression
 *)
-let timestamp_wrapper : 
+let code_wrapper : 
     (Location.t -> Parsetree.expression -> Parsetree.expression) ->
-    (Location.t -> Parsetree.expression -> Parsetree.expression) =
+    (Location.t -> code_repr -> code_repr) =
 fun f l e ->
-  let (e,var) = remove_tstamp None e in
-  add_timestamp var (f l e)
+  let Code (vars,e) = validate_vars l e in
+  Code (vars, f l e)
 
 (* building a typical Parsetree node: Pexp_assert of expression*)
-let build_assert : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  timestamp_wrapper
+let build_assert : Location.t -> code_repr -> code_repr = 
+  code_wrapper
   (fun l e -> {pexp_loc = l; pexp_desc = Pexp_assert e})
 
 (* When we translate the typed-tree, we have to manually compile
@@ -723,42 +762,38 @@ If building the parsetree on our own, beware! For example, labels in
 Texp_record must be sorted, in their declared order!
 *)
 
+
 (* Other similar builders *)
-let build_lazy : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  timestamp_wrapper
+let build_lazy : Location.t -> code_repr -> code_repr = 
+  code_wrapper
     (fun l e -> {pexp_loc = l; pexp_desc = Pexp_lazy e})
-let build_bracket : Location.t -> Parsetree.expression -> Parsetree.expression= 
-  timestamp_wrapper
+let build_bracket : Location.t -> code_repr -> code_repr= 
+  code_wrapper
     (fun l e -> {pexp_loc = l; pexp_desc = Pexp_bracket e})
-let build_escape : Location.t -> Parsetree.expression -> Parsetree.expression = 
-  timestamp_wrapper
+let build_escape : Location.t -> code_repr -> code_repr = 
+  code_wrapper
     (fun l e -> {pexp_loc = l; pexp_desc = Pexp_escape e})
 
-let build_sequence : 
-  Location.t -> Parsetree.expression -> Parsetree.expression -> 
-  Parsetree.expression = 
+let build_sequence : Location.t -> code_repr -> code_repr -> code_repr = 
   fun l e1 e2 -> 
-    let (e1,var) = remove_tstamp None e1 in
-    let (e2,var) = remove_tstamp var  e2 in
-    add_timestamp var
-    {pexp_loc = l; pexp_desc = Pexp_sequence (e1,e2) }
-let build_while : 
-  Location.t -> Parsetree.expression -> Parsetree.expression -> 
-  Parsetree.expression = 
+    let Code (vars1,e1) = validate_vars l e1 in
+    let Code (vars2,e2) = validate_vars l e2 in
+    Code (merge vars1 vars2,
+          {pexp_loc = l; pexp_desc = Pexp_sequence (e1,e2) })
+let build_while : Location.t -> code_repr -> code_repr -> code_repr = 
   fun l e1 e2 -> 
-    let (e1,var) = remove_tstamp None e1 in
-    let (e2,var) = remove_tstamp var  e2 in
-    add_timestamp var
-    {pexp_loc = l; pexp_desc = Pexp_while (e1,e2) }
-let build_when : 
-  Location.t -> Parsetree.expression -> Parsetree.expression -> 
-  Parsetree.expression = 
+    let Code (vars1,e1) = validate_vars l e1 in
+    let Code (vars2,e2) = validate_vars l e2 in
+    Code (merge vars1 vars2,
+          {pexp_loc = l; pexp_desc = Pexp_while (e1,e2) })
+let build_when : Location.t -> code_repr -> code_repr -> code_repr = 
   fun l e1 e2 -> 
-    let (e1,var) = remove_tstamp None e1 in
-    let (e2,var) = remove_tstamp var  e2 in
-    add_timestamp var
-      {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) }
+    let Code (vars1,e1) = validate_vars l e1 in
+    let Code (vars2,e2) = validate_vars l e2 in
+    Code (merge vars1 vars2,
+          {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) })
 
+(* ZZZZZ
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
 let build_apply : Location.t -> (label * Parsetree.expression) array -> 
@@ -1411,12 +1446,11 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
 let rec trx_bracket : 
   (expression -> expression) -> (* 0-level traversal *)
   int -> (expression -> expression) = fun trx_exp n exp ->
-  trx_bracket trx_exp 0 (failwith "trx_bracket") 
-(*
-YYYY
   let new_desc = match exp.exp_desc with
     (* Don't just do when vd.val_kind = Val_reg 
        because (+) or Array.get are Val_prim *)
+(*
+YYYY
   | Texp_ident (p,li,vd)  ->
     let stage = try Env.find_stage p exp.exp_env
 	        with Not_found ->
@@ -1439,13 +1473,13 @@ YYYY
          | {exp_desc = Texp_ident (_,_,vd); exp_type = ty}  ->
            {exp with exp_desc = Texp_ident(p,li,vd); exp_type = ty}
          | _ -> assert false]
+*)
 
-  | Texp_constant cst ->
-    let ast = 
-      {pexp_loc = exp.exp_loc;
-       pexp_desc = Pexp_constant cst}
-    in Texp_cspval (Obj.repr ast, dummy_lid "*cst*")
+  | Texp_constant cst -> 
+      texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
 
+(*
+YYYY
      (* The most common case of let-expressions: let x = e in body *)
   | Texp_let (recf,[({pat_desc = Tpat_var (id,name)},e)],body) ->
       let recf_exp = texp_ident "Trx.sample_rec_flag" in
@@ -1605,7 +1639,7 @@ YYYY
          trx_bracket trx_exp n e;
          trx_bracket trx_exp n et;
 	 texp_option (map_option (trx_bracket trx_exp n) efo)]
-
+*)
   | Texp_sequence (e1,e2) ->
       texp_apply (texp_ident "Trx.build_sequence")
         [texp_loc exp.exp_loc; 
@@ -1614,7 +1648,7 @@ YYYY
       texp_apply (texp_ident "Trx.build_while")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-
+(*
   | Texp_for (id, name, elo, ehi, dir, ebody) ->
       texp_binding_simple (id,name) (fun gensymed_var ->
         { exp with
@@ -1627,13 +1661,13 @@ YYYY
              trx_bracket trx_exp n ehi;
              texp_bool (dir = Upto);
              trx_bracket trx_exp n ebody] })
-
+*)
 
   | Texp_when (e1,e2) ->
       texp_apply (texp_ident "Trx.build_when")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-
+(*
   | Texp_send (e,m,_) ->
       (* We don't check the persistence of the method: after all,
          a method name is somewhat like a polymorphic variant.
@@ -1645,16 +1679,15 @@ YYYY
          texp_string (match m with
                         | Tmeth_name name -> name
                         | Tmeth_val id -> Ident.name id)]
+*)
 
   | Texp_new (p,li,_) ->
-    check_path_quotable "Class" p;
-    let ast = 
-      {pexp_loc = exp.exp_loc;
-       pexp_desc = Pexp_new (Location.mkloc (path_to_lid p) li.loc)}
-    in Texp_cspval (Obj.repr ast, dummy_lid "*new*")
+      check_path_quotable "Class" p;
+      texp_code ~node_id:"*new*" exp.exp_loc 
+        (Pexp_new (Location.mkloc (path_to_lid p) li.loc))
 
   | Texp_instvar (p1,p2,s) ->
-     not_supported exp.exp_loc "Objects (Texp_instvar)"
+      not_supported exp.exp_loc "Objects (Texp_instvar)"
         (* Alternatively: since instance variables are always bound 
            at level 0 (for now)
            so this is like a csp variable 
@@ -1668,10 +1701,7 @@ YYYY
       texp_apply (texp_ident "Trx.build_assert")
         [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
   | Texp_assertfalse ->
-    let ast = 
-      {pexp_loc = exp.exp_loc;
-       pexp_desc = Pexp_assertfalse}
-    in Texp_cspval (Obj.repr ast, dummy_lid "*af*")
+      texp_code ~node_id:"*af*" exp.exp_loc Pexp_assertfalse
 
   | Texp_lazy e ->
       texp_apply (texp_ident "Trx.build_lazy")
@@ -1689,11 +1719,9 @@ YYYY
       texp_apply (texp_ident "Trx.build_escape")
         [texp_loc exp.exp_loc; trx_bracket trx_exp (n-1) e]
   | Texp_cspval (v,li) ->               (* CSP is a sort of a constant *)
-    let ast = 
-      {pexp_loc = exp.exp_loc;
-       pexp_desc = Pexp_cspval(v,li)}
-    in Texp_cspval (Obj.repr ast, dummy_lid "*csp*")
+      texp_code ~node_id:"*csp*" exp.exp_loc (Pexp_cspval(v,li))
 
+  | _ -> not_supported exp.exp_loc "not yet supported" (* YYYYY *)
   in                               
   let trx_extra (extra, loc) exp = (* See untype_extra in tools/untypeast.ml *)
    let desc =
@@ -1703,14 +1731,16 @@ YYYY
        *)
     | Texp_constraint (cty1, cty2) -> 
         not_supported loc "Texp_constraint"
-
-    | Texp_open (path, lid, _) -> 
+    | Texp_open (ovf, path, lid, _) -> not_supported loc "not yet supported" (* XXX *)
+(* YYY
+    | Texp_open (ovf, path, lid, _) -> 
        check_path_quotable "Texp_open" path;
        texp_apply (texp_ident "Trx.build_open")
         [texp_loc exp.exp_loc; 
+XXX need ovf
          texp_lid (mkloc (path_to_lid path) lid.loc);
          exp]      (* exp is the result of trx_bracket *)
-
+*)
     | Texp_poly cto  -> not_supported loc "Texp_poly"
     | Texp_newtype s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
@@ -1719,8 +1749,9 @@ YYYY
   {exp with exp_type = wrap_ty_in_code n exp.exp_type;
             exp_desc = new_desc}
 
-YYYY *)
 
+
+(*{{{ Typedtree traversal to eliminate bracket/escapes *)
 
 (* ------------------------------------------------------------------------ *)
 (* Typedtree traversal to eliminate bracket/escapes *)
@@ -1922,7 +1953,11 @@ and trx_expression = function
 let trx_structure str = 
   try trx_struct str with Not_modified -> str
 
+(*}}}*)
+
   
+(*{{{ Historical: hints on native mode CSP *)
+
 (* Native mode is moved out to the `userland'
 
 let remove_texp_cspval exp =
@@ -1940,3 +1975,5 @@ let remove_texp_cspval exp =
       {exp with exp_desc = desc}
   | _ -> assert false
 *)
+
+(*}}}*)

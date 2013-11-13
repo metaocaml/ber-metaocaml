@@ -37,7 +37,6 @@ val close_code_delay_check : code_repr -> closed_code_repr * (unit -> unit)
 (* Total: a closed code can always be used in slices, etc. *)
 val open_code : closed_code_repr -> code_repr
 
-(* YYY
 
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
@@ -51,30 +50,27 @@ val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
 val sample_rec_flag : Asttypes.rec_flag
 
+(* YYY
+
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
 
 val lift_constant_int  : int  -> code_repr
 val lift_constant_char : char -> code_repr
 val lift_constant_bool : bool -> code_repr
+*)
 
 (* Builders of the Parsetree *)
 val build_assert  : Location.t -> code_repr -> code_repr
 val build_lazy    : Location.t -> code_repr -> code_repr
 val build_bracket : Location.t -> code_repr -> code_repr
 val build_escape  : Location.t -> code_repr -> code_repr
-val build_run     : Location.t -> code_repr -> code_repr
 
-val build_sequence : 
-  Location.t -> code_repr -> code_repr -> 
-  code_repr
-val build_while : 
-  Location.t -> code_repr -> code_repr -> 
-  code_repr
-val build_when : 
-  Location.t -> code_repr -> code_repr -> 
-  code_repr
+val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
+val build_while    : Location.t -> code_repr -> code_repr -> code_repr
+val build_when     : Location.t -> code_repr -> code_repr -> code_repr
 
+(* YYY
 val build_apply : Location.t -> 
                     (Asttypes.label * code_repr) array -> 
                     code_repr
