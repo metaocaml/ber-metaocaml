@@ -50,31 +50,26 @@ val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
 val sample_rec_flag : Asttypes.rec_flag
 
-(* YYY
-
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
 
 val lift_constant_int  : int  -> code_repr
 val lift_constant_char : char -> code_repr
 val lift_constant_bool : bool -> code_repr
-*)
 
 (* Builders of the Parsetree *)
-val build_assert  : Location.t -> code_repr -> code_repr
-val build_lazy    : Location.t -> code_repr -> code_repr
-val build_bracket : Location.t -> code_repr -> code_repr
-val build_escape  : Location.t -> code_repr -> code_repr
+val build_assert   : Location.t -> code_repr -> code_repr
+val build_lazy     : Location.t -> code_repr -> code_repr
+val build_bracket  : Location.t -> code_repr -> code_repr
+val build_escape   : Location.t -> code_repr -> code_repr
 
 val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
 val build_while    : Location.t -> code_repr -> code_repr -> code_repr
 val build_when     : Location.t -> code_repr -> code_repr -> code_repr
 
-(* YYY
-val build_apply : Location.t -> 
-                    (Asttypes.label * code_repr) array -> 
-                    code_repr
+val build_apply : Location.t -> (Asttypes.label * code_repr) array -> code_repr
 
+(* YYY
 val build_tuple : 
   Location.t -> code_repr array -> code_repr
 val build_array : 
@@ -102,8 +97,9 @@ val build_send :
 val build_open :
  Location.t -> Longident.t Location.loc -> code_repr -> 
  code_repr
-
+*)
 val build_ident : Location.t -> string Location.loc -> code_repr
+(*
 val with_binding_region : 
     string Location.loc -> (string Location.loc -> code_repr) -> 
     code_repr

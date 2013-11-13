@@ -10,7 +10,8 @@ no special syntax .!
  Different API for running code, with closed_code
  Printing is now part of Ocaml (Pprintast, which was influenced by
  OCaml)
- 
+ More precise tracking of free variables and reporting of scope
+ extrusion.
 
 			BER MetaOCaml
 

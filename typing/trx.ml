@@ -122,7 +122,7 @@
 This file is based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
 traversal algorithm, the way of compiling Parsetree builders, dealing
-with CSP and many other algorithms are all different.
+    with CSP and many other algorithms are all different.
 
 *)
 
@@ -137,6 +137,7 @@ XXX check all Obj.repr, that CSP really builds annotated tree
 XXX Check Parsetree.expression. Should all be replaced by marked expr
 Check that all Trx. functions have the correct type that matches
 that in .mli
+Check all XXXX
 *)
 
 (*{{{ Preliminaries, common functions *)
@@ -584,6 +585,18 @@ let scope_extrusion_error :
    code fragment are valid.
    We only check for the variable with the latest stack_mark (the
    one corresponding to the latest binding)
+XXXX double-check! When we capture some of the inner-bidings
+ in a continuation and then reinstall that continuation at the
+ top level, the `latest' free variable is valid but earlier are
+ no longer valid:
+
+  let r = ref ... in
+  .<fun x1 x2 -> .~(reset .<fun y1 y2 -> 
+                              .~(shift k (r := k; k .<0>.))>.)>.
+  .r .<2>.
+  Here, y1 and y2 are valid but x1 and x2 are not.
+ 
+the captured continuation contains some 
 *)
 let validate_vars : Location.t -> code_repr -> code_repr = 
   fun l -> function
@@ -793,20 +806,23 @@ let build_when : Location.t -> code_repr -> code_repr -> code_repr =
     Code (merge vars1 vars2,
           {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) })
 
-(* ZZZZZ
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
-let build_apply : Location.t -> (label * Parsetree.expression) array -> 
-  Parsetree.expression = 
+let build_apply : Location.t -> (label * code_repr) array -> code_repr = 
   fun l ea -> 
     assert (Array.length ea > 1);
-    let (el,var) = map_accum 
-        (fun var (l,e) -> let (e,var) = remove_tstamp var e in ((l,e),var))
-        None (Array.to_list ea) in
-    add_timestamp var
-    {pexp_loc  = l; 
-     pexp_desc = Pexp_apply (snd (List.hd el),List.tl el)}
+    match map_accum (fun vars (lbl,e) -> 
+                   let Code (var,e) = validate_vars l e in
+                   ((lbl,e),merge var vars))
+          Nil (Array.to_list ea) with
+    | (("",eh)::elt,vars) ->
+       Code (vars, 
+              {pexp_loc  = l; 
+               pexp_desc = Pexp_apply (eh, elt)})
+    | _ -> assert false
 
+
+(* ZZZZZ
 let build_tuple : 
   Location.t -> Parsetree.expression array -> Parsetree.expression =
   fun l ea -> 
@@ -900,19 +916,23 @@ let build_open :
    add_timestamp var
      {pexp_loc  = loc;
       pexp_desc = Pexp_open (l,e)}
-
+*)
 
 (* Build a Parsetree for a future-stage identifier
    It is always in scope of with_binding_region:
    Bound variables are always in scope of their binders;
    A well-typed code has no unbound variables.
 *)
-let build_ident : Location.t -> string loc -> Parsetree.expression =
+let build_ident : Location.t -> string loc -> code_repr =
  fun loc l ->
-  add_timestamp (Some l)
+  not_supported loc "vars not supported"
+(*
+  Code (add_timestamp (Some l)
    {pexp_loc  = loc;
     pexp_desc = Pexp_ident (mkloc (Longident.Lident l.txt) l.loc)}
+*)
 
+(*
 let build_for : 
   Location.t -> string loc -> Parsetree.expression -> Parsetree.expression -> 
   bool -> Parsetree.expression -> Parsetree.expression =
@@ -1000,6 +1020,9 @@ let rec check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
   | _                        -> assert false (* can't occur in generated code *)
 *)
 
+*)
+
+(*{{{ CSP *)
 
 (* ------------------------------------------------------------------------ *)
 (* Dealing with CSP *)
@@ -1036,16 +1059,19 @@ let lift_as_literal :
     | _ -> raise CannotLift
 
 (* TODO: similarly handle Const_nativeint, Const_int32, Const_int64 *)
-let lift_constant_int : int -> Parsetree.expression = fun x -> 
+let lift_constant_int : int -> code_repr = fun x -> 
+  open_code
   {pexp_loc  = Location.none;
    pexp_desc = Pexp_constant (Const_int x)}
 
-let lift_constant_char : char -> Parsetree.expression = fun x -> 
+let lift_constant_char : char -> code_repr = fun x -> 
+  open_code
   {pexp_loc  = Location.none;
    pexp_desc = Pexp_constant (Const_char x)}
 
-let lift_constant_bool : bool -> Parsetree.expression = fun x -> 
+let lift_constant_bool : bool -> code_repr = fun x -> 
   let b = if x then "true" else "false" in 
+  open_code
   {pexp_loc  = Location.none;
    pexp_desc = Pexp_construct (Location.mknoloc (Longident.Lident b), 
                                None, false)}
@@ -1060,7 +1086,7 @@ let lift_constant_bool : bool -> Parsetree.expression = fun x ->
   TODO: also check for double_array_tag
    and create a (structured) constant for a double array
 *)
-let dyn_quote : Obj.t -> Longident.t loc -> Parsetree.expression =
+let dyn_quote : Obj.t -> Longident.t loc -> code_repr =
   fun v li ->
    let dflt = Pexp_cspval(v,li) in        (* By default, we build CSP *)
    let desc = 
@@ -1073,6 +1099,7 @@ let dyn_quote : Obj.t -> Longident.t loc -> Parsetree.expression =
       Pexp_constant (Const_string (Obj.obj v))
     | _   -> dflt
    in 
+   open_code
    {pexp_loc = li.loc; pexp_desc = desc}
 
        
@@ -1095,14 +1122,18 @@ let trx_csp :
   with CannotLift ->
   (* Then check if we can pass by reference *)
   if ident_can_be_quoted p then
-     let ast = 
-         {pexp_loc = exp.exp_loc;
-          pexp_desc = Pexp_ident (Location.mkloc (path_to_lid p) li.loc)}
-      in Texp_cspval (Obj.repr ast, dummy_lid "*id*")
+    texp_code ~node_id:"*id*" exp.exp_loc
+          (Pexp_ident (Location.mkloc (path_to_lid p) li.loc))
   else
   (* Otherwise, do the lifting at run-time *)
   texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
 
+(*}}}*)
+
+
+(*{{{ Translating patterns and expressions using patterns *)
+
+(* ZZZZ
 
 (* Analyze and translate a pattern:
          Typedtree.pattern -> Parsetree.pattern
@@ -1402,6 +1433,8 @@ let build_let :
 ZZZZ
 *)
 
+(*}}}*)
+
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
    an expression at the level n > 0.
@@ -1449,20 +1482,18 @@ let rec trx_bracket :
   let new_desc = match exp.exp_desc with
     (* Don't just do when vd.val_kind = Val_reg 
        because (+) or Array.get are Val_prim *)
-(*
-YYYY
   | Texp_ident (p,li,vd)  ->
     let stage = try Env.find_stage p exp.exp_env
 	        with Not_found ->
                   if false then
                     debug_print ("Stage for var is set to implicit 0:" ^ 
-	                         Path.name p ^ "\n");  [] in
+	                         Path.name p ^ "\n");  0 in
     (* We make CSP only if the variable is bound at the stage 0.
        Variables bound at stage > 0 are subject to renaming.
        They are translated into stage 0 variable but of a different
        type (string loc), as explained in the title comments.
      *)
-    if stage = [] then trx_csp exp p li 
+    if stage = 0 then trx_csp exp p li 
     else
       texp_apply (texp_ident "Trx.build_ident")
         [texp_loc exp.exp_loc; 
@@ -1473,7 +1504,6 @@ YYYY
          | {exp_desc = Texp_ident (_,_,vd); exp_type = ty}  ->
            {exp with exp_desc = Texp_ident(p,li,vd); exp_type = ty}
          | _ -> assert false]
-*)
 
   | Texp_constant cst -> 
       texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
@@ -1540,7 +1570,7 @@ YYYY
              pats;
              texp_array (List.map (trx_bracket trx_exp n) exps)]
         })
-
+*)
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
      let lel = List.fold_right (function                 (* keep the order! *)
@@ -1551,7 +1581,7 @@ YYYY
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (l,e) ->
            texp_tuple [texp_string l;trx_bracket trx_exp n e]) lel)]
-
+(* YYYY
   (* Pretty much like a function *)
   (* Since e and pel don't share any bindings (the type-checker appropriately
      renamed all variables into timestamped Ident), there is no
