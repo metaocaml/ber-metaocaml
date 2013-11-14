@@ -49,6 +49,7 @@ val sample_loc  : Location.t
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
 val sample_rec_flag : Asttypes.rec_flag
+val sample_override_flag : Asttypes.override_flag
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
@@ -69,35 +70,25 @@ val build_when     : Location.t -> code_repr -> code_repr -> code_repr
 
 val build_apply : Location.t -> (Asttypes.label * code_repr) array -> code_repr
 
-(* YYY
-val build_tuple : 
-  Location.t -> code_repr array -> code_repr
-val build_array : 
-  Location.t -> code_repr array -> code_repr
+val build_tuple : Location.t -> code_repr array -> code_repr
+val build_array : Location.t -> code_repr array -> code_repr
 val build_ifthenelse : 
-  Location.t -> 
-  code_repr -> code_repr -> code_repr option ->
-  code_repr
-val build_construct :
- Location.t -> Longident.t Location.loc -> code_repr array -> bool ->
- code_repr
+  Location.t -> code_repr -> code_repr -> code_repr option -> code_repr
+val build_construct  :
+ Location.t -> Longident.t Location.loc -> code_repr array -> bool -> code_repr
 val build_record :
  Location.t -> (Longident.t Location.loc * code_repr) array ->
  code_repr option -> code_repr
 val build_field :
- Location.t -> code_repr -> Longident.t Location.loc -> 
- code_repr
+ Location.t -> code_repr -> Longident.t Location.loc -> code_repr
 val build_setfield :
- Location.t -> code_repr -> Longident.t Location.loc -> 
-   code_repr -> code_repr
-val build_variant :
- Location.t -> string -> code_repr option -> code_repr
-val build_send :
- Location.t -> code_repr -> string -> code_repr
+ Location.t -> code_repr -> Longident.t Location.loc -> code_repr -> code_repr
+val build_variant  : Location.t -> string -> code_repr option -> code_repr
+val build_send     : Location.t -> code_repr -> string -> code_repr
 val build_open :
- Location.t -> Longident.t Location.loc -> code_repr -> 
- code_repr
-*)
+ Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
+   code_repr -> code_repr
+
 val build_ident : Location.t -> string Location.loc -> code_repr
 (*
 val with_binding_region : 

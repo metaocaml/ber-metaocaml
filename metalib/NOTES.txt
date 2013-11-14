@@ -12,6 +12,8 @@ no special syntax .!
  OCaml)
  More precise tracking of free variables and reporting of scope
  extrusion.
+Suggestion: make all path_idents in predef to be persistent.
+
 
 			BER MetaOCaml
 

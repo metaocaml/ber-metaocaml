@@ -194,7 +194,8 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
    a .cmo file.
 *)
 let is_external = function
-  | Path.Pident id -> Ident.persistent id              (* not qualified *)
+  | Path.Pident id ->           (* not qualified *)
+      Ident.persistent id || Ident.global id || Ident.is_predef_exn id
   | Path.Papply _  -> false
   | Path.Pdot(Path.Pident id, _,_) -> Ident.persistent id
   | _             -> false
@@ -208,6 +209,16 @@ let rec path_to_lid : Path.t -> Longident.t = function
   | Path.Papply (p1,p2) ->
       Longident.Lapply(path_to_lid p1, path_to_lid p2)
 
+(* Convert the path to lid but use the given str as the last component.
+   This in effect qualifies 'str' with the given module path
+*)
+let path_to_lid_but_last : Path.t -> string -> Longident.t =
+  fun p str ->
+    match p with
+    | Path.Pident _ -> Longident.Lident str
+    | Path.Pdot (p,_,pos) -> path_to_lid (Path.Pdot (p,str,pos))
+    | _ -> assert false
+
 (* Replace the last component of p1 with p2, which should be a Pident
    path 
 *)
@@ -216,6 +227,7 @@ let path_replace_last : Path.t -> Path.t -> Path.t = fun p1 p2 ->
   | (Path.Pident _,x) -> x
   | (Path.Pdot(p1,_,s),Path.Pident id) -> Path.Pdot(p1,Ident.name id,s)
   | _ -> assert false
+
 
 (* Check to make sure a constructor, label, exception, etc.
    have the name that we can put into AST (Parsetree).
@@ -239,73 +251,87 @@ let check_path_quotable msg path =
    The major complexity comes from this scenario:
       open Scanf
       .<raise (Scan_failure "xx")>.
-   The Texp_construct node of Typedtree contains the lid and the
-   path that refer to "Scan_failure" without any module qualifications.
+   The Texp_construct node of Typedtree contains the lid and (was: the
+   path) that refer to "Scan_failure" without any module qualifications.
    We have to find the fully qualified path and check
    that it is external. We do that by finding the path for the _type_
    constructor, for the type of which the data constructor is a member.
    That type_path is fully qualified. We can ascertain the later fact
-   from Typecore.constructors_of_type, which puts the complete path
+   from Env.constructors_of_type, which puts the complete path
    into the type of the constructor, which is always of the form
    Tconstr(ty_path,_,_). The function constructors_of_type is used
-   within store_type, which is used when opening a module.
+   within Env.store_type, which is used when opening a module.
 
    Alternatively we could've used Env.lookup_constuctor, which also
    returns the qualified path? Searching the environment is costly
    though.
+   Actually, using Env.lookup_constuctor is a bad idea. Now labels and
+   constructors don;t have to be unique. The type checker goes to
+   a great length to disambiguate a constructor or a label. It records
+   the eventually determined type of the label/constructor in
+   label_description or constructor_description.
+   So, we should only use information from these descriptions.
+
+   Alas, the predefined types (with no module qualification) are
+   not specially distinguished. So, we have to check the initial
+   environment.
  *)
-let qualify_ctor : Location.t -> Path.t -> constructor_description -> 
-  Longident.t loc = 
- fun loc p cdesc ->
-  (fun lid -> Location.mkloc lid loc) (
-  let lid = path_to_lid p in
-  if is_external p then lid
-  else if try ignore (Env.lookup_constructor lid Env.initial); true
-          with Not_found -> false
-       then lid
-  else match (cdesc.cstr_tag, Ctype.repr cdesc.cstr_res) with
+let qualify_ctor : 
+    Longident.t loc -> constructor_description -> Longident.t loc = 
+ fun lid cdesc ->
+  let loc = lid.loc in
+  match (cdesc.cstr_tag, Ctype.repr cdesc.cstr_res) with
   | (Cstr_exception (p,_),_) ->
-      if is_external p then path_to_lid p else
+      if is_external p then Location.mkloc (path_to_lid p) loc else
        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
        "Exception %s cannot be used within brackets. Put into a separate file."
         (Path.name p))
+  | (_,{desc = Tconstr((Path.Pident _ as ty_path), _, _)}) ->
+     begin
+      try ignore (Env.find_type ty_path Env.initial); lid
+      with Not_found ->
+        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+        "Unqualified constructor %s cannot be used within brackets. Put into a separate file."
+          cdesc.cstr_name)
+     end
   | (_,{desc = Tconstr(ty_path, _, _)}) ->
       if is_external ty_path then
-        path_to_lid (path_replace_last ty_path p)
+        Location.mkloc (path_to_lid_but_last ty_path cdesc.cstr_name) loc
       else
       trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
       "Constructor %s cannot be used within brackets. Put into a separate file."
-          (Path.name p))
+          cdesc.cstr_name)
   | _ -> Printtyp.type_expr Format.err_formatter cdesc.cstr_res;
            failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
-                     Path.name p)
-  )
+                     cdesc.cstr_name)
 
 (* Check to see that a record label belongs to a record defined
    in a persistent module or in the initial environment.
    This is a label version of qualify_ctor
 *)
-let qualify_label : Location.t -> Path.t -> label_description -> 
-  Longident.t loc =
- fun loc p ldesc ->
-  (fun lid -> Location.mkloc lid loc) (
-  let lid = path_to_lid p in
-  if is_external p then lid
-  else if try ignore (Env.lookup_label lid Env.initial); true
-          with Not_found -> false
-       then lid
-  else match (Ctype.repr ldesc.lbl_res) with
+let qualify_label : Longident.t loc -> label_description -> Longident.t loc =
+ fun lid ldesc ->
+  let loc = lid.loc in
+  match Ctype.repr ldesc.lbl_res with
+  | {desc = Tconstr((Path.Pident _ as ty_path), _, _)} ->
+    begin
+      try ignore (Env.find_type ty_path Env.initial); lid
+      with Not_found ->
+        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+        "Unqualified label %s cannot be used within brackets. Put into a separate file."
+          ldesc.lbl_name)
+    end
   | {desc = Tconstr(ty_path, _, _)} ->
       if is_external ty_path then
-        path_to_lid (path_replace_last ty_path p)
+        Location.mkloc 
+          (path_to_lid_but_last ty_path ldesc.lbl_name) loc
       else
         trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
           "Label %s cannot be used within brackets. Put into a separate file."
-          (Path.name p))
+          ldesc.lbl_name)
   | _ -> Printtyp.type_expr Format.err_formatter ldesc.lbl_res;
            failwith ("qualify_label: cannot determine type from label "^
-                     Path.name p)
- )
+                     ldesc.lbl_name)
 
 (* Test if we should refer to a CSP value by name rather than by
    value
@@ -313,6 +339,9 @@ let qualify_label : Location.t -> Path.t -> label_description ->
 (* Module identifiers for the modules that are expected to be
    present at run-time -- that is, will be available for
    dynamic linking of the run-time generated code.
+
+TODO: check bytecomp/transclass.ml:const_path
+Perhaps that's a hint which unqualified identifiers will be persistent
 *)
 
 let ident_can_be_quoted = is_external
@@ -339,6 +368,9 @@ let sample_pat_list : Parsetree.pattern list = []
 
 (* Exported. Used as a template for passing the Asttypes.rec_flag *)
 let sample_rec_flag : Asttypes.rec_flag = Nonrecursive
+
+(* Exported. Used as a template for passing the Asttypes.override_flag *)
+let sample_override_flag : Asttypes.override_flag = Fresh
 
 (*}}}*)
 
@@ -605,6 +637,19 @@ let validate_vars : Location.t -> code_repr -> code_repr =
     if StackMark.is_valid sm then cde
     else scope_extrusion_error ~detected:l ~occurred:ast.pexp_loc var 
 
+let validate_vars_option : Location.t -> code_repr option -> 
+  Parsetree.expression option * string loc heap = 
+  fun l -> function
+  | None -> (None,Nil)
+  | Some e -> let Code (vars, e) = validate_vars l e in (Some e, vars)
+
+let validate_vars_list : Location.t -> code_repr list -> 
+  Parsetree.expression list * string loc heap = fun l cs ->
+  map_accum (fun acc c -> 
+      let Code (vars,e) = validate_vars l c in
+      (e, merge vars acc))
+    Nil cs
+
 (* ZZZZZ
 (* The names of gensym'd future stage bindings currently in scope,
    of new_binding_region.
@@ -662,12 +707,6 @@ let add_timestamp : string loc option -> Parsetree.expression ->
   | Some var -> 
   {pexp_loc  = timestamp_loc;
    pexp_desc = Pexp_setinstvar (var,e)}
-
-let remove_tstamp_option : string loc option -> 
-  Parsetree.expression option -> 
-  Parsetree.expression option * string loc option = fun var -> function
-    | None   -> (None,var)
-    | Some e -> let (e,var) = remove_tstamp var e in (Some e,var)
 
 (* Generate a gensym with a given base name and enter a new region 
    in which this gensym will live
@@ -822,38 +861,32 @@ let build_apply : Location.t -> (label * code_repr) array -> code_repr =
     | _ -> assert false
 
 
-(* ZZZZZ
-let build_tuple : 
-  Location.t -> Parsetree.expression array -> Parsetree.expression =
-  fun l ea -> 
-    let (el,var) = map_accum remove_tstamp None (Array.to_list ea) in
-    add_timestamp var
-      {pexp_loc = l; pexp_desc = Pexp_tuple el }
+let build_tuple : Location.t -> code_repr array -> code_repr =
+ fun l ea -> 
+  let (els,vars) = validate_vars_list l (Array.to_list ea) in
+  Code (vars, 
+    {pexp_loc = l; pexp_desc = Pexp_tuple els })
 
-let build_array : 
-  Location.t -> Parsetree.expression array -> Parsetree.expression =
-  fun l ea -> 
-    let (el,var) = map_accum remove_tstamp None (Array.to_list ea) in
-    add_timestamp var
-      {pexp_loc = l; pexp_desc = Pexp_array el }
+let build_array : Location.t -> code_repr array -> code_repr =
+ fun l ea -> 
+  let (els,vars) = validate_vars_list l (Array.to_list ea) in
+  Code (vars, 
+    {pexp_loc = l; pexp_desc = Pexp_array els })
 
 let build_ifthenelse : 
-  Location.t -> 
-  Parsetree.expression -> Parsetree.expression -> Parsetree.expression option ->
-  Parsetree.expression =
-  fun l e1 e2 eo -> 
-    let (e1,var) = remove_tstamp None e1 in
-    let (e2,var) = remove_tstamp var  e2 in
-    let (eo,var) = remove_tstamp_option var eo in
-    add_timestamp var
-      {pexp_loc = l; pexp_desc = Pexp_ifthenelse (e1,e2,eo) }
+ Location.t -> code_repr -> code_repr -> code_repr option -> code_repr =
+ fun l e1 e2 eo -> 
+    let Code (vars1,e1) = validate_vars l e1 in
+    let Code (vars2,e2) = validate_vars l e2 in
+    let (eo,varso)      = validate_vars_option l eo in
+    Code (merge vars1 (merge vars2 varso),
+      {pexp_loc = l; pexp_desc = Pexp_ifthenelse (e1,e2,eo) })
 
 let build_construct :
- Location.t -> Longident.t loc -> Parsetree.expression array -> bool ->
- Parsetree.expression =
+ Location.t -> Longident.t loc -> code_repr array -> bool -> code_repr =
  fun loc lid args explicit_arity ->
-   let (args,var) = map_accum remove_tstamp None (Array.to_list args) in
-   add_timestamp var
+  let (args,vars) = validate_vars_list loc (Array.to_list args) in
+  Code (vars, 
   {pexp_loc  = loc;
    pexp_desc = Pexp_construct (lid,
      begin
@@ -862,61 +895,56 @@ let build_construct :
       | [x] -> Some x
       | xl  -> Some { pexp_loc  = loc; pexp_desc = Pexp_tuple xl }
      end,
-     explicit_arity) }
+     explicit_arity) })
 
-let build_record :
- Location.t -> (Longident.t loc * Parsetree.expression) array ->
- Parsetree.expression option -> Parsetree.expression =
+let build_record : Location.t -> (Longident.t loc * code_repr) array ->
+ code_repr option -> code_repr =
  fun loc lel eo ->
-    let (lel,var) = map_accum 
-        (fun var (l,e) -> let (e,var) = remove_tstamp var e in ((l,e),var))
-        None (Array.to_list lel) in
-   let (eo,var) = remove_tstamp_option var eo in
-   add_timestamp var
-      {pexp_loc  = loc; pexp_desc = Pexp_record (lel,eo)}
+   let (lel,vars) = map_accum (fun vars (lbl,e) -> 
+                       let Code (var,e) = validate_vars loc e in
+                       ((lbl,e),merge var vars))
+        Nil (Array.to_list lel) in
+   let (eo,varo) = validate_vars_option loc eo in
+   Code (merge vars varo, 
+   {pexp_loc  = loc; pexp_desc = Pexp_record (lel,eo)})
 
-let build_field :
- Location.t -> Parsetree.expression -> Longident.t loc -> Parsetree.expression =
+let build_field : Location.t -> code_repr -> Longident.t loc -> code_repr =
  fun loc e lid ->
-   let (e,var) = remove_tstamp None e in
-   add_timestamp var
+  let Code (vars,e) = validate_vars loc e in
+  Code (vars, 
      {pexp_loc  = loc;
-      pexp_desc = Pexp_field (e,lid)}
+      pexp_desc = Pexp_field (e,lid)})
 
 let build_setfield :
- Location.t -> Parsetree.expression -> Longident.t loc -> 
-   Parsetree.expression -> Parsetree.expression =
+ Location.t -> code_repr -> Longident.t loc -> code_repr -> code_repr =
  fun loc e1 lid e2 ->
-   let (e1,var) = remove_tstamp None e1 in
-   let (e2,var) = remove_tstamp var  e2 in
-   add_timestamp var
+  let Code (vars1,e1) = validate_vars loc e1 in
+  let Code (vars2,e2) = validate_vars loc e2 in
+  Code (merge vars1 vars2,
      {pexp_loc  = loc;
-      pexp_desc = Pexp_setfield (e1,lid,e2)}
+      pexp_desc = Pexp_setfield (e1,lid,e2)})
 
-let build_variant :
- Location.t -> string -> Parsetree.expression option -> Parsetree.expression =
+let build_variant : Location.t -> string -> code_repr option -> code_repr =
  fun loc l eo ->
-   let (eo,var) = remove_tstamp_option None eo in
-   add_timestamp var
+  let (eo,vars) = validate_vars_option loc eo in
+  Code (vars, 
      {pexp_loc  = loc;
-      pexp_desc = Pexp_variant (l,eo)}
+      pexp_desc = Pexp_variant (l,eo)})
 
-let build_send :
- Location.t -> Parsetree.expression -> string -> Parsetree.expression =
+let build_send : Location.t -> code_repr -> string -> code_repr =
  fun loc e l ->
-   let (e,var) = remove_tstamp None e in
-   add_timestamp var
-     {pexp_loc  = loc;
-      pexp_desc = Pexp_send (e,l)}
+  let Code (vars,e) = validate_vars loc e in
+  Code (vars, 
+    {pexp_loc  = loc;
+     pexp_desc = Pexp_send (e,l)})
 
 let build_open :
- Location.t -> Longident.t loc -> Parsetree.expression -> Parsetree.expression =
- fun loc l e ->
-   let (e,var) = remove_tstamp None e in
-   add_timestamp var
+ Location.t -> Longident.t loc -> override_flag -> code_repr -> code_repr =
+ fun loc l ovf e ->
+  let Code (vars,e) = validate_vars loc e in
+  Code (vars, 
      {pexp_loc  = loc;
-      pexp_desc = Pexp_open (l,e)}
-*)
+      pexp_desc = Pexp_open (ovf,l,e)})
 
 (* Build a Parsetree for a future-stage identifier
    It is always in scope of with_binding_region:
@@ -1180,8 +1208,8 @@ let rec trx_pattern :
   | Tpat_tuple lst ->
     let (pl,acc) = map_accum trx_pattern acc lst
     in (Ppat_tuple pl, acc)
-  | Tpat_construct (p, li, cdesc, args, explicit_arity) ->
-      let lid = qualify_ctor li.loc p cdesc in
+  | Tpat_construct (li, cdesc, args, explicit_arity) ->
+      let lid = qualify_ctor li cdesc in
       let (args,acc) = map_accum trx_pattern acc args in
       (Ppat_construct (lid,
           (match args with
@@ -1195,8 +1223,8 @@ let rec trx_pattern :
       let (p,acc) = trx_pattern acc p 
       in (Ppat_variant (label,Some p),acc)
   | Tpat_record (lst, closed) ->
-      let dolab acc (p,li,ldesc,pat) =
-        let lid = qualify_label li.loc p ldesc in
+      let dolab acc (li,ldesc,pat) =
+        let lid = qualify_label li ldesc in
         let (pat,acc) = trx_pattern acc pat in
         ((lid,pat),acc)
       in
@@ -1617,14 +1645,14 @@ YYYY
              pats;
              texp_array (List.map (trx_bracket trx_exp n) exps)]
         })
-
+*)
   | Texp_tuple el ->
       texp_apply (texp_ident "Trx.build_tuple")
         [texp_loc exp.exp_loc; 
 	 texp_array (List.map (trx_bracket trx_exp n) el)]
 
   | Texp_construct (li, cdesc, args, explicit_arity) ->
-      let lid = qualify_ctor li.loc p cdesc in
+      let lid = qualify_ctor li cdesc in
       texp_apply (texp_ident "Trx.build_construct")
         [texp_loc exp.exp_loc; 
          texp_lid lid;
@@ -1640,22 +1668,22 @@ YYYY
   | Texp_record (lel,eo) ->
       texp_apply (texp_ident "Trx.build_record")
         [texp_loc exp.exp_loc; 
-         texp_array (List.map (fun (p,li,ldesc,e) ->
-           texp_tuple [texp_lid (qualify_label li.loc p ldesc);
+         texp_array (List.map (fun (li,ldesc,e) ->
+           texp_tuple [texp_lid (qualify_label li ldesc);
                        trx_bracket trx_exp n e]) lel);
          texp_option (map_option (trx_bracket trx_exp n) eo)]
 
-  | Texp_field (e,p,li,ldesc) ->
+  | Texp_field (e,li,ldesc) ->
       texp_apply (texp_ident "Trx.build_field")
         [texp_loc exp.exp_loc; 
          trx_bracket trx_exp n e;
-         texp_lid (qualify_label li.loc p ldesc)]
+         texp_lid (qualify_label li ldesc)]
 
-  | Texp_setfield (e1,p,li,ldesc,e2) ->
+  | Texp_setfield (e1,li,ldesc,e2) ->
       texp_apply (texp_ident "Trx.build_setfield")
         [texp_loc exp.exp_loc; 
          trx_bracket trx_exp n e1;
-         texp_lid (qualify_label li.loc p ldesc);
+         texp_lid (qualify_label li ldesc);
          trx_bracket trx_exp n e2]
 
   | Texp_array el ->
@@ -1669,7 +1697,7 @@ YYYY
          trx_bracket trx_exp n e;
          trx_bracket trx_exp n et;
 	 texp_option (map_option (trx_bracket trx_exp n) efo)]
-*)
+
   | Texp_sequence (e1,e2) ->
       texp_apply (texp_ident "Trx.build_sequence")
         [texp_loc exp.exp_loc; 
@@ -1697,7 +1725,7 @@ YYYY
       texp_apply (texp_ident "Trx.build_when")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-(*
+
   | Texp_send (e,m,_) ->
       (* We don't check the persistence of the method: after all,
          a method name is somewhat like a polymorphic variant.
@@ -1709,7 +1737,6 @@ YYYY
          texp_string (match m with
                         | Tmeth_name name -> name
                         | Tmeth_val id -> Ident.name id)]
-*)
 
   | Texp_new (p,li,_) ->
       check_path_quotable "Class" p;
@@ -1761,16 +1788,16 @@ YYYY
        *)
     | Texp_constraint (cty1, cty2) -> 
         not_supported loc "Texp_constraint"
-    | Texp_open (ovf, path, lid, _) -> not_supported loc "not yet supported" (* XXX *)
-(* YYY
     | Texp_open (ovf, path, lid, _) -> 
        check_path_quotable "Texp_open" path;
+       let ovf_exp = texp_ident "Trx.sample_override_flag" in
+       let ovf_exp = {ovf_exp with exp_desc = 
+                        Texp_cspval (Obj.repr ovf, dummy_lid "*ovf*")} in
        texp_apply (texp_ident "Trx.build_open")
-        [texp_loc exp.exp_loc; 
-XXX need ovf
+        [texp_loc exp.exp_loc;
          texp_lid (mkloc (path_to_lid path) lid.loc);
+         ovf_exp;
          exp]      (* exp is the result of trx_bracket *)
-*)
     | Texp_poly cto  -> not_supported loc "Texp_poly"
     | Texp_newtype s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)

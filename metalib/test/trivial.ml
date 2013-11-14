@@ -203,11 +203,11 @@ let 1 = Lazy.force (!. .<lazy 1>.);;
 (* Tuples *)
 .<(1,"abc")>.;;
 (*
-- : ('cl, int * string) code = .<((1), ("abc"))>.
+- : (int * string) code = .<(1, "abc")>. 
 *)
 .<(1,"abc",'d')>.;;
 (*
-- : ('cl, int * string * char) code = .<((1), ("abc"), ('d'))>.
+- : (int * string * char) code = .<(1, "abc", 'd')>. 
 *)
 let "abc" =
   match !. .<(1,"abc",'d')>. with (_,x,_) -> x;;
@@ -215,17 +215,17 @@ let "abc" =
 (* Arrays *)
 .<[||]>.;;
 (*
-- : ('cl, 'a array) code = .<[||]>.
+- : 'a array code = .<[||]>. 
 *)
 let x = .<1+2>. in .<[|.~x;.~x|]>.;;
 (*
-- : ('cl, int array) code = .<[|(1 + 2); (1 + 2)|]>.
+- : int array code = .<[|(1 + 2);(1 + 2)|]>. 
 *)
 
 (* Constructors and enforcing externality *)
 .<raise Not_found>.;;
 (*
-- : ('cl, 'a) code = .<(raise (Not_found)>.
+- : 'a code = .<(raise (Not_found)>.
 *)
 .<raise (Scan_failure "")>.;;
 (*
@@ -237,12 +237,12 @@ Error: Unbound constructor Scan_failure
 print_endline "Error was expected";;
 .<raise (Scanf.Scan_failure "")>.;;
 (*
-- : ('cl, 'a) code = .<(raise (Scanf.Scan_failure (""))>.
+- : 'a code = .<(raise (Scanf.Scan_failure (""))>.
 *)
 open Scanf;;
 .<raise (Scan_failure "")>.;;
 (*
-- : ('cl, 'a) code = .<(raise (Scanf.Scan_failure (""))>.
+- : 'a code = .<Pervasives.raise (Scanf.Scan_failure "")>. 
 *)
 !. .<raise (Scan_failure "")>.;;
 (*
@@ -253,37 +253,31 @@ print_endline "Exception was expected";;
 
 .<true>.;;
 (*
-- : ('cl, bool) code = .<(true)>.
+- : bool code = .<true>. 
 *)
 .<Some 1>.;;
 (*
-- : ('cl, int option) code = .<(Some (1))>.
+- : int option code = .<Some 1>. 
 *)
 .<Some [1]>.;;
 (*
-- : ('cl, int list option) code = .<(Some ([1]))>.
+- : int list option code = .<Some [1]>. 
 *)
-!. .<Some [1]>.;;
-(*
-- : int list option = Some [1]
-*)
+let Some [1] = !. .<Some [1]>.;;
 .<None>.;;
 (*
-- : ('cl, 'a option) code = .<(None)>.
+- : 'a option code = .<None>. 
 *)
-!. .<None>.;;
-(*
-- : 'a option = None
-*)
+let None = !. .<None>.;;
 
 .<Genlex.Int 1>.;;
 (*
-- : ('cl, Genlex.token) code = .<(Genlex.Int (1))>.
+- : Genlex.token code = .<Genlex.Int 1>. 
 *)
 open Genlex;;
 .<Int 1>.;;
 (*
-- : ('cl, Genlex.token) code = .<(Genlex.Int (1))>.
+- : Genlex.token code = .<Genlex.Int 1>. 
 *)
 let Int 1 = !. .<Int 1>.;;
 
@@ -297,14 +291,20 @@ print_endline "Error was expected";;
 type foo = Bar;;
 .<Bar>.;;
 (*
-Fatal error: exception Trx.TrxError("Constructor Bar cannot be used within brackets. Put into a separate file.")
+Characters 2-5:
+  .<Bar>.;;
+    ^^^
+Error: Unqualified constructor Bar cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
 module Foo = struct type foo = Bar end;;
 .<Foo.Bar>.;;
 (*
-Fatal error: exception Trx.TrxError("Constructor Foo.Bar cannot be used within brackets. Put into a separate file.")
+Characters 2-9:
+  .<Foo.Bar>.;;
+    ^^^^^^^
+Error: Constructor Bar cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
@@ -314,34 +314,34 @@ print_endline "Error was expected";;
 (*
 - : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
 *)
-Complex.conj (!. .<{Complex.re = 1.0; im = 2.0}>.);;
-(*
-- : Complex.t = {Complex.re = 1.; Complex.im = -2.}
-*)
+let {Complex.re = 1.; Complex.im = -2.} =
+  Complex.conj (!. .<{Complex.re = 1.0; im = 2.0}>.);;
 let x = {Complex.re = 1.0; im = 2.0} in .<x.re>.;;
 (*
-Characters 42-46:
+Characters 44-46:
   let x = {Complex.re = 1.0; im = 2.0} in .<x.re>.;;
-                                            ^^^^
-Error: Unbound record field label re
+                                              ^^
+Warning 40: re was selected from type Complex.t.
+It is not visible in the current scope, and will not 
+be selected if the type becomes unknown.
+- : float code = .<((* cross-stage persistent value (id: x) *)).Complex.re>. 
 *)
-print_endline "Error was expected";;
 
 let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.;;
 (*
-- : ('cl, float) code =
+- : float code =
 .<((* cross-stage persistent value (as id: x) *)).Complex.re>.
 *)
 let 1.0 = !.(let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.);;
 let x = ref 1 in .<x.contents>.;;       (* Pervasive record *)
 (*
-- : ('cl, int) code =
+- : int code =
 .<((* cross-stage persistent value (as id: x) *)).contents>.
 *)
 let 1 = !.(let x = ref 1 in .<x.contents>.);;
 let x = ref 1 in .<x.contents <- 2>.;;
 (*
-- : ('cl, unit) code =
+- : unit code =
 .<((* cross-stage persistent value (as id: x) *)).contents <- 2>.
 *)
 let x = ref 1 in (!. .<x.contents <- 2>.); x;;
@@ -350,12 +350,12 @@ let x = ref 1 in (!. .<x.contents <- 2>.); x;;
 open Complex;;
 .<{re = 1.0; im = 2.0}>.;;
 (*
-- : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
+- : Complex.t code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
 *)
 let 5.0 = norm (!. .<{re = 3.0; im = 4.0}>.);;
 let x = {re = 1.0; im = 2.0} in .<x.re>.;;
 (*
-- : ('cl, float) code =
+- : float code =
 .<((* cross-stage persistent value (as id: x) *)).Complex.re>.
 *)
 let 1.0 = !.(let x = {re = 1.0; im = 2.0} in .<x.re>.);;
@@ -363,36 +363,38 @@ let 1.0 = !.(let x = {re = 1.0; im = 2.0} in .<x.re>.);;
 type foo = {fool : int};;
 .<{fool = 1}>.;;
 (*
-Fatal error: exception Trx.TrxError("Label fool cannot be used within brackets. Put into a separate file.")
+Characters 3-7:
+  .<{fool = 1}>.;;
+     ^^^^
+Error: Unqualified label fool cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
 (* Conditional *)
 
 .<if true then 1 else 2>.;;
-(* - : ('cl, int) code = .<if (true) then 1 else 2>. *)
+(* - : int code = .<if true then 1 else 2>. *)
 .<if Some 1 = None then print_string "weird">.;;
 (*
-- : ('cl, unit) code =
-.<if ((Some (1)) = (None)) then (print_string "weird">.
+- : unit code = .<if (Some 1) = None then Pervasives.print_string "weird">. 
 *)
 let () = !. .<if Some 1 = None then print_string "weird">.;;
 
 (* Polymorphic variants *)
 .<`Foo>.;;
 (*
-- : ('cl, [> `Foo ]) code = .<`Foo>.
+- : [> `Foo ] code = .<`Foo>. 
 *)
 .<`Bar 1>.;;
 (*
-- : ('cl, [> `Bar of int ]) code = .<`Bar 1>.
+- : [> `Bar of int ] code = .<`Bar 1>. 
 *)
 let 1 = match !. .<`Bar 1>. with `Bar x -> x ;;
 
 (* Some support for modules *)
 let f = fun x -> .<x # foo>.;;
 (*
-val f : < foo : 'a; .. > -> ('cl, 'a) code = <fun>
+val f : < foo : 'a; .. > -> 'a code = <fun>
 *)
 let x = object method foo = 1 end;;
 (*
@@ -400,8 +402,7 @@ val x : < foo : int > = <obj>
 *)
 f x;;
 (*
-- : ('a, int) code =
-.<(((* cross-stage persistent value (as id: x) *))#foo)>.
+- : int code = .<((* cross-stage persistent value (id: x) *))#foo>. 
 *)
 let 1 = !. (f x);;
 
