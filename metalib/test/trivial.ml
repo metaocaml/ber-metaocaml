@@ -479,6 +479,11 @@ ok 3 2
 
 .<fun x -> .~(!. .<x>.; .<1>.)>.;;
 (*
+Exception:
+Failure
+ "The code built at Characters 6-7:\n  .<fun x -> .~(!. .<x>.; .<1>.)>.;;\n        ^\n is not closed: identifier x_28 bound at Characters 6-7:\n  .<fun x -> .~(!. .<x>.; .<1>.)>.;;\n        ^\n is free".
+
+Was:
 Characters 14-22:
   .<fun x -> .~(!. .<x>.; .<1>.)>.;;
                 ^^^^^^^^
@@ -504,33 +509,34 @@ print_endline "Error was expected";;
 (* Simple functions *)
 .<fun x -> x>.;;
 (*
-- : ('cl, 'a -> 'a) code = .<fun x_3 -> x_3>.
+- : ('a -> 'a) code = .<fun x_7  -> x_7>. 
 *)
 let 42 = (!. .<fun x -> x>.) 42;;
 
 .<fun x y -> x + y>.;;
 (*
-- : ('cl, int -> int -> int) code = .<fun x_5 -> fun y_6 -> (x_5 + y_6)>.
+- : (int -> int -> int) code = .<fun x_9  y_10  -> x_9 + y_10>. 
 *)
 let 5 = (!. .<fun x y -> x + y>.) 2 3;;
 
 .<fun x -> fun x -> x + x >.;;
 (*
-- : ('cl, 'a -> int -> int) code = .<fun x_9 -> fun x_10 -> (x_10 + x_10)>.
+- : ('a -> int -> int) code = .<fun x_13  x_14  -> x_14 + x_14>. 
 *)
+let 8 = !. .<fun x -> fun x -> x + x >. 3 4;;
 
 (* Testing hygiene  *)
 let eta f = .<fun x -> .~(f .<x>.)>.;;
 (*
-val eta : (('cl, 'a) code -> ('cl, 'b) code) -> ('cl, 'a -> 'b) code = <fun>
+val eta : ('a code -> 'b code) -> ('a -> 'b) code = <fun>
 *)
 eta (fun x -> .<1 + .~x>.);;
 (*
-- : ('cl, int -> int) code = .<fun x_11 -> (1 + x_11)>.
+- : (int -> int) code = .<fun x_17  -> 1 + x_17>. 
 *)
 eta (fun y -> .<fun x -> x + .~y>.);;
 (*
-- : ('cl, int -> int -> int) code = .<fun x_12 -> fun x_13 -> (x_13 + x_12)>.
+- : (int -> int -> int) code = .<fun x_18  x_19  -> x_19 + x_18>. 
 *)
 let 5 = (!. (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
 
@@ -539,12 +545,12 @@ let rec fhyg = function
   | 0 -> .<1>.
   | n -> .<(fun x -> .~(fhyg (n-1)) + x) n>.;;
 (*
-val fhyg : int -> ('cl, int) code = <fun>
+val fhyg : int -> int code = <fun>
 *)
 fhyg 3;;
 (*
-- : ('a, int) code = .<
-((fun x_5 -> (((fun x_6 -> (((fun x_7 -> (1 + x_7)) 1) + x_6)) 2) + x_5)) 3)>.
+- : int code = .<
+(fun x_22  -> ((fun x_23  -> ((fun x_24  -> 1 + x_24) 1) + x_23) 2) + x_22) 3>.
 *)
 let 7 = !. (fhyg 3);;
 
@@ -910,13 +916,12 @@ let false = (!. .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) an
 
 (* testing scope extrusion *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<1>.; .<0>.)>. in !r ;;
-(* - : ('cl, int) code = .<1>.  *)
+(* - : int code = .<1>.  *)
 let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;
-(* shown code is a bit funny -- but instructive! *)
 (*
-- : ('cl, int) code = .<x_10 <- x_10>.
+- : int code = .<x_30>.
 
-Failure("Scope extrusion at Characters 50-51:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                                    ^\n for the identifier x_10 bound at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n")
+Failure("The code built at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n is not closed: identifier x_30 bound at Characters 35-36:\n  let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in !r ;;\n                                     ^\n is free")
 *)
 print_endline "Error was expected";;
 
@@ -924,15 +929,16 @@ let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) 
 (*
 Exception:
 Failure
- "Scope extrusion at Characters 58-59:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in !. c;;\n                                                            ^\n for the identifier x_11 bound at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in !. c;;\n                                             ^\n".
+ "The code built at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in !. c;;\n                                             ^\n is not closed: identifier x_31 bound at Characters 43-44:\n  let c = let r = ref .<0>. in let _ = .<fun x -> .~(r := .<x>.; .<0>.)>. in (!r) in !. c;;\n                                             ^\n is free".
 *)
 print_endline "Error was expected";;
 
 let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;
 (*
-- : ('cl, '_a -> '_a) code = .<x_13 <- fun y_14 -> x_13>.
+- : ('_a -> '_a) code = .<fun y_34  -> x_33>.
 
-Failure("Scope extrusion at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_13 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                            ^\n")
+Failure("The code built at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n is not closed: identifier x_33 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in !r ;;\n                                            ^\n is free")
+
 *)
 print_endline "Error was expected";;
 
@@ -940,28 +946,31 @@ print_endline "Error was expected";;
 let r = ref .<fun y->y>. in 
 let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;
 (*
+Exception:
 Failure
- "Scope extrusion at Characters 58-68:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                               ^^^^^^^^^^\n for the identifier x_34 bound at Characters 43-44:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                ^\n".
+ "Scope extrusion detected at Characters 95-103:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                                                                    ^^^^^^^^\n for code built at Characters 58-68:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                               ^^^^^^^^^^\n for the identifier x_36 bound at Characters 43-44:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                ^\n".
 *)
 print_endline "Error was expected";;
 
-(* The test is approximate: it is sound but overflagging *)
+(* Unlike BER N100, the test is exact. The following is accepted with BER N101
+   (it wasn't with BER N100) 
+*)
 let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;
 (*
-- : ('cl, '_a -> '_a) code = .<x_16 <- fun y_17 -> y_17>.
-
-Failure("Scope extrusion at Characters 57-67:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                                           ^^^^^^^^^^\n for the identifier x_16 bound at Characters 42-43:\n  let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. in !r ;;\n                                            ^\n")
+- : ('_a -> '_a) code = .<fun y_41  -> y_41>. 
 *)
 print_endline "Error was expected";;
 
 (* The following are OK though *)
 let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> y>.; !r)>.;;
 (*
-- : ('cl, '_a -> '_b -> '_b) code = .<fun x_22 -> fun y_23 -> y_23>. 
+- : ('_a -> '_b -> '_b) code = .<fun x_43  y_44  -> y_44>. 
 *)
 let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> x>.; !r)>.;;
 (*
-- : ('cl, '_a -> '_a -> '_a) code = .<fun x_25 -> fun y_26 -> x_25>. 
+- : ('_a -> '_a -> '_a) code = .<fun x_46  y_47  -> x_46>. 
 *)
+let 3 = 
+ let r = ref .<fun y->y>. in !. .<fun x -> .~(r := .<fun y -> x>.; !r)>. 3 4;;
 
 print_endline "\nAll done\n";;

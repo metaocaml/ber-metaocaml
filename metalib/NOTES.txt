@@ -12,7 +12,28 @@ no special syntax .!
  OCaml)
  More precise tracking of free variables and reporting of scope
  extrusion.
+Faster generation of code (especially for functions, nonbinding
+functions, etc)
 Suggestion: make all path_idents in predef to be persistent.
+
+One significant simplification in the future: try to build as much
+code as possible at translation time. See one of the TODO in trx.ml.
+If we can build functions at translation time, we don't even
+need to rename bound variables.
+
+With the new dynamic test, more programs are accepted.
+let tr7 = .<fun x -> !. x>.;;
+(*
+val tr7 : ('a code -> 'a) code = .<fun x_63  -> Runcode.( !. )  x_63>. 
+
+Was:
+Characters 24-25:
+  let tr7 = .<fun x -> !. x>.;;
+                          ^
+Error: !. error: 'a not generalizable in ('a, 'b) code
+*)
+But the code was legitimate:
+let 10 = !. tr7 .<10>.;;
 
 
 			BER MetaOCaml

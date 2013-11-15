@@ -89,7 +89,9 @@ val build_open :
  Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
    code_repr -> code_repr
 
-val build_ident : Location.t -> string Location.loc -> code_repr
+val build_fun_simple : 
+  Location.t -> string -> string Location.loc -> 
+  (code_repr -> code_repr) -> code_repr
 (*
 val with_binding_region : 
     string Location.loc -> (string Location.loc -> code_repr) -> 

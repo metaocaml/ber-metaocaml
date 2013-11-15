@@ -49,7 +49,17 @@
   We now check for scope extrusion: we enforce the region discipline
   for generated identifiers. To make it easier to impose checks,
   the translation rule is modified as follows
-     <fun x -> e> ---> with_binding_region "x" (fun x -> mkLAM x <e>)
+     <fun x -> e> ---> build_simple_fun "x" (fun x -> <e>)
+  One can say that <fun x -> e> of the type (a->b) code is translated
+  into (fun x -> <e>) of the type a code -> b code. This looks quite
+  like the HOAS syntax for lambda (see the code-generation approach
+  with code combinators. The function build_simple_fun generates a gensym
+  and establishes a region for the gensym variable.
+
+  OCaml has more complicated functions, <function pattern -> body> with
+  complex patterns. If the patterns contain no binding variables,
+  there is no need to go into the gensym generation. The translation is
+  no more complex than that of <lazy e>. 
   For more complicated binding patterns, we iterate
      <fun (x1,x2) -> e> ---> 
        with_binding_region "x1" (fun x1 ->
@@ -534,11 +544,16 @@ let rec merge : 'v heap -> 'v heap -> 'v heap = fun h1 h2 ->
         | _ -> HNode (k1,v1,l1,merge h2 r1)
       end
 
-(* Remove the top of a non-empty heap *)
-let remove_top : 'v heap -> 'v heap = function
-  | Nil -> assert false
-  | HNode (_,_,h1,h2) -> merge h1 h2
-
+(* Remove stack mark from the top of a non-empty heap *)
+let remove_top : StackMark.t -> 'v heap -> 'v heap = fun mark -> function
+  | Nil -> Nil
+  | HNode (k,_,h1,h2) as h -> 
+      begin
+        match StackMark.compare mark k with
+        | 0 -> merge h1 h2
+        | n when n > 0 -> h
+        | _ -> assert false
+      end
 
 (* The representation of the possibly open code: AST plus the
    set of free identifiers, annotated with the marks
@@ -950,11 +965,9 @@ let build_open :
    It is always in scope of with_binding_region:
    Bound variables are always in scope of their binders;
    A well-typed code has no unbound variables.
-*)
 let build_ident : Location.t -> string loc -> code_repr =
  fun loc l ->
   not_supported loc "vars not supported"
-(*
   Code (add_timestamp (Some l)
    {pexp_loc  = loc;
     pexp_desc = Pexp_ident (mkloc (Longident.Lident l.txt) l.loc)}
@@ -971,17 +984,32 @@ let build_for :
   add_timestamp var
   {pexp_loc = l; 
    pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) }
+*)
 
+(* Build a simple one-arg function, as described in the the title comments *)
+(* 'name' is the name of the variable from Ppat_var of the fun x -> ...
+   form. It is the real name with the location within the function pattern.
+   Use name.loc to identify the binder in the source code.
+*)
 let build_fun_simple : 
-  Location.t -> string -> string loc -> Parsetree.expression -> 
-  Parsetree.expression =
-  fun l label name ebody -> 
-  let (ebody,var) = remove_tstamp None ebody in
-  let pat = {ppat_loc  = l; ppat_desc = Ppat_var name} in
-  add_timestamp var
-  {pexp_loc = l; 
-   pexp_desc = Pexp_function (label,None,[(pat,ebody)])}
+  Location.t -> string -> string loc -> (code_repr -> code_repr) -> code_repr =
+  fun l label name fbody -> 
+  let new_name = genident name in
+  let (vars,ebody) = 
+   StackMark.with_stack_mark (fun mark ->
+     let var_code = (* code that corresponds to the bound variable *)
+       Code (HNode (mark,new_name,Nil,Nil),
+          {pexp_loc  = name.loc;        (* the loc of the binder *)
+           pexp_desc = 
+            Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)}) in
+     let Code (vars,ebody) = validate_vars l (fbody var_code) in
+     (remove_top mark vars, ebody)) in
+  let pat = {ppat_loc  = new_name.loc; ppat_desc = Ppat_var new_name} in
+  Code (vars,
+    {pexp_loc = l; 
+     pexp_desc = Pexp_function (label,None,[(pat,ebody)])})
 
+(*
 let build_let_simple : 
   Location.t -> rec_flag -> string loc -> Parsetree.expression -> 
   Parsetree.expression -> Parsetree.expression =
@@ -1481,6 +1509,17 @@ if the translation of e produced Texp_cspval. We extract the CSP value,
 invoke build_assert (at compile time, when trx.ml is run) to build
 the Pexp_assert node, and wrap it as a CSP.
 
+Essentially the result of trx_bracket should be like
+   Transl_bracket of Parsetree.expression option * Typedtree.expression
+The first part of the result is the code built-in at compile time.
+This part is None of the expression to translate contains an escape
+or a true CSP (global id is OK). Sometimes we need both parts: consider
+       <fun x -> x + ~(...)>
+When we translate x we don't know if we can take a shortcut and
+build the function code at translation time. So, we have to account
+for both possibilities. If we can build the function at compile time,
+we don't even need to rename the bound variable!
+
 *)
 
 (* Given a type [ty], return [ty code code ... code] (n times code).
@@ -1519,19 +1558,20 @@ let rec trx_bracket :
     (* We make CSP only if the variable is bound at the stage 0.
        Variables bound at stage > 0 are subject to renaming.
        They are translated into stage 0 variable but of a different
-       type (string loc), as explained in the title comments.
+       type (t code), as explained in the title comments.
      *)
     if stage = 0 then trx_csp exp p li 
     else
-      texp_apply (texp_ident "Trx.build_ident")
-        [texp_loc exp.exp_loc; 
          (* Future-stage bound variable becomes the present-stage
-            bound-variable, but at a different type
+            bound-variable, but at a different type.
           *)
-         match texp_ident "Trx.sample_name" with (* fill in the type, etc.*)
-         | {exp_desc = Texp_ident (_,_,vd); exp_type = ty}  ->
-           {exp with exp_desc = Texp_ident(p,li,vd); exp_type = ty}
-         | _ -> assert false]
+      let () = assert (vd.val_kind = Val_reg) in
+      (* The drawback is that exp.exp_loc disappears. If the scope extrusion
+         is reported for a simple expression like <x>, we can no longer
+         print in the error message the location that <x> appeared.
+         We can only print the location x was bound.
+      *)
+      Texp_ident (p,li,{vd with val_type = wrap_ty_in_code n vd.val_type})
 
   | Texp_constant cst -> 
       texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
@@ -1572,19 +1612,35 @@ YYYY
                          (List.map (trx_bracket trx_exp n) exps))]
         })
 
-
+*)
      (* The most common case of functions: fun x -> body *)
-  | Texp_function (l,[({pat_desc = Tpat_var (id,name)},ebody)],_) ->
-      texp_binding_simple (id,name) (fun gensymed_var ->
-        { exp with
-          exp_type = wrap_ty_in_code n exp.exp_type; (* lifted type *)
-          exp_desc = 
-            texp_apply (texp_ident "Trx.build_fun_simple") 
-            [texp_loc exp.exp_loc;
-             texp_string l;
-             gensymed_var;
-             trx_bracket trx_exp n ebody] })
+  | Texp_function (l,[({pat_desc = Tpat_var (_,name)} as pat,ebody)],_) ->
+      texp_apply (texp_ident "Trx.build_fun_simple") 
+        [texp_loc exp.exp_loc;
+         texp_string l;
+         begin 
+           let name_exp = texp_ident "Trx.sample_name" in
+           {name_exp with
+            exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} 
+         end;
+         (* Translate the future-stage function as present-stage function;
+            with the same variables, but with a different type,
+            targ code -> tres code
+          *)
+         { exp with
+           exp_desc = 
+             Texp_function ("",[(pat, trx_bracket trx_exp n ebody)],Total);
+           exp_type = 
+            {exp.exp_type with desc =
+             match exp.exp_type.desc with
+             | Tarrow (_,targ,tres,_) ->
+                 Tarrow ("",wrap_ty_in_code n targ, wrap_ty_in_code n tres,
+                         Cok)
+             | _ -> assert false}
+         }
+       ]
 
+(*
   | Texp_function (l,pel,_) ->
       let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
       texp_binding_pattern pel exp
