@@ -35,6 +35,9 @@ Error: !. error: 'a not generalizable in ('a, 'b) code
 But the code was legitimate:
 let 10 = !. tr7 .<10>.;;
 
+Added a test for the well-formedness of simple let.
+.<let rec f = f in f>. is now disallowed.
+
 
 			BER MetaOCaml
 

@@ -95,6 +95,12 @@ val build_fun_simple :
 val build_for : 
   Location.t -> string Location.loc -> code_repr -> code_repr -> 
   bool -> (code_repr -> code_repr) -> code_repr
+val build_let_simple_nonrec : 
+  Location.t -> string Location.loc -> bool -> code_repr -> 
+    (code_repr -> code_repr) -> code_repr
+val build_let_simple_rec : 
+  Location.t -> string Location.loc -> (code_repr -> code_repr * code_repr) -> 
+    code_repr
 (*
 val build_fun : 
   Location.t -> string -> string Location.loc array -> 

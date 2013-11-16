@@ -415,8 +415,8 @@ let 5.0 = !. .<let open Complex in norm {re=4.0; im = 3.0}>.;;
 
 .<for i=1 to 5 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
 (*
-- : ('cl, unit) code =
-.<for i_10 = 1 to 5 do Printf.printf "ok %d %d\n" i_10 (i_10 + 1) done>.
+- : unit code = .<
+for i_1 = 1 to 5 do Printf.printf "ok %d %d\n" i_1 (i_1 + 1) done>. 
 *)
 !. .<for i=1 to 5 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
 (*
@@ -429,8 +429,8 @@ ok 5 6
 
 .<for i=5 downto 1 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
 (*
-- : ('cl, unit) code =
-.<for i_8 = 5 downto 1 do Printf.printf "ok %d %d\n" i_8 (i_8 + 1) done>.
+- : unit code = .<
+for i_3 = 5 downto 1 do Printf.printf "ok %d %d\n" i_3 (i_3 + 1) done>. 
 *)
 !. .<for i=5 downto 1 do Printf.printf "ok %d %d\n" i (i+1) done>.;;
 (*
@@ -443,9 +443,10 @@ ok 1 2
 
 .<for i=1 to 2 do for j=1 to 3 do Printf.printf "ok %d %d\n" i j done done>.;;
 (*
-- : ('cl, unit) code =
-.<for i_14 = 1 to 2 do
-   for j_15 = 1 to 3 do (Printf.printf "ok %d %d\n" i_14 j_15 done done>.
+- : unit code = .<
+for i_5 = 1 to 2 do
+  for j_6 = 1 to 3 do Printf.printf "ok %d %d\n" i_5 j_6 done
+done>. 
 *)
 !. .<for i=1 to 2 do 
      for j=1 to 3 do Printf.printf "ok %d %d\n" i j done done>.;;
@@ -461,9 +462,10 @@ ok 2 3
 let c = .<for i=1 to 2 do .~(let x = .<i>. in 
              .<for i=1 to 3 do Printf.printf "ok %d %d\n" i .~x done>.) done>.;;
 (*
-val c : ('cl, unit) code =
-  .<for i_20 = 1 to 2 do
-     for i_21 = 1 to 3 do (Printf.printf "ok %d %d\n" i_21 i_20 done done>.
+val c : unit code = .<
+  for i_9 = 1 to 2 do
+    for i_10 = 1 to 3 do Printf.printf "ok %d %d\n" i_10 i_9 done
+  done>. 
 *)
 !. c;;
 (*
@@ -494,7 +496,7 @@ print_endline "Error was expected";;
 let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<0>.; .<()>.) done>.; 
                      .<for i=1 to 5 do ignore (.~(!r)) done>.;;
 (*
-- : ('cl, unit) code = .<for i_2 = 1 to 5 do (ignore 0 done>.
+- : unit code = .<for i_13 = 1 to 5 do Pervasives.ignore 0 done>. 
 *)
 
 let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; 
@@ -502,7 +504,22 @@ let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.;
 (*
 Exception:
 Failure
- "Scope extrusion at Characters 49-50:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                                   ^\n for the identifier i_3 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                             ^\n".
+ "Scope extrusion detected at Characters 110-125:\n                       .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                         ^^^^^^^^^^^^^^^\n for code built at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n for the identifier i_14 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n".
+*)
+print_endline "Error was expected";;
+
+(* Better error message *)
+let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; 
+                     .<for i=1 to 5 do ignore (.~(!r)) done>.;;
+
+(*
+Characters 21-70:
+  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; 
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 10: this expression should have type unit.
+Exception:
+Failure
+ "Scope extrusion detected at Characters 112-127:\n                       .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                         ^^^^^^^^^^^^^^^\n for code built at Characters 49-52:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; \n                                                   ^^^\n for the identifier i_16 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; \n                             ^\n".
 *)
 print_endline "Error was expected";;
 
@@ -541,18 +558,18 @@ eta (fun y -> .<fun x -> x + .~y>.);;
 let 5 = (!. (eta (fun y -> .<fun x -> x + .~y>.))) 2 3;;
 
 (* new identifiers must be generated at run-time *)
-let rec fhyg = function
-  | 0 -> .<1>.
-  | n -> .<(fun x -> .~(fhyg (n-1)) + x) n>.;;
+let rec fhyg = fun y -> function
+  | 0 -> y
+  | n -> .<(fun x -> .~(fhyg .<.~y + x>. (n-1))) n>.;;
 (*
 val fhyg : int -> int code = <fun>
 *)
-fhyg 3;;
+fhyg .<1>. 3;;
 (*
 - : int code = .<
-(fun x_22  -> ((fun x_23  -> ((fun x_24  -> 1 + x_24) 1) + x_23) 2) + x_22) 3>.
+(fun x_7  -> (fun x_8  -> (fun x_9  -> ((1 + x_7) + x_8) + x_9) 1) 2) 3>. 
 *)
-let 7 = !. (fhyg 3);;
+let 7 = !. (fhyg .<1>. 3);;
 
 (* pattern-matching, general functions *)
 
@@ -814,7 +831,7 @@ let "fail scanf: bad input at char number 0: ``character 'x' is not a decimal di
 
 .<let x = 1 in x>.;;
 (*
-- : ('cl, int) code = .<let x_1 = 1 in x_1>. 
+- : int code = .<let x_1 = 1 in x_1>. 
 *)
 let 1 = 
   !. .<let x = 1 in x>.;;
@@ -826,10 +843,8 @@ let 2 =
   !. .<let x = 1 in let x = x + 1 in x>.;;
 .<let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
 (*
-- : ('cl, int) code = .<
-let rec f_11 =
- fun n_12 -> if (n_12 = 0) then 1 else (n_12 * (f_11 (n_12 - 1))) in
-(f_11 5)>. 
+- : int code = .<
+let rec f_7 n_8 = if n_8 = 0 then 1 else n_8 * (f_7 (n_8 - 1)) in f_7 5>. 
 *)
 let 120 =
   !. .<let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
@@ -838,15 +853,14 @@ let 120 =
 .<let f = fun x -> x in 
   let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
 (*
-Characters 6-7:
-  .<let f = fun x -> x in let rec f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+  Characters 6-7:
+  .<let f = fun x -> x in 
         ^
 Warning 26: unused variable f.
-- : ('cl, int) code = .<
-let f_19 = fun x_22 -> x_22 in
-let rec f_20 =
- fun n_21 -> if (n_21 = 0) then 1 else (n_21 * (f_20 (n_21 - 1))) in
-(f_20 5)>. 
+- : int code = .<
+let f_12 x_11 = x_11 in
+let rec f_13 n_14 = if n_14 = 0 then 1 else n_14 * (f_13 (n_14 - 1)) in
+f_13 5>. 
 *)
 
 let 120 = !. .<let f = fun x -> x in 
@@ -855,13 +869,22 @@ let 120 = !. .<let f = fun x -> x in
 .<let f = fun x -> x in 
   let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
 (*
-- : ('cl, int) code = .<
-let f_31 = fun x_34 -> x_34 in
-let f_32 = fun n_33 -> if (n_33 = 0) then 1 else (n_33 * (f_31 (n_33 - 1))) in
-(f_32 5)>. 
+  - : int code = .<
+let f_20 x_19 = x_19 in
+let f_22 n_21 = if n_21 = 0 then 1 else n_21 * (f_20 (n_21 - 1)) in f_22 5>. 
 *)
 let 20 = !. .<let f = fun x -> x in 
               let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
+
+.<let rec f = 1 in 2>.
+(*
+Characters 10-11:
+  .<let rec f = 1 in 2>.;;
+Exception:
+Failure
+ "Recursive let binding must be to a function Characters 2-20:\n  .<let rec f = 1 in 2>.;;\n    ^^^^^^^^^^^^^^^^^^\n".
+*)
+print_endline "Error was expected";;
 
 
 (* General let *)
