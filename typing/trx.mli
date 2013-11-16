@@ -92,18 +92,10 @@ val build_open :
 val build_fun_simple : 
   Location.t -> string -> string Location.loc -> 
   (code_repr -> code_repr) -> code_repr
-(*
-val with_binding_region : 
-    string Location.loc -> (string Location.loc -> code_repr) -> 
-    code_repr
 val build_for : 
-  Location.t -> string Location.loc -> 
-  code_repr -> code_repr -> 
-  bool -> code_repr -> code_repr
-
-val build_fun_simple : 
-  Location.t -> string -> string Location.loc -> code_repr -> 
-  code_repr
+  Location.t -> string Location.loc -> code_repr -> code_repr -> 
+  bool -> (code_repr -> code_repr) -> code_repr
+(*
 val build_fun : 
   Location.t -> string -> string Location.loc array -> 
   Parsetree.pattern list -> code_repr array ->

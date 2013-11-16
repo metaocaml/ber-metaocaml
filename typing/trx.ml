@@ -430,6 +430,12 @@ let texp_string : string -> Typedtree.expression = fun str ->
   mk_texp (Texp_constant (Const_string str))
           (Ctype.instance_def Predef.type_string)
 
+(* Compiling a string with a location *)
+let texp_string_loc : string loc -> Typedtree.expression = fun name ->
+  let name_exp = texp_ident "Trx.sample_name" in
+  {name_exp with
+   exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} 
+
 (* Compiling a boolean *)
 (* For prototype, see Typecore.option_none *)
 let texp_bool : bool -> Typedtree.expression = fun b ->
@@ -664,6 +670,29 @@ let validate_vars_list : Location.t -> code_repr list ->
       let Code (vars,e) = validate_vars l c in
       (e, merge vars acc))
     Nil cs
+
+(* Generate a fresh name off the given name, enter a new binding region
+   and evaluate a function passing it the generated name as code_repr.
+   Remove the generated name from the annotation on the resulting code_expr.
+   Return that result and the generated name.
+   This function embodies the translation of simple functions, for-loops,
+   simple let-expressions, etc.
+*)
+let with_binding_region : 
+  Location.t -> string loc -> (code_repr -> code_repr) -> 
+  string loc * string loc heap * Parsetree.expression = fun l name f -> 
+  let new_name = genident name in
+  let (vars,e) = 
+   StackMark.with_stack_mark (fun mark ->
+     let var_code = (* code that corresponds to the bound variable *)
+       Code (HNode (mark,new_name,Nil,Nil),
+          {pexp_loc  = name.loc;        (* the loc of the binder *)
+           pexp_desc = 
+            Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)}) in
+     let Code (vars,e) = validate_vars l (f var_code) in
+     (remove_top mark vars, e)) in
+  (new_name, vars, e)
+
 
 (* ZZZZZ
 (* The names of gensym'd future stage bindings currently in scope,
@@ -973,19 +1002,6 @@ let build_ident : Location.t -> string loc -> code_repr =
     pexp_desc = Pexp_ident (mkloc (Longident.Lident l.txt) l.loc)}
 *)
 
-(*
-let build_for : 
-  Location.t -> string loc -> Parsetree.expression -> Parsetree.expression -> 
-  bool -> Parsetree.expression -> Parsetree.expression =
-  fun l name elo ehi dir ebody -> 
-  let (elo,var)   = remove_tstamp None elo in
-  let (ehi,var)   = remove_tstamp var  ehi in
-  let (ebody,var) = remove_tstamp var  ebody in
-  add_timestamp var
-  {pexp_loc = l; 
-   pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) }
-*)
-
 (* Build a simple one-arg function, as described in the the title comments *)
 (* 'name' is the name of the variable from Ppat_var of the fun x -> ...
    form. It is the real name with the location within the function pattern.
@@ -993,21 +1009,23 @@ let build_for :
 *)
 let build_fun_simple : 
   Location.t -> string -> string loc -> (code_repr -> code_repr) -> code_repr =
-  fun l label name fbody -> 
-  let new_name = genident name in
-  let (vars,ebody) = 
-   StackMark.with_stack_mark (fun mark ->
-     let var_code = (* code that corresponds to the bound variable *)
-       Code (HNode (mark,new_name,Nil,Nil),
-          {pexp_loc  = name.loc;        (* the loc of the binder *)
-           pexp_desc = 
-            Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)}) in
-     let Code (vars,ebody) = validate_vars l (fbody var_code) in
-     (remove_top mark vars, ebody)) in
-  let pat = {ppat_loc  = new_name.loc; ppat_desc = Ppat_var new_name} in
+  fun l label old_name fbody -> 
+  let (name, vars, ebody) = with_binding_region l old_name fbody in
+  let pat = {ppat_loc  = name.loc; ppat_desc = Ppat_var name} in
   Code (vars,
     {pexp_loc = l; 
      pexp_desc = Pexp_function (label,None,[(pat,ebody)])})
+
+let build_for : 
+  Location.t -> string loc -> code_repr -> code_repr -> 
+  bool -> (code_repr -> code_repr) -> code_repr =
+  fun l old_name elo ehi dir fbody -> 
+  let (name, varsb, ebody) = with_binding_region l old_name fbody in
+  let Code (varso,elo) = validate_vars l elo in
+  let Code (varsh,ehi) = validate_vars l ehi in
+  Code (merge varsb (merge varso varsh),
+  {pexp_loc = l; 
+   pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) })
 
 (*
 let build_let_simple : 
@@ -1618,11 +1636,7 @@ YYYY
       texp_apply (texp_ident "Trx.build_fun_simple") 
         [texp_loc exp.exp_loc;
          texp_string l;
-         begin 
-           let name_exp = texp_ident "Trx.sample_name" in
-           {name_exp with
-            exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} 
-         end;
+         texp_string_loc name;
          (* Translate the future-stage function as present-stage function;
             with the same variables, but with a different type,
             targ code -> tres code
@@ -1762,20 +1776,26 @@ YYYY
       texp_apply (texp_ident "Trx.build_while")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-(*
+
   | Texp_for (id, name, elo, ehi, dir, ebody) ->
-      texp_binding_simple (id,name) (fun gensymed_var ->
-        { exp with
-          exp_type = wrap_ty_in_code n exp.exp_type; (* lifted type of for *)
-          exp_desc = 
-            texp_apply (texp_ident "Trx.build_for") 
-            [texp_loc exp.exp_loc;
-             gensymed_var;
-             trx_bracket trx_exp n elo;
-             trx_bracket trx_exp n ehi;
-             texp_bool (dir = Upto);
-             trx_bracket trx_exp n ebody] })
-*)
+      texp_apply (texp_ident "Trx.build_for") 
+        [texp_loc exp.exp_loc;
+         texp_string_loc name;
+         trx_bracket trx_exp n elo;
+         trx_bracket trx_exp n ehi;
+         texp_bool (dir = Upto);
+         let var_typ = wrap_ty_in_code n (Ctype.instance_def Predef.type_int) in
+         let pat = {pat_loc = exp.exp_loc; pat_extra = [];
+                    pat_type = var_typ; pat_env = exp.exp_env;
+                    pat_desc = Tpat_var (id,name)} in
+         { exp with
+           exp_desc = 
+             Texp_function ("",[(pat, trx_bracket trx_exp n ebody)],Total);
+           exp_type = 
+            {exp.exp_type with desc =
+               Tarrow ("",var_typ, wrap_ty_in_code n ebody.exp_type, Cok)}
+         }
+       ]
 
   | Texp_when (e1,e2) ->
       texp_apply (texp_ident "Trx.build_when")
