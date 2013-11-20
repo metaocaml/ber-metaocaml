@@ -48,6 +48,7 @@ val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
 val sample_loc  : Location.t
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
+val sample_pats_names : Parsetree.pattern list * string Location.loc list
 val sample_rec_flag : Asttypes.rec_flag
 val sample_override_flag : Asttypes.override_flag
 
@@ -88,6 +89,9 @@ val build_send     : Location.t -> code_repr -> string -> code_repr
 val build_open :
  Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
    code_repr -> code_repr
+val build_fun_nonbinding : 
+  Location.t -> string -> Parsetree.pattern list -> 
+  code_repr array -> code_repr
 
 val build_fun_simple : 
   Location.t -> string -> string Location.loc -> 
@@ -101,12 +105,11 @@ val build_let_simple_nonrec :
 val build_let_simple_rec : 
   Location.t -> string Location.loc -> (code_repr -> code_repr * code_repr) -> 
     code_repr
-(*
-val build_fun : 
-  Location.t -> string -> string Location.loc array -> 
-  Parsetree.pattern list -> code_repr array ->
-  code_repr
+val build_fun : Location.t -> string -> 
+  (Parsetree.pattern list * string Location.loc list) -> 
+  (code_repr array -> code_repr array) -> code_repr
 
+(*
 val build_match : 
   Location.t -> code_repr -> string Location.loc array -> 
   Parsetree.pattern list -> code_repr array ->
@@ -116,9 +119,6 @@ val build_try :
   Parsetree.pattern list -> code_repr array ->
   code_repr
 
-val build_let_simple : 
-  Location.t -> Asttypes.rec_flag -> string Location.loc -> 
-  code_repr -> code_repr -> code_repr
 val build_let : 
   Location.t -> Asttypes.rec_flag -> string Location.loc array -> 
   Parsetree.pattern list -> 

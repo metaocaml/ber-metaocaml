@@ -650,32 +650,42 @@ let 3 = (!. .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.)
 
 (* General functions *)
 
+(* Non-binding pattern *)
+.<fun () -> 1>.;;
+(*
+- : (unit -> int) code = .<fun ()  -> 1>. 
+*)
+let 1 = !. .<fun () -> 1>. ();;
+
+.<fun _ -> true>.;;
+(* - : ('a -> bool) code = .<fun _  -> true>. *)
+let true = !. .<fun _ -> true>. 1;;
+
 .<fun (x,y) -> x + y>.;;
 (*
-- : ('cl, int * int -> int) code = .<fun (x_2, y_3) -> (x_2 + y_3)>. 
+- : (int * int -> int) code = .<fun (x_1,y_2)  -> x_1 + y_2>. 
 *)
 let 5 = (!. .<fun (x,y) -> x + y>.) (2,3);;
 .<function (Some x) as y -> x | _ ->  2>.;;
 (*
-- : ('cl, int option -> int) code = .<
-function | (Some (x_6) as y_7) -> x_6 | _ -> 2>.
+- : (int option -> int) code = .<function | Some x_5 as y_6 -> x_5 | _ -> 2>. 
 *)
 let 1 = (!. .<function (Some x) as y -> x | _ ->  2>.) (Some 1);;
 let 2 = (!. .<function (Some x) as y -> x | _ ->  2>.) None;;
 .<function [x;y;z] -> x - y + z | [x;y] -> x - y>.;;
 (*
-- : ('cl, int list -> int) code = .<
+- : (int list -> int) code = .<
 function
-| (x_12 :: y_13 :: z_14 :: []) -> ((x_12 - y_13) + z_14)
-| (x_15 :: y_16 :: []) -> (x_15 - y_16)>. 
+| x_11::y_12::z_13::[] -> (x_11 - y_12) + z_13
+| x_14::y_15::[] -> x_14 - y_15>. 
 *)
 let 2 = (!. .<function [x;y;z] -> x - y + z | [x;y] -> x - y>.) [1;2;3];;
 
  (* OR patterns *)
 .<function ([x;y] | [x;y;_]) -> x - y>.;;
 (*
-- : ('cl, int list -> int) code = .<
-fun ((x_1 :: y_2 :: []) | (x_1 :: y_2 :: _ :: [])) -> (x_1 - y_2)>. 
+- : (int list -> int) code = .<
+fun (x_21::y_22::[]|x_21::y_22::_::[])  -> x_21 - y_22>. 
 *)
 let -1 = (!. .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2];;
 let -1 = (!. .<function ([x;y] | [x;y;_]) -> x - y>.) [1;2;3];;
@@ -685,10 +695,8 @@ print_endline "Error was expected";;
 
 .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.;;
 (*
-- : ('cl, int list -> int) code = .<
-fun (((x_9 :: y_10 :: []) | (x_9 :: y_10 :: _ :: []))
-     | (y_10 :: x_9 :: _ :: _ :: [])) ->
- (x_9 - y_10)>.
+- : (int list -> int) code = .<
+fun (x_29::y_30::[]|x_29::y_30::_::[]|y_30::x_29::_::_::[])  -> x_29 - y_30>. 
 *)
 let -1 = (!. .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2];;
 let -1 = (!. .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3];;
@@ -696,36 +704,33 @@ let  1 = (!. .<function ([x;y] | [x;y;_]| [y;x;_;_]) -> x - y>.) [1;2;3;4];;
 
 .<function (`F x | `G x) -> x | `E x -> x>.;;
 (*
-- : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
-function | ((`F x_17) | (`G x_17)) -> x_17 | (`E x_18) -> x_18>. 
+- : ([< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
+function | `F x_37|`G x_37 -> x_37 | `E x_38 -> x_38>. 
 *)
 let 2 = (!. .<function (`F x | `G x) -> x | `E x -> x>.) (`F 2);;
 open Complex;;
 .<function {re=x} -> x | {im=x; re=y} -> x -. y>.;;
 (*
-Characters 25-37:
-  .<function {re=x} -> x | {im=x; re=y} -> x -. y>.;;
-                           ^^^^^^^^^^^^
-Warning 11: this match case is unused.
-- : ('cl, Complex.t -> float) code = .<
+- : (Complex.t -> float) code = .<
 function
-| {Complex.re = x_21} -> x_21
-| {Complex.re = y_22; Complex.im = x_23} -> (x_23 -. y_22)>. 
+| { Complex.re = x_41 } -> x_41
+| { Complex.re = y_42; Complex.im = x_43 } -> x_43 -. y_42>. 
 *)
 .<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.;;
 (*
-- : ('cl, Complex.t -> float) code = .<
+- : (Complex.t -> float) code = .<
 function
-| {Complex.re = x_24; Complex.im = 2.0} -> x_24
-| {Complex.re = y_25; Complex.im = x_26} -> (x_26 -. y_25)>. 
+| { Complex.re = x_44; Complex.im = 2.0 } -> x_44
+| { Complex.re = y_45; Complex.im = x_46 } -> x_46 -. y_45>. 
 *)
 let 0. = (!. .<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.) 
          {re=1.0; im=1.0};;
-(* - : float = 0. *)
+let 1. = (!. .<function {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.) 
+         {re=1.0; im=2.0};;
 .<function (Some x) as y when x  > 0 -> y | _ -> None>.;;
 (*
-- : ('cl, int option -> int option) code = .<
-function | (Some (x_30) as y_31) when (x_30 > 0) -> y_31 | _ -> None>. 
+- : (int option -> int option) code = .<
+function | Some x_53 as y_54 when x_53 > 0 -> y_54 | _ -> None>. 
 *)
 let Some 1 = (!. .<function (Some x) as y when x  > 0 -> y | _ -> None>.)
              (Some 1);;

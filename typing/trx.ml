@@ -34,7 +34,7 @@
   unqualified (i.e., simple names, without the module path).
   The principal rule of translating binding forms is
      <fun x -> e> ---> let x = gensym "x" in mkLAM x <e>
-  Emphatically, gensym cannot be generated at compile time!
+  Emphatically, gensym cannot be run at compile time!
   Reason: consider the recursive invocation:
      let rec f z = <fun y -> ~( ... f 1 ... )>
 
@@ -60,12 +60,12 @@
   complex patterns. If the patterns contain no binding variables,
   there is no need to go into the gensym generation. The translation is
   no more complex than that of <lazy e>. 
-  For more complicated binding patterns, we iterate
-     <fun (x1,x2) -> e> ---> 
-       with_binding_region "x1" (fun x1 ->
-       with_binding_region "x2" (fun x2 ->
-         mkLAM (x1,x2) <e>))
-  etc.
+  For more complicated binding patterns, we generalize, for example
+     <fun (x1,true,x2) as x3 -> e1 | _ -> e2> ---> 
+       build_fun ["x1";"x2"] (fun (x1,x2,x3) -> [<e1>;e2])
+  That is, we pick all binding variables from the pattern and build a
+  function that receives the code for these variables and produces the
+  array of code for all alternatives.
 
   Here are the main patterns of scope extrusion
   let r = <0> in 
@@ -92,44 +92,20 @@
   code.
 
   We use a different method: we mark each piece of the generated code
-  with the `timestamp' of the latest free variable the code contains.
-  The partial order of free variables is the partial order of their
-  regions (nesting of with_binding_region calls).
-  If the timestamp is missing, the code is closed.
-  The function with_binding_region generates timestamps and
-  this function also checks that the generated binding form is
-  timestamped with exactly the timestamp of that 
-  particular with_binding_region (or the timestamp is missing).
-  After the checks, with_binding_region adjusts the time stamp
-  to that of the parent with_binding_region function.
-  Every code building function ( build_* ) checks to see that the timestamps
-  of incorporated fragments correspond to the timestamps of currently
-  alive variables.
+  with the list of free variable the code contains. Each variable
+  is identified by a `stackmark', which identifiers the region
+  with which the variable is associated. All valid stackmarks form
+  a total order.
+  The function build_simple_fun and others enter a new region
+  and then check that the generated body contains only valid stackmarks
+  (that is, stackmarks that correspond to active regions). 
+  Every code building function ( build_* ) checks to see that the stackmarks
+  in the incorporated fragments are all valid, that is,
+  correspond currently alive variables. These code building function
+  merge the free variable lists (heaps actually) from the incorporated
+  fragments.
 
-  Generally speaking, a single timestamp does not suffice. We should maintain
-  the full list of free variables for each piece of code. The AST building
-  functions will merge the lists; with_binding_region will check the list
-  and remove the gensym that with_binding_region has created.
-  A single timestamp is a sound approximation. It presupposes that a code
-  that contains a free variable also contains all earlier free variables.
-  Therefore, the safe code
-    let r = .<0> in 
-    let _ = .<fun x -> .~(r := .<fun y -> y>.; !r)>. in !r
-  will be flagged as scope-extruding. We go with the single timestamp
-  approximation for now as being simper.
-
-  Alas Parsetree doesn't have a dedicated field for marking expressions
-  with timestamps. Therefore, in an ad hoc and hacking way re-purpose
-  the Pexp_setinstvar node. To designate that a code expression 'e'
-  has a free variable 'x : string loc' we create a wrapper node
-   {pexp_loc = timestamp_loc;
-    pexp_desc = Pexp_setinstvar (x,e)}
-  We distinguish such special timestamp nodes by their unique pexp_loc,
-  being physically equal to timestamp_loc. Although a hack, this
-  convention avoids modifying the Parsetree data structure and makes it
-  easy to add, check and remove the timestamp.
-
-This file is based on trx.ml from the original MetaOCaml, but it is
+This file was based on trx.ml from the original MetaOCaml, but it is
 completely re-written from scratch and has many comments. The
 traversal algorithm, the way of compiling Parsetree builders, dealing
     with CSP and many other algorithms are all different.
@@ -375,6 +351,7 @@ let sample_loc = Location.none
 
 (* Exported. Used as a template for constructing pattern lists expressions *)
 let sample_pat_list : Parsetree.pattern list = []
+let sample_pats_names : Parsetree.pattern list * string loc list = ([],[])
 
 (* Exported. Used as a template for passing the Asttypes.rec_flag *)
 let sample_rec_flag : Asttypes.rec_flag = Nonrecursive
@@ -714,6 +691,30 @@ let with_binding_region_pair :
      (remove_top mark (merge vars1 vars2), (e1,e2))) in
   (new_name, vars, es)
 
+(* The most general version with several bindings and several expressions 
+   that use the bindings
+ *)
+let with_binding_region_gen : 
+  Location.t -> string loc list -> (code_repr array -> code_repr array) -> 
+  string loc list * string loc heap * Parsetree.expression list
+  = fun l names f -> 
+  let new_names = List.map genident names in
+  let (vars,es) = 
+   StackMark.with_stack_mark (fun mark ->
+     let vars_code = Array.of_list (List.map (fun new_name ->
+                      (* code that corresponds to a bound variable *)
+       Code (HNode (mark,new_name,Nil,Nil),
+          {pexp_loc  = new_name.loc;        (* the loc of the binder *)
+           pexp_desc = 
+            Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)}))
+       new_names) in
+     let cs = Array.to_list (f vars_code) in
+     let (es,vars) = map_accum (fun vars c -> 
+                      let Code (var,e) = validate_vars l c in 
+                      (e,merge var vars)) Nil cs in
+     (remove_top mark vars, es)) in
+  (new_names, vars, es)
+
 
 (* ZZZZZ
 (* The names of gensym'd future stage bindings currently in scope,
@@ -1011,6 +1012,18 @@ let build_open :
      {pexp_loc  = loc;
       pexp_desc = Pexp_open (ovf,l,e)})
 
+(* Build a function with a non-binding pattern, such as fun () -> ... *)
+let build_fun_nonbinding : 
+  Location.t -> string -> Parsetree.pattern list -> 
+  code_repr array -> code_repr =
+  fun l label pats bodies -> 
+  let (ebodies,vars) = validate_vars_list l (Array.to_list bodies) in
+  Code (vars,
+    {pexp_loc = l; 
+     pexp_desc = Pexp_function (label,None,
+                                List.map2 (fun p e -> (p,e)) pats ebodies)})
+
+
 (* Build a Parsetree for a future-stage identifier
    It is always in scope of with_binding_region:
    Bound variables are always in scope of their binders;
@@ -1106,60 +1119,6 @@ let build_let_simple :
   {pexp_loc = l; 
    pexp_desc = Pexp_let (recf,[(pat,e)],ebody)}
 
-(* All simple Pext_ident must use alive gensym'd names  *)
-(*
-let rec check_scope_extrusion : Parsetree.expression -> unit = fun exp ->
-  let check = check_scope_extrusion in
-  let check_option = function 
-    | None -> () 
-    | Some e -> check e in
-  let check_list = List.iter check in
-  let check_xl l   = List.iter (fun (_,e) -> check e) l in
-  match exp.pexp_desc with
-  | Pexp_ident ({txt = Longident.Lident s} as l) ->
-      if not (BVar.mem (mkloc s l.loc) !bindings_in_scope) then
-        (* This is a run-time error, rather than translation-time error *)
-        (Format.fprintf Format.str_formatter
-            "Scope extrusion at %a for the identifier %s bound at %a"
-             Location.print exp.pexp_loc s Location.print l.loc;
-         failwith (Format.flush_str_formatter ()))
-  | Pexp_ident _    -> ()
-  | Pexp_constant _ -> ()
-  | Pexp_let (_,pel,e)       -> check_xl pel; check e
-  | Pexp_function (_,None,pel) -> ()
-  | Pexp_apply (e,lel)       -> check e; check_xl lel
-  | Pexp_match (e,pel)       -> check e; check_xl pel
-  | Pexp_try (e,pel)         -> check e; check_xl pel
-  | Pexp_tuple el            -> check_list el
-  | Pexp_construct (_,eo,_)  -> check_option eo
-  | Pexp_variant (_,eo)      -> check_option eo
-  | Pexp_record (lel,eo)     -> check_xl lel; check_option eo
-  | Pexp_field (e,_)         -> check e
-  | Pexp_setfield (e1,_,e2)  -> check e1; check e2
-  | Pexp_array el            -> check_list el 
-  | Pexp_ifthenelse (e1,e2,eo) -> check e1; check e2; check_option eo
-  | Pexp_sequence (e1,e2)    -> check e1; check e2
-  | Pexp_while (e1,e2)       -> check e1; check e2
-  | Pexp_for (_,e1,e2,_,e3)  -> ()      (* we run when construct *)
-  | Pexp_constraint (e,_,_)  -> check e
-  | Pexp_when (e1,e2)        -> check e1; check e2
-  | Pexp_send (e,_)          -> check e
-  | Pexp_new _               -> ()
-  | Pexp_setinstvar (_,e)    -> check e
-  | Pexp_override lel        -> check_xl lel
-  | Pexp_assert e            -> check e
-  | Pexp_assertfalse         -> ()
-  | Pexp_lazy e              -> check e
-  | Pexp_poly (e,_)          -> check e
-  | Pexp_object _            -> ()
-  | Pexp_newtype (_,e)       -> check e
-  | Pexp_pack _              -> ()
-  | Pexp_open (_,e)          -> check e
-  | Pexp_bracket e           -> check e
-  | Pexp_escape e            -> check e
-  | Pexp_cspval _            -> ()
-  | _                        -> assert false (* can't occur in generated code *)
-*)
 
 *)
 
@@ -1295,7 +1254,6 @@ let trx_csp :
   bind exactly the same identifiers. Don't count them twice!
 *)
 
-(* ZZZZ
 
 (* The first argument is a list of identifiers. Found identifiers are
    prepended to that list. The order of identifiers is important!
@@ -1356,17 +1314,22 @@ let rec trx_pattern :
   in
   ({ ppat_desc = pd; ppat_loc = pat.pat_loc}, acc)
 
+
 (* Process all patterns in the pattern-expression list *)
-(* Patterned are processed left-to-right. The found bound identifiers
-   are added to lst, in strict reverse order. The last identifier added
-   by the last (right-most) pattern in the list is at the head
-   of the list of identifiers.
+(* Patternes are processed left-to-right. The result is the processed
+   patterns plus the list of names of the bound variables.
+   The variables are listed in the order they occur in the pattern.
+   Thus the following should hold:
+      let (pats,names) = trx_pel pel in
+      let (pats',acc) =  pattern_subst_list names pats in
+      assert (pats = pats');
+      assert (acc = [])
 *)
-let trx_pel : 
-    (Ident.t * string loc) list -> 
-     (Typedtree.pattern * Typedtree.expression) list -> 
-     Parsetree.pattern list * (Ident.t * string loc) list = 
-   map_accum (fun acc (p,_) -> trx_pattern acc p)
+let trx_pel : (Typedtree.pattern * Typedtree.expression) list -> 
+     Parsetree.pattern list * (Ident.t * string loc) list = fun pel -> 
+   let (pats, lst) = map_accum (fun acc (p,_) -> trx_pattern acc p) [] pel in
+   (pats, List.rev lst)
+
 
 (* Substitute the names of bound variables in the pattern.
    The new names are given in the string loc list. We
@@ -1463,6 +1426,29 @@ let pattern_subst_list :
  map_accum (pattern_subst ~by_name:false) acc pl
 
 
+(* Build the general fun Parsetree *)
+let build_fun : 
+  Location.t -> string -> 
+  (* The following argument is a pair: a pattern list for the clauses
+     of the function, and the list of names of bound variables, in order.
+  *)
+  (Parsetree.pattern list * string loc list) -> 
+  (code_repr array -> code_repr array) -> code_repr =
+  fun l label (pats,old_names) fbodies -> 
+    let (names,vars,ebodies) = with_binding_region_gen l old_names fbodies in
+    let pats = 
+      if names = [] then pats else
+      let (pats,acc) = pattern_subst_list names pats in
+      assert (acc = []); pats
+    in
+    Code(vars,
+      {pexp_loc = l; 
+       pexp_desc = Pexp_function (label,None,
+                                  List.map2 (fun p e -> (p,e)) pats ebodies)})
+
+
+(* ZZZZ
+
 (* Generalization of texp_binding_simple to the general binding pattern:
    Convert the meta-level (fun vars pats exps -> body) to the 
    Typedtree.expression
@@ -1492,22 +1478,6 @@ let texp_binding_pattern :
            loop (gensymed_var::acc) rest)}
   in (loop [] idents).exp_desc
 
-(* Build the general fun Parsetree *)
-let build_fun : 
-  Location.t -> string -> string loc array -> 
-  Parsetree.pattern list -> Parsetree.expression array ->
-  Parsetree.expression =
-  fun l label names pats ebodies -> 
-    let (ebodies,var) = map_accum remove_tstamp None (Array.to_list ebodies) in
-    let pats = 
-      if names = [||] then pats else
-      let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
-      assert (acc = []); pats
-    in
-    add_timestamp var
-      {pexp_loc = l; 
-       pexp_desc = Pexp_function (label,None,
-                                  List.map2 (fun p e -> (p,e)) pats ebodies)}
 
 (* The second argument to build_match is the Parsetree representing
    the expression to match. Since the expression is evaluated
@@ -1749,21 +1719,72 @@ YYYY
          }
        ]
 
-(*
   | Texp_function (l,pel,_) ->
-      let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
-      texp_binding_pattern pel exp
-       (fun gensyms pats exps ->
-        { exp with
-          exp_desc = 
-            texp_apply (texp_ident "Trx.build_fun") 
+      begin
+      match trx_pel pel with
+      | (pl, []) ->                    (* non-binding pattern *)
+          texp_apply (texp_ident "Trx.build_fun_nonbinding")
+            [texp_loc exp.exp_loc; 
+             texp_string l;
+             begin 
+               let pl_exp = texp_ident "Trx.sample_pat_list" in
+               {pl_exp with
+                exp_desc = Texp_cspval (Obj.repr pl, dummy_lid "*pl*")}
+             end;
+             texp_array (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel)
+           ]
+      | (pl,ids) ->
+          texp_apply (texp_ident "Trx.build_fun") 
             [texp_loc exp.exp_loc;
              texp_string l;
-             texp_array gensyms;
-             pats;
-             texp_array (List.map (trx_bracket trx_exp n) exps)]
-        })
-*)
+             begin
+               let pn_exp = texp_ident "Trx.sample_pats_names" in
+               let pn = ((pl, List.map snd ids) : 
+                         Parsetree.pattern list * string loc list) in
+               {pn_exp with
+                exp_desc = Texp_cspval (Obj.repr pn, dummy_lid "*pn*")}
+             end;
+             (* Translate the future-stage function as the present-stage 
+                function whose argument is an array of variables 
+                (should be a tuple, really) and the type
+                   some_targ code array -> tres code array
+                Using array forces a single type to all arguments. Although
+                it is phantom anyway, it is still a bummer. Instead of
+                array, we should have used a tuple. But then we can't
+                generically write build_fun.
+              *)
+             let pat_template = begin
+               match pel with
+               | (p,_)::_ ->
+                   {pat_loc = p.pat_loc; pat_extra = [];
+                    pat_env = exp.exp_env;
+                    pat_desc = Tpat_any;
+                    pat_type = p.pat_type}
+               | _ -> assert false
+             end in
+               (* Pattern representing one binding variable *)
+             let var_pat (id,name) =
+               {pat_template with
+                pat_desc = Tpat_var (id,name);
+                pat_type = wrap_ty_in_code n (Btype.newgenvar ())} in
+               (* Pattern representing the function's argument:
+                  array of variables bound by the original pattern, in order.
+                *)
+             let pat =
+               {pat_template with
+                pat_desc = Tpat_array (List.map var_pat ids);
+                pat_type = 
+	         Ctype.instance_def (Predef.type_array (Btype.newgenvar()))} in
+             let body = texp_array (List.map (fun (_,e) -> 
+                                     trx_bracket trx_exp n e) pel) in
+             { exp with
+                exp_desc = Texp_function ("",[(pat, body)],Total);
+                exp_type = {exp.exp_type with desc =
+                            Tarrow ("",pat.pat_type, body.exp_type, Cok)}
+             }
+           ]
+      end
+
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
      let lel = List.fold_right (function                 (* keep the order! *)
