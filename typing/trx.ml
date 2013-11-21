@@ -460,6 +460,13 @@ let texp_array : Typedtree.expression list -> Typedtree.expression = function
       mk_texp (Texp_array el) 
 	      (Ctype.instance_def (Predef.type_array h.exp_type))
 
+(* Compiling patterns and the list of names bound by them *)
+let texp_pats_names : Parsetree.pattern list -> string loc list -> 
+  Typedtree.expression = fun pats names ->
+    let pn_exp = texp_ident "Trx.sample_pats_names" in
+    {pn_exp with
+     exp_desc = Texp_cspval (Obj.repr (pats,names), dummy_lid "*pn*")}
+
 (* ------------------------------------------------------------------------ *)
 (* Stack marks, a simple form of dynamic binding *)
 module type STACKMARK = sig
@@ -1306,20 +1313,41 @@ let rec trx_pattern :
 
 
 (* Process all patterns in the pattern-expression list *)
-(* Patternes are processed left-to-right. The result is the processed
-   patterns plus the list of names of the bound variables.
+(* Patterns are processed left-to-right. The result is the processed
+   pattern list plus the list of names of the bound variables.
    The variables are listed in the order they occur in the pattern.
    Thus the following should hold:
-      let (pats,names) = trx_pel pel in
+      let (pats,names,_) = trx_pel pel in
       let (pats',acc) =  pattern_subst_list names pats in
       assert (pats = pats');
       assert (acc = [])
-*)
-let trx_pel : (Typedtree.pattern * Typedtree.expression) list -> 
-     Parsetree.pattern list * (Ident.t * string loc) list = fun pel -> 
-   let (pats, lst) = map_accum (fun acc (p,_) -> trx_pattern acc p) [] pel in
-   (pats, List.rev lst)
+   The final result of trx_pel is the pattern binding the names.
+   We build an array pattern rather than a more appropriate tuple.
+   Using array forces a single type to all arguments. Although
+   it is phantom anyway, it is still a bummer. But we the tuple
+   we can't generically write build_fun.
+   The second argument, typ_expr, should normally be a code type.
 
+   This function is used when translating a future-stage function as the 
+   present-stage whose argument is an array of variables.
+   See trx_bracket for functions, let, match and try
+*)
+let trx_pel : (Typedtree.pattern * Typedtree.expression) list -> type_expr ->
+     Parsetree.pattern list * string loc list * Typedtree.pattern
+   = fun pel typ -> 
+   let (pats, lst) = map_accum (fun acc (p,_) -> trx_pattern acc p) [] pel in
+   let idnames = List.rev lst in
+   let (loc,env) = 
+     match pel with (p,_)::_ -> (p.pat_loc, p.pat_env) |_ -> assert false in
+    (* Pattern representing one binding variable *)
+   let var_pat (id,name) =
+    {pat_loc = loc; pat_extra = []; pat_env = env;
+     pat_desc = Tpat_var (id,name);
+     pat_type = typ} in
+   (pats, List.map snd idnames,
+    {pat_loc = loc; pat_extra = []; pat_env = env;
+     pat_desc = Tpat_array (List.map var_pat idnames);
+     pat_type = Ctype.instance_def (Predef.type_array typ)})
 
 (* Substitute the names of bound variables in the pattern.
    The new names are given in the string loc list. We
@@ -1416,6 +1444,7 @@ let pattern_subst_list :
  map_accum (pattern_subst ~by_name:false) acc pl
 
 
+
 (* Build the general fun Parsetree *)
 let build_fun : 
   Location.t -> string -> 
@@ -1435,6 +1464,26 @@ let build_fun :
       {pexp_loc = l; 
        pexp_desc = Pexp_function (label,None,
                                   List.map2 (fun p e -> (p,e)) pats ebodies)})
+
+(* Build the general let-Parsetree (like the fun-Parsetree) *)
+let build_let : 
+  Location.t -> bool -> 
+  (Parsetree.pattern list * string loc list) -> code_repr array ->
+  (code_repr array -> code_repr array) -> code_repr =
+  fun l recf (pats,old_names) ecs fbodies ->
+    let (names,bvars,ebodies) = with_binding_region_gen l old_names fbodies in
+    let ebody = match ebodies with [x] -> x | _ -> assert false in
+    let pats = 
+      if names = [] then pats else
+      let (pats,acc) = pattern_subst_list names pats in
+      assert (acc = []); pats
+    in
+    let (es,evars) = validate_vars_list l (Array.to_list ecs) in
+    Code (merge evars bvars,
+          {pexp_loc = l; 
+           pexp_desc = 
+             Pexp_let ((if recf then Default else Nonrecursive), 
+                       List.map2 (fun p e -> (p,e)) pats es,ebody)})
 
 
 (* ZZZZ
@@ -1510,26 +1559,6 @@ let build_try :
       {pexp_loc = l; 
        pexp_desc = Pexp_try (exp, List.map2 (fun p e -> (p,e)) pats ebodies)}
 
-(* Build the general let-Parsetree (like the fun-Parsetree) *)
-let build_let : 
-  Location.t -> rec_flag -> string loc array -> 
-  Parsetree.pattern list -> 
-  Parsetree.expression array ->         (* the first is the body of let *)
-  Parsetree.expression =
-  fun l recf names pats ebodies -> 
-    let (ebodies,var) = map_accum remove_tstamp None (Array.to_list ebodies) in
-    let pats = 
-      if names = [||] then pats else
-      let (pats,acc) = pattern_subst_list (Array.to_list names) pats in
-      assert (acc = []); pats
-    in
-    match ebodies with
-     | (body::el) ->
-        add_timestamp var
-          {pexp_loc = l; 
-           pexp_desc = 
-             Pexp_let (recf,List.map2 (fun p e -> (p,e)) pats el,body)}
-     | _ -> assert false
 
 ZZZZ
 *)
@@ -1690,31 +1719,24 @@ let rec trx_bracket :
          }
        ]
 
+    (* General-case, non-recursive let General case. Like Texp_function *)
+  | Texp_let (recf,pel,body) ->
+      let (pl,names,binding_pat) = 
+        trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) in
+      texp_apply (texp_ident "Trx.build_let") 
+        [texp_loc exp.exp_loc;
+         texp_bool (recf = Default);
+         texp_pats_names pl names;
+         texp_array (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel);
+         (* See the comment at Texp_function below *)
+         let body = texp_array [trx_bracket trx_exp n body] in
+         { exp with
+           exp_desc = Texp_function ("",[(binding_pat, body)],Total);
+           exp_type = {exp.exp_type with desc =
+                       Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
+         }
+       ]
 
-(*
-YYYY
-
-  | Texp_let (recf,pel,body) ->         (* General case. Like Texp_function *)
- Make a special case for a non-binding pattern. Also, if the pattern
- is non-binding, recf must not be Recursive.
-      let recf_exp = texp_ident "Trx.sample_rec_flag" in
-      let recf_exp = {recf_exp with exp_desc = 
-                        Texp_cspval (Obj.repr recf, dummy_lid "*recf*")} in
-      let exp = { exp with exp_type = wrap_ty_in_code n exp.exp_type } in
-      texp_binding_pattern pel exp
-       (fun gensyms pats exps ->
-        { exp with
-          exp_desc = 
-            texp_apply (texp_ident "Trx.build_let") 
-            [texp_loc exp.exp_loc;
-             recf_exp;
-             texp_array gensyms;
-             pats;
-             texp_array (trx_bracket trx_exp n body::
-                         (List.map (trx_bracket trx_exp n) exps))]
-        })
-
-*)
      (* The most common case of functions: fun x -> body *)
   | Texp_function (l,[({pat_desc = Tpat_var (_,name)} as pat,ebody)],_) ->
       let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
@@ -1737,8 +1759,8 @@ YYYY
 
   | Texp_function (l,pel,_) ->
       begin
-      match trx_pel pel with
-      | (pl, []) ->                    (* non-binding pattern *)
+      match trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) with
+      | (pl, [], _) ->                    (* non-binding pattern *)
           texp_apply (texp_ident "Trx.build_fun_nonbinding")
             [texp_loc exp.exp_loc; 
              texp_string l;
@@ -1749,17 +1771,11 @@ YYYY
              end;
              texp_array (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel)
            ]
-      | (pl,ids) ->
+      | (pl, names, binding_pat) ->
           texp_apply (texp_ident "Trx.build_fun") 
             [texp_loc exp.exp_loc;
              texp_string l;
-             begin
-               let pn_exp = texp_ident "Trx.sample_pats_names" in
-               let pn = ((pl, List.map snd ids) : 
-                         Parsetree.pattern list * string loc list) in
-               {pn_exp with
-                exp_desc = Texp_cspval (Obj.repr pn, dummy_lid "*pn*")}
-             end;
+             texp_pats_names pl names;
              (* Translate the future-stage function as the present-stage 
                 function whose argument is an array of variables 
                 (should be a tuple, really) and the type
@@ -1769,34 +1785,16 @@ YYYY
                 array, we should have used a tuple. But then we can't
                 generically write build_fun.
               *)
-             let pat_template = begin
-               match pel with
-               | (p,_)::_ ->
-                   {pat_loc = p.pat_loc; pat_extra = [];
-                    pat_env = exp.exp_env;
-                    pat_desc = Tpat_any;
-                    pat_type = p.pat_type}
-               | _ -> assert false
-             end in
-               (* Pattern representing one binding variable *)
-             let var_pat (id,name) =
-               {pat_template with
-                pat_desc = Tpat_var (id,name);
-                pat_type = wrap_ty_in_code n (Btype.newgenvar ())} in
                (* Pattern representing the function's argument:
                   array of variables bound by the original pattern, in order.
                 *)
-             let pat =
-               {pat_template with
-                pat_desc = Tpat_array (List.map var_pat ids);
-                pat_type = 
-	         Ctype.instance_def (Predef.type_array (Btype.newgenvar()))} in
              let body = texp_array (List.map (fun (_,e) -> 
                                      trx_bracket trx_exp n e) pel) in
              { exp with
-                exp_desc = Texp_function ("",[(pat, body)],Total);
+                exp_desc = Texp_function ("",[(binding_pat, body)],Total);
                 exp_type = {exp.exp_type with desc =
-                            Tarrow ("",pat.pat_type, body.exp_type, Cok)}
+                            Tarrow ("",binding_pat.pat_type, body.exp_type, 
+                                    Cok)}
              }
            ]
       end

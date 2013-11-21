@@ -108,6 +108,10 @@ val build_letrec :
 val build_fun : Location.t -> string -> 
   (Parsetree.pattern list * string Location.loc list) -> 
   (code_repr array -> code_repr array) -> code_repr
+val build_let : 
+  Location.t -> bool -> 
+  (Parsetree.pattern list * string Location.loc list) -> code_repr array ->
+  (code_repr array -> code_repr array) -> code_repr
 
 (*
 val build_match : 
@@ -118,11 +122,4 @@ val build_try :
   Location.t -> code_repr -> string Location.loc array -> 
   Parsetree.pattern list -> code_repr array ->
   code_repr
-
-val build_let : 
-  Location.t -> Asttypes.rec_flag -> string Location.loc array -> 
-  Parsetree.pattern list -> 
-  code_repr array ->         (* the first is the body of let *)
-  code_repr
-
 *)
