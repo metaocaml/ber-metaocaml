@@ -1088,39 +1088,29 @@ let build_let_simple_nonrec :
  that is, 
    let rec f x y ... =
 *)
-let build_let_simple_rec : 
-  Location.t -> string loc -> (code_repr -> code_repr * code_repr) -> 
-    code_repr = fun l old_name fbody -> 
-  let (name, vars, (e,ebody)) = with_binding_region_pair l old_name fbody in
-  let pat = {ppat_loc  = name.loc; ppat_desc = Ppat_var name} in
-  begin
+let build_letrec : 
+  Location.t -> string loc array -> 
+    (code_repr array -> code_repr array) -> code_repr = 
+  fun l old_names fbodies -> 
+  let (names,vars,ebodies) = 
+    with_binding_region_gen l (Array.to_list old_names) fbodies in
+  let (ebody,es) = 
+    match ebodies with body::es -> (body,es) | _ -> assert false in
+  let pel = List.map2 (fun name e ->
+     ({ppat_loc  = name.loc; ppat_desc = Ppat_var name},e)) names es in
+  let check_rhs e =
     match e.pexp_desc with
     | Pexp_function (_,_,_) -> ()
     | _ ->     
         Format.fprintf Format.str_formatter
-          "Recursive let binding must be to a function %a"
-          Location.print l;
-        failwith (Format.flush_str_formatter ())
-  end;
+          "Recursive let binding %a must be to a function %a"
+          Location.print l Location.print e.pexp_loc;
+        failwith (Format.flush_str_formatter ()) in
+  List.iter check_rhs es;
   Code (vars,
   {pexp_loc = l; 
-   pexp_desc = 
-    Pexp_let (Recursive, [(pat,e)],ebody)})
+   pexp_desc = Pexp_let (Recursive, pel, ebody)})
 
-(*
-let build_let_simple : 
-  Location.t -> rec_flag -> string loc -> Parsetree.expression -> 
-  Parsetree.expression -> Parsetree.expression =
-  fun l recf name e ebody -> 
-  let (e,var)     = remove_tstamp None e in
-  let (ebody,var) = remove_tstamp var  ebody in
-  let pat = {ppat_loc  = l; ppat_desc = Ppat_var name} in
-  add_timestamp var
-  {pexp_loc = l; 
-   pexp_desc = Pexp_let (recf,[(pat,e)],ebody)}
-
-
-*)
 
 (*{{{ CSP *)
 
@@ -1631,22 +1621,51 @@ let rec trx_bracket :
   | Texp_constant cst -> 
       texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
 
-     (* The second most common case of let-expressions: 
-         let rec f x = e in body
+     (* Recursive let: 
+         let rec f = e1 [and g = e2 ...] in body
+        According to transl_let in bytecomp/translcore.ml,
+        the patterns in recursive let are very restrictive: elther
+          let rec var = ...
+        or
+          let rec _ as var = ...
+       For instance, let rec (x1,x2) = ... is not allowed.
+       We do this test here. For simplicity, we are not going to support
+          let rec _ as var = ...
+       pattern.
       *)
-  | Texp_let (Recursive,[({pat_desc = Tpat_var (_,name)} as pat,e)],ebody) ->
-      let e_ebody = texp_tuple [trx_bracket trx_exp n e;
-                                trx_bracket trx_exp n ebody] in
-      texp_apply (texp_ident "Trx.build_let_simple_rec") 
+  | Texp_let (Recursive,pel,ebody) ->
+      let names =                       (* in the order of appearance *)
+        let rec loop = function
+          | [] -> []
+          | ({pat_desc = Tpat_var (_,name)},_) :: rest -> name :: loop rest
+          | _ -> trx_error ~loc:exp.exp_loc (fun ppf -> Format.fprintf ppf
+                "Only variables are allowed as left-hand side of `let rec'")
+        in loop pel
+      in
+      (* code for body followed by the code for e's *)
+      let es_body = texp_array (
+        trx_bracket trx_exp n ebody ::
+          (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel)) in
+      texp_apply (texp_ident "Trx.build_letrec") 
         [texp_loc exp.exp_loc;
-         texp_string_loc name;
+         texp_array (List.map texp_string_loc names);
+             (* Translate the future-stage function as the present-stage 
+                function whose argument is an array of variables 
+                (should be a tuple, really) and the type
+                   some_targ code array -> tres code array
+                See the comment at Texp_function below for details.
+              *)
+         let pats = List.map (fun (p,_) -> 
+                      {p with pat_type = wrap_ty_in_code n p.pat_type}) pel in
+         let p1 = (match pats with h::_ -> h | _ -> assert false) in
+         let pat = {p1 with
+                    pat_desc = Tpat_array pats;
+                    pat_type = 
+                        Ctype.instance_def (Predef.type_array p1.pat_type)} in
          { exp with
-           exp_desc = 
-             Texp_function ("",[(pat, e_ebody)],Total);
-           exp_type = 
-            {exp.exp_type with desc =
-               Tarrow ("",wrap_ty_in_code n pat.pat_type, 
-                          e_ebody.exp_type, Cok)}
+           exp_desc = Texp_function ("",[(pat, es_body)],Total);
+           exp_type = {exp.exp_type with desc =
+                           Tarrow ("",pat.pat_type, es_body.exp_type, Cok)}
          }
        ]
 
@@ -1656,6 +1675,7 @@ let rec trx_bracket :
         checker for the default function argument.
       *)
   | Texp_let (recf,[({pat_desc = Tpat_var (_,name)} as pat,e)],ebody) ->
+      let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
       texp_apply (texp_ident "Trx.build_let_simple_nonrec") 
         [texp_loc exp.exp_loc;
          texp_string_loc name;
@@ -1666,8 +1686,7 @@ let rec trx_bracket :
              Texp_function ("",[(pat, trx_bracket trx_exp n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
-               Tarrow ("",wrap_ty_in_code n pat.pat_type, 
-                          wrap_ty_in_code n ebody.exp_type, Cok)}
+               Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
@@ -1698,6 +1717,7 @@ YYYY
 *)
      (* The most common case of functions: fun x -> body *)
   | Texp_function (l,[({pat_desc = Tpat_var (_,name)} as pat,ebody)],_) ->
+      let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
       texp_apply (texp_ident "Trx.build_fun_simple") 
         [texp_loc exp.exp_loc;
          texp_string l;
@@ -1711,11 +1731,7 @@ YYYY
              Texp_function ("",[(pat, trx_bracket trx_exp n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
-             match exp.exp_type.desc with
-             | Tarrow (_,targ,tres,_) ->
-                 Tarrow ("",wrap_ty_in_code n targ, wrap_ty_in_code n tres,
-                         Cok)
-             | _ -> assert false}
+               Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
