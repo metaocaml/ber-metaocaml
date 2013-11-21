@@ -740,19 +740,18 @@ let None = (!. .<function (Some x) as y when x  > 0 -> y | _ -> None>.)
 (* pattern-matching *)
 .<match 1 with 1 -> true>.;;
 (*
-- : ('cl, bool) code = .<(match 1 with 1 -> true)>. 
+- : bool code = .<match 1 with | 1 -> true>. 
 *)
 let true = !. .<match 1 with 1 -> true>.;;
 
 .<match (1,2) with (1,x) -> true | x -> false>.;;
 (*
-- : ('cl, bool) code = .<
-(match ((1), (2)) with | (1, x_3) -> true | x_4 -> false)>. 
+- : bool code = .<match (1, 2) with | (1,x_5) -> true | x_6 -> false>. 
 *)
 .<match [1;2] with [x] -> x | [x;y] -> x + y>.;;
 (*
-- : ('cl, int) code = .<
-(match [1; 2] with | (x_5 :: []) -> x_5 | (x_6 :: y_7 :: []) -> (x_6 + y_7))>.
+- : int code = .<
+match [1; 2] with | x_7::[] -> x_7 | x_8::y_9::[] -> x_8 + y_9>. 
 *)
 let 3 = 
   !. .<match [1;2] with [x] -> x | [x;y] -> x + y>.;;
@@ -760,30 +759,27 @@ let 3 =
 (* OR patterns *)
 .<match [1;2] with [x] -> x | [x;y] | [x;y;_] -> x + y>.;;
 (*
-- : ('cl, int) code = .<
-(match [1; 2] with
- | (x_11 :: []) -> x_11
- | ((x_12 :: y_13 :: []) | (x_12 :: y_13 :: _ :: [])) -> (x_12 + y_13))>.
+- : int code = .<
+match [1; 2] with
+| x_13::[] -> x_13
+| x_14::y_15::[]|x_14::y_15::_::[] -> x_14 + y_15>. 
 *)
 let 3 = !. .<match [1;2] with [x] -> x | [x;y] | [x;y;_] -> x + y>.;;
 
 .<match [1;2;3;4] with [x] -> x | [x;y] | [x;y;_] | [y;x;_;_] -> x - y>.;;
 (*
-- : ('cl, int) code = .<
-(match [1; 2; 3; 4] with
- | (x_17 :: []) -> x_17
- | (((x_18 :: y_19 :: []) | (x_18 :: y_19 :: _ :: []))
-    | (y_19 :: x_18 :: _ :: _ :: [])) ->
-    (x_18 - y_19))>.
+- : int code = .<
+match [1; 2; 3; 4] with
+| x_19::[] -> x_19
+| x_20::y_21::[]|x_20::y_21::_::[]|y_21::x_20::_::_::[] -> x_20 - y_21>. 
 *)
 let 1 =
   !. .<match [1;2;3;4] with [x] -> x | [x;y] | [x;y;_] | [y;x;_;_] -> x - y>.;;
 
 .<fun x -> match x with (`F x | `G x) -> x | `E x -> x>.;;
 (*
-- : ('cl, [< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
-fun x_23 ->
- (match x_23 with | ((`F x_24) | (`G x_24)) -> x_24 | (`E x_25) -> x_25)>.
+- : ([< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
+fun x_25  -> match x_25 with | `F x_26|`G x_26 -> x_26 | `E x_27 -> x_27>. 
 *)
 
 let 1 = (!. .<fun x -> match x with (`F x | `G x) -> x | `E x -> x>.) (`G 1);;
@@ -791,11 +787,11 @@ let 1 = (!. .<fun x -> match x with (`F x | `G x) -> x | `E x -> x>.) (`G 1);;
 open Complex;;
 .<fun x -> match x with {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.;;
 (*
-- : ('cl, Complex.t -> float) code = .<
-fun x_29 ->
- (match x_29 with
-  | {Complex.re = x_30; Complex.im = 2.0} -> x_30
-  | {Complex.re = y_31; Complex.im = x_32} -> (x_32 -. y_31))>.
+- : (Complex.t -> float) code = .<
+fun x_31  ->
+  match x_31 with
+  | { Complex.re = x_32; Complex.im = 2.0 } -> x_32
+  | { Complex.re = y_33; Complex.im = x_34 } -> x_34 -. y_33>.
 *)
 
 let 1.0 =
@@ -806,31 +802,31 @@ let 1.0 =
 (* try *)
 .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.;;
 (*
-- : ('cl, int -> bool option) code = .<
-fun x_1 ->
- (try Some(List.assoc x_1 [((1), (true)); ((2), (false))])) with
-  Not_found -> None)>.
+- : (int -> bool option) code = .<
+fun x_39  ->
+  try Some (List.assoc x_39 [(1, true); (2, false)])
+  with | Not_found  -> None>.
 *)
 let Some true =
   (!. .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 1;;
 let Some false =
-(!. .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 2;;
+ (!. .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 2;;
 let None =
-(!. .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 3;;
+ (!. .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.) 3;;
 
 .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.;;
 (*
-- : ('cl, string -> string) code = .<
-fun x_5 ->
- let open Scanf in
- (try (Scanf.sscanf x_5 "%d" (fun x_7 -> (string_of_int x_7))) with
-  Scanf.Scan_failure (x_6) -> ("fail " ^ x_6))>.
+- : (string -> string) code = .<
+fun x_43  ->
+  let open Scanf in
+    try Scanf.sscanf x_43 "%d" (fun x_44  -> Pervasives.string_of_int x_44)
+    with | Scanf.Scan_failure x_45 -> "fail " ^ x_45>.
 *)
 
 let "1" = 
   (!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "1";;
-let "fail scanf: bad input at char number 0: ``character 'x' is not a decimal digit''" =
-(!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "xxx";;
+let "fail scanf: bad input at char number 0: 'character 'x' is not a decimal digit'" =
+ (!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "xxx";;
 
 (* Simple let *)
 
@@ -842,7 +838,7 @@ let 1 =
   !. .<let x = 1 in x>.;;
 .<let x = 1 in let x = x + 1 in x>.;;
 (*
-- : ('cl, int) code = .<let x_7 = 1 in let x_8 = (x_7 + 1) in x_8>. 
+- : int code = .<let x_55 = 1 in let x_56 = x_55 + 1 in x_56>. 
 *)
 let 2 = 
   !. .<let x = 1 in let x = x + 1 in x>.;;
@@ -881,40 +877,60 @@ let f_22 n_21 = if n_21 = 0 then 1 else n_21 * (f_20 (n_21 - 1)) in f_22 5>.
 let 20 = !. .<let f = fun x -> x in 
               let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
 
-.<let rec f = 1 in 2>.
+.<let rec [] = [] in []>.
 (*
-Characters 10-11:
-  .<let rec f = 1 in 2>.;;
-Exception:
-Failure
- "Recursive let binding must be to a function Characters 2-20:\n  .<let rec f = 1 in 2>.;;\n    ^^^^^^^^^^^^^^^^^^\n".
+Characters 2-23:
+  .<let rec [] = [] in []>.;;
+    ^^^^^^^^^^^^^^^^^^^^^
+Error: Only variables are allowed as left-hand side of `let rec'
 *)
 print_endline "Error was expected";;
+
+.<let rec f = f in f>.
+(*
+Exception:
+Failure
+ "Recursive let binding Characters 2-20:\n  .<let rec f = f in f>.;;\n    ^^^^^^^^^^^^^^^^^^\n must be to a function Characters 10-11:\n  .<let rec f = f in f>.;;\n            ^\n".
+*)
+print_endline "Error was expected";;
+
+(* General let rec *)
+.<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and 
+                   odd  = function 0 -> false | x -> even (x-1) in even x>.;;
+(*
+  - : (int -> bool) code = .<
+fun x_80  ->
+  let rec even_81 = function | 0 -> true | x_84 -> odd_82 (x_84 - 1)
+  and odd_82 = function | 0 -> false | x_83 -> even_81 (x_83 - 1) in
+  even_81 x_80>.
+*)
+let true = (!. .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and odd = function 0 -> false | x -> even (x-1) in even x>.) 42;;
+let false = (!. .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and odd = function 0 -> false | x -> even (x-1) in even x>.) 43;;
 
 
 (* General let *)
 .<let x = 1 and y = 2 in x + y>.;;
 (*
-- : ('cl, int) code = .<let x_1 = 1 and y_2 = 2 in (x_1 + y_2)>. 
+- : int code = .<let x_73 = 1 and y_74 = 2 in x_73 + y_74>. 
 *)
 let 3 = !. .<let x = 1 and y = 2 in x + y>.;;
 
 .<let x = 1 in let x = x+1 and y = x+1 in x + y>.;;
 (*
-- : ('cl, int) code = .<
-let x_3 = 1 in let x_4 = (x_3 + 1) and y_5 = (x_3 + 1) in (x_4 + y_5)>. 
+- : int code = .<
+let x_77 = 1 in let x_78 = x_77 + 1 and y_79 = x_77 + 1 in x_78 + y_79>. 
 *)
 let 4 = !. .<let x = 1 in let x = x+1 and y = x+1 in x + y>.;;
-(*
 .<fun x -> let (Some x) = x in x + 1>.;;
+(*
 Characters 15-23:
   .<fun x -> let (Some x) = x in x + 1>.;;
                  ^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a value that is not matched:
 None
-- : ('cl, int option -> int) code = .<
-fun x_11 -> let Some (x_12) = x_11 in (x_12 + 1)>. 
+- : (int option -> int) code = .<
+fun x_83  -> let Some x_84 = x_83 in x_84 + 1>. 
 *)
 let 3 = (!. .<fun x -> let (Some x) = x in x + 1>.) (Some 2);;
 (!. .<fun x -> let (Some x) = x in x + 1>.) None;;
@@ -929,17 +945,6 @@ Exception: Match_failure ("//toplevel//", 1, 19).
 *)
 print_endline "Error was expected";;
 
-.<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and 
-                   odd  = function 0 -> false | x -> even (x-1) in even x>.;;
-(*
-- : ('cl, int -> bool) code = .<
-fun x_17 ->
- let rec even_18 = function | 0 -> true | x_21 -> (odd_19 (x_21 - 1))
- and odd_19 = function | 0 -> false | x_20 -> (even_18 (x_20 - 1)) in
- (even_18 x_17)>.
-*)
-let true = (!. .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and odd = function 0 -> false | x -> even (x-1) in even x>.) 42;;
-let false = (!. .<fun x -> let rec even = function 0 -> true | x -> odd (x-1) and odd = function 0 -> false | x -> even (x-1) in even x>.) 43;;
 
 
 (* testing scope extrusion *)

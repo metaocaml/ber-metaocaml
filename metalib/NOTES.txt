@@ -35,8 +35,12 @@ Error: !. error: 'a not generalizable in ('a, 'b) code
 But the code was legitimate:
 let 10 = !. tr7 .<10>.;;
 
-Added a test for the well-formedness of simple let.
-.<let rec f = f in f>. is now disallowed.
+Added a test for the well-formedness of recursive let.
+.<let rec f = f in f>. 
+and .<let rec [] = [] in []>. are now disallowed.
+It was allowed in all previous versions of MetaOCaml and was a bad
+bug: a well-typed generator will produce well-typed code which
+will nevertheless fail to compile.
 
 
 			BER MetaOCaml

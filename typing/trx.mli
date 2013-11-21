@@ -112,14 +112,9 @@ val build_let :
   Location.t -> bool -> 
   (Parsetree.pattern list * string Location.loc list) -> code_repr array ->
   (code_repr array -> code_repr array) -> code_repr
-
-(*
 val build_match : 
-  Location.t -> code_repr -> string Location.loc array -> 
-  Parsetree.pattern list -> code_repr array ->
-  code_repr
+  Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
+  code_repr -> (code_repr array -> code_repr array) -> code_repr
 val build_try : 
-  Location.t -> code_repr -> string Location.loc array -> 
-  Parsetree.pattern list -> code_repr array ->
-  code_repr
-*)
+  Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
+  code_repr -> (code_repr array -> code_repr array) -> code_repr
