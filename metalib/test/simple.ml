@@ -1,4 +1,5 @@
 (* Various simple (one-liner) examples and NON-examples  *)
+open Runcode;;
 
 (* Safety of run *)
 
@@ -102,6 +103,7 @@ print_endline "Error was expected";;
 
 Failure("The code built at Characters 16-17:\n   is not closed: identifier x_65 bound at Characters 16-17:\n   is free")
 *)
+print_endline "Error was expected";;
 
 let tm1 = .<fun x -> .< x >. >.;;
 (*

@@ -2,6 +2,7 @@
 (* Author:  Walid Taha and Cristiano Calcagno
    Date:    Fri Aug 31 03:03:11 EDT 2001 *)
 
+open Runcode;;
 open T4types;;
 
 let unJ(J i) = i
@@ -66,7 +67,7 @@ val stage1Running : ('a, dom) code =
         ff_1))) (J (1000000)))>.
 
 *)
-let compiling = .! .<fun () -> .~ stage1Running>.;;
+let compiling = !. .<fun () -> .~ stage1Running>.;;
 
 let J 42 = compiling ();;
 
@@ -102,7 +103,7 @@ val stage1Running' : ('a, dom) code =
        ff_1)) (J (1000000)))>.
 *)
 
-let compiling' = .! .<fun () -> .~ stage1Running'>.;;
+let compiling' = !. .<fun () -> .~ stage1Running'>.;;
 
 let J 42 = (compiling' ());;
 

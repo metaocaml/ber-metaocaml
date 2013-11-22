@@ -992,7 +992,7 @@ let r = ref .<fun y->y>. in let _ = .<fun x -> .~(r := .<fun y -> y>.; .<0>.)>. 
 (*
 - : ('_a -> '_a) code = .<fun y_41  -> y_41>. 
 *)
-print_endline "Error was expected";;
+(* Was in N100: print_endline "Error was expected";; *)
 
 (* The following are OK though *)
 let r = ref .<fun y->y>. in .<fun x -> .~(r := .<fun y -> y>.; !r)>.;;

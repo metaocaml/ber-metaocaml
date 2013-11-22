@@ -1,6 +1,7 @@
 (* Various simple tests, all should pass. Whenever an error is discovered,
    please add here.
 *)
+open Runcode;;
 
 (* From Problems.txt  Wed Oct  2 08:39:04 BST 2002
   Occurrences of a csp value share the same instantiated type
@@ -87,9 +88,9 @@ let t7 =
  ;;
 
 (*
-val t7 : ('cl, Complex.t) code = .<
-  let x_39 = {Complex.re = 1.0; Complex.im = 2.0} in
-  let y_40 = {x_39 with Complex.re = 2.0} in y_40>. 
+val t7 : Complex.t code = .<
+  let x_14 = { Complex.re = 1.0; Complex.im = 2.0 } in
+  let y_15 = { x_14 with Complex.re = 2.0 } in y_15>. 
 *)
 
 let {Complex.re=2.0; im=2.0} = !. t7;;
@@ -118,7 +119,7 @@ let 1 = Runcode.run (Runcode.run {Runcode.cde= .<{Runcode.cde = .<1>.}>.});;
 let tr1 = .<fun x -> .~(!. .<.<1>.>.)>.;;
 let 1 = (!. tr1) 42;;
 (*
-val tr1 : ('a -> int) code = .<fun x_69  -> 1>. 
+val tr1 : ('a -> int) code = .<fun x_17  -> 1>. 
 *)
 
 let tr1' = .<fun x -> .~(!. .<.<fun x -> x>.>.)>.;;

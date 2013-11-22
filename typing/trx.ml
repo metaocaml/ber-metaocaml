@@ -118,13 +118,6 @@ open Misc
 open Typedtree
 open Types
 
-(*
-XXX check all Obj.repr, that CSP really builds annotated tree
-XXX Check Parsetree.expression. Should all be replaced by marked expr
-Check that all Trx. functions have the correct type that matches
-that in .mli
-Check all XXXX
-*)
 
 (*{{{ Preliminaries, common functions *)
 
@@ -785,39 +778,6 @@ let with_binding_region : string loc ->
           in r
     with e -> bindings_in_scope := old_bindings; raise e
 
-
-(* Convert the meta-level (fun var -> body) to the Typedtree.expression
-   representing the same function, and use the result generate the call to
-   with_binding_region
-*)
-let texp_binding_simple : 
-  Ident.t * string loc -> (Typedtree.expression -> Typedtree.expression) ->
-  Typedtree.expression_desc = fun (id,name) fbody ->
-  let name_exp = texp_ident "Trx.sample_name" in
-  let base_name_exp = 
-    {name_exp with
-     exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} in
-  let pat = { pat_desc = Tpat_var (id,name);
-              pat_loc  = name.loc; pat_extra = [];
-              pat_type = name_exp.exp_type;
-              pat_env  = name_exp.exp_env }(* not including the binding to id!*)
-  in
-  let name_vd = match name_exp.exp_desc with
-                  | Texp_ident (_,_,vd) -> vd
-                  | _ -> assert false in
-  let gensymed_exp =                (* translated var *)
-    {name_exp with exp_desc = 
-       Texp_ident (Path.Pident id,
-                    (mkloc (Longident.Lident name.txt) name.loc),name_vd)} in
-  let body = fbody gensymed_exp in 
-  let fun_body_exp = 
-        { body with
-          exp_desc = Texp_function ("",[(pat,body)],Total); 
-          exp_type = Ctype.newty (Tarrow("", name_exp.exp_type, 
-                                             body.exp_type, Cok)) }
-  in
-  texp_apply (texp_ident "Trx.with_binding_region")
-    [base_name_exp; fun_body_exp]
 *)
 
 (* ------------------------------------------------------------------------ *)
@@ -1204,6 +1164,28 @@ let trx_csp :
   else
   (* Otherwise, do the lifting at run-time *)
   texp_apply (texp_ident "Trx.dyn_quote") [exp; texp_lid li]
+
+(*{{{ Historical: hints on native mode CSP *)
+
+(* Native mode is moved out to the `userland'
+
+let remove_texp_cspval exp =
+  if !native_mode = false then exp else
+  failwith "native mode CSP are not impemented yet"
+
+old code
+  match exp.exp_desc with
+  | Texp_cspval (v,l) ->
+      let i = add_csp_value (v,l) in
+      let exp' = {exp with exp_desc = Texp_constant (Const_int i)} in
+      let desc = if !initial_native_compilation
+        then (Texp_apply (trx_array_get exp, [(Some !local_csp_arr_texp, Required);(Some exp', Required)]))
+	else (Texp_apply (trx_get_csp_value exp, [(Some exp', Required)])) in
+      {exp with exp_desc = desc}
+  | _ -> assert false
+*)
+
+(*}}}*)
 
 (*}}}*)
 
@@ -2157,24 +2139,3 @@ let trx_structure str =
 (*}}}*)
 
   
-(*{{{ Historical: hints on native mode CSP *)
-
-(* Native mode is moved out to the `userland'
-
-let remove_texp_cspval exp =
-  if !native_mode = false then exp else
-  failwith "native mode CSP are not impemented yet"
-
-   XXX old code
-  match exp.exp_desc with
-  | Texp_cspval (v,l) ->
-      let i = add_csp_value (v,l) in
-      let exp' = {exp with exp_desc = Texp_constant (Const_int i)} in
-      let desc = if !initial_native_compilation
-        then (Texp_apply (trx_array_get exp, [(Some !local_csp_arr_texp, Required);(Some exp', Required)]))
-	else (Texp_apply (trx_get_csp_value exp, [(Some exp', Required)])) in
-      {exp with exp_desc = desc}
-  | _ -> assert false
-*)
-
-(*}}}*)
