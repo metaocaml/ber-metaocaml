@@ -37,6 +37,14 @@ val close_code_delay_check : code_repr -> closed_code_repr * (unit -> unit)
 (* Total: a closed code can always be used in slices, etc. *)
 val open_code : closed_code_repr -> code_repr
 
+(* Adjusting the implementation of stackmarks -- needed when delimited
+   control is used (other than mere exceptions).
+*)
+type stackmark = unit -> bool           (* true if valid *)
+type stackmark_region_fn = 
+    {stackmark_region_fn : 'w. (stackmark -> 'w) -> 'w}
+val set_with_stack_mark : stackmark_region_fn -> unit
+
 
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
