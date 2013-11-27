@@ -2036,6 +2036,7 @@ and emit_constant_field field cont =
       (Clabel_address lbl,
        Cint(floatarray_header (List.length fields)) :: Cdefine_label lbl ::
        Misc.map_end (fun f -> Cdouble f) fields cont)
+  | Const_csp_value _  -> assert false  (* NNN *)
 
 and emit_string_constant s cont =
   let n = size_int - 1 - (String.length s) mod size_int in

@@ -46,7 +46,7 @@ done    ./tools/tast_iter.ml new in 4.01
 
 
 		./typing/ident.ml       No longer changed
-	./tools/addlabels.ml not built any more?
+	        ./tools/addlabels.ml not built any more?
 		./typing/ident.mli      No longer changed
 		./typing/typeclass.ml   No longer changed
                 ./typing/cmt_format.ml    in 4.01, no longer changed
@@ -54,5 +54,5 @@ done    ./tools/tast_iter.ml new in 4.01
                 ./typing/unused_var.ml  No longer present in Ocaml 4
 
 
-./asmcomp/cmmgen.ml	Not changed; Const_csp_value will cause fatal error
+done ./asmcomp/cmmgen.ml	Const_csp_value will cause fatal error
 			Const_csp_value must not appear in native code
