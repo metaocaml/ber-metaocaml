@@ -1,48 +1,3 @@
-just the standard installation: configure then make world
- no longer any bootstrap
-binary compatibility: no need to build otherlibs (check with Anil)
-no special syntax .!
- there is !. (prefix operation, for historical reasons)
- There is Trx.run (using bytecode). More different runs (of the same
- signature) are coming
- No env classifiers
- Trx_error -- the single error variant for all our errors
- Different API for running code, with closed_code
- Printing is now part of Ocaml (Pprintast, which was influenced by
- OCaml)
- More precise tracking of free variables and reporting of scope
- extrusion.
-Faster generation of code (especially for functions, nonbinding
-functions, etc)
-Suggestion: make all path_idents in predef to be persistent.
-
-One significant simplification in the future: try to build as much
-code as possible at translation time. See one of the TODO in trx.ml.
-If we can build functions at translation time, we don't even
-need to rename bound variables.
-
-With the new dynamic test, more programs are accepted.
-let tr7 = .<fun x -> !. x>.;;
-(*
-val tr7 : ('a code -> 'a) code = .<fun x_63  -> Runcode.( !. )  x_63>. 
-
-Was:
-Characters 24-25:
-  let tr7 = .<fun x -> !. x>.;;
-                          ^
-Error: !. error: 'a not generalizable in ('a, 'b) code
-*)
-But the code was legitimate:
-let 10 = !. tr7 .<10>.;;
-
-Added a test for the well-formedness of recursive let.
-.<let rec f = f in f>. 
-and .<let rec [] = [] in []>. are now disallowed.
-It was allowed in all previous versions of MetaOCaml and was a bad
-bug: a well-typed generator will produce well-typed code which
-will nevertheless fail to compile.
-
-
 			BER MetaOCaml
 
 * Main differences from the original MetaOCaml
@@ -58,15 +13,24 @@ will nevertheless fail to compile.
  mutation or other effects) is caught early, raising an exception
  with good diagnostics.
 
- -- Introduced the type 'a cde of closed code values -- in preparation
- for removing run from the `kernel' and moving it to a user-level
- library, see below.
+ -- The scope extrusion check made it possible to remove environment
+ classifiers while still preserving the static guarantee: if the generator
+ finishes successfully, the generated code is well-typed and
+ well-scoped. Environment classifiers ensured well-scopedness when
+ type-checking the generator -- but only for pure generators. The
+ scope extrusion check is executed when the generator is run; however
+ the check is now comprehensive. Scope extrusion is always caught, and
+ caught early, whether the generator is effectful or not.
+
+ -- Syntax .! is replaced with the ordinary prefix operation
+ (!.) (alias run) defined in the module Runcode. Runcode.run is an
+ ordinary function, and is not part of the MetaOCaml kernel.
 
  -- In OCaml 4.00.1 , the Core type checker was changed to use
  type_expect. This generates better error messages. Therefore, the type
- checking of brackets, escape, run and CSP was re-written accordingly,
+ checking of brackets, escape and CSP was re-written accordingly,
  to propagate expectations down. For example, <e> is expected to have
- the type of (clsfier, ty) code where e has is expected to have the
+ the type of ty code where e has is expected to have the
  type ty.
 
  -- The main MetaOCaml kernel module, trx.ml, has been completely
@@ -75,12 +39,17 @@ will nevertheless fail to compile.
  re-written. Now we maintain sharing as much as possible. If the tree
  has no brackets, it is returned as it was.  Previously, it was copied.
 
+ -- Faster generation of code (especially for functions and nonbinding
+ functions)
+
+ -- Added a test for the well-formedness of recursive let (see below)
+
  -- Applications with labeled arguments are supported now.
 
  -- The problem with first-class polymorphism (records with polymorphic
  fields inside brackets) has fixed itself. See the file
- tests/simple.txt. Therefore, we can really remove run from the core
- of MetaOCaml and use the type cde of closed code.
+ tests/simple.txt. 
+
 
  -- Precise type assignment when building Typedtree nodes (when
  hand-compiling Parsetree generation)
@@ -105,7 +74,13 @@ OCaml will not generally affect the `user-level' code.
 
  -- Printing of code values --  AST pretty_printing by Ed Pizzi --
  is moved to user-level, a dedicated file metalib/print_code.ml.
- It is now maintained by Jacques Carette. 
+ The bulk of pretty-printing is now done by OCaml itself, module
+ Pprintast.
+
+ -- New API for running code, encouraging the development of new ways
+ to execute code values (see metalib/runcode.mli).
+ The operation 'run' is a regular function now, and is user-level
+ rather than being part of the kernel.
 
  -- Now BER MetaOCaml is built as a custom top-level, using the standard tool
  ocamlmktop. We register code printers as regular top-level printers
@@ -128,13 +103,36 @@ OCaml will not generally affect the `user-level' code.
  -- Added very many regression tests (which also work as examples) to test
  every feature: see test/trivial.ml and test/simple.ml
 
+ -- The new BER N101 is not only source-compatible with OCaml 4.01 --
+ it is also binary compatible. Any 4.01-built OCaml library and plugin
+ (including findlib) can be used with BER N101 in their binary form.
+ The building of BER N101 no longer involves bootstrapping
+ and is hence much faster. 
+
+
 
 * What part of MetaOCaml can be moved to the OCaml proper
 Suggestions for the OCaml HQ
 
- -- Merge metalib/print_code.ml and tools/pprintast.ml
- Both are essentially the same. We could use optional arguments to
- make the printing extensible and robust to AST changes.
+ -- make all path_idents in predef.ml to be persistent. Currently,
+ to check if type int is in Pervasives, I have to search the initial
+ environment. 
+
+ -- There are two restrictions on let rec: patterns must be simple
+ variable patterns (either just 'var' or '_ as var') and the variable
+ bound by let rec must appear under lambda, lazy or constructor.
+ These conditions are checked very late (in bytecomp/transcore.ml),
+ after type checking. But these are syntactic conditions; in
+ particular, the first condition can be checked during the parsing.
+ Minimal suggestion: check the first condition at parsing and
+ the second at type checking. So, a code that type checks should
+ produce no further compilation errors. Extended suggestion: since
+ let rec patterns are so restricted (and since the processing of patterns
+ becomes more involved with the addition of GADTs), separate
+ Pexp_let/Texp_let into Pexp_let and Pexp_letrec (ditto for Texp). 
+ Type checking will become more orthogonal since in type checking Pexp_letrec
+ we don't need to care about GADTs, the exhaustiveness check and
+ the type propagation from expression to patterns. 
 
  -- Unify printing functions for various trees and make them
  prettier. The very same fmt_longident_aux occurs three times in 
@@ -149,7 +147,7 @@ Suggestions for the OCaml HQ
       exception Error of (format -> unit)
  The error carries the function that will print out the error
  message on the supplied ppf. Handler becomes much more extensible!
- This approach does seem to work out.
+ This approach does seem to work out. It is used all throughout N101.   
 
  -- On one hand, it is tempting to eliminate Const_csp_value. There
  will no longer be a need to modify the code generator (in bytecomp/).
@@ -161,23 +159,6 @@ Suggestions for the OCaml HQ
 
 
 * Further plans
-
-** Get rid of .! as a kernel form
-
-The syntax .! may remain, but only as syntax. The parser would just 
-expand .! x  to {Trx.cde = x}. To really run the code, we would write
-    Run.run .! .<1>.
-Incidentally, we can have Run.run_bytecode and Run.run_native.
-Since it is possible now to dynamically load native code into
-bytecode, we can separate the mode of running the generated code
-(bytecode/native) from the mode of running the generator.
-
-We don't have to add the record 'a cde to predef. We can add it to
-Trx. The only drawback is that pretty-printer may print {cde = x} with
-the Trx qualification. But it is easy to adjust the pretty-printer to
-omit the Trx qualification.
-
-Then BER MetaOCaml becomes BE MetaOCaml?
 
 ** Optimize the construction of code values (Parsetree)
 
@@ -195,6 +176,10 @@ This approach can be extended, by constructing large Parsetree
 subtrees at compile time, and passing them as CSP. See ``TODO: an
 optimization idea. Consider <assert e> as a typical expression.'' in
 trx.ml
+If we can build functions at translation time, we don't even
+need to rename bound variables (let alone do the scope-extrusion
+check). If a code value has no escapes, like .<fun x -> x>.,
+then no scope extrusion is possible.
 
 ** Improve processing CSP
 
@@ -218,16 +203,6 @@ Pexp_extension and a similar node to typed tree. The user may register
 extensions, invoked by the type checker, printer, etc.  to type check
 the node.
 
-** Type-checking of run
-Type-checking of run  (in typing/typecore.ml) can be done differently,
-using polymorphic/universally quantified variables (Tpoly/Tunivar)
-
-One may think that we can pre-process the ParseTree before we hand it
-over to the type-checker, replacing Pexp_constant that occurs within
-the brackets with a node Pexp_apply "mk_constant", etc. However, we
-have problems with generalizing second-stage let. Since the let-form
-will be replaced with a function call, generalization won't be
-performed!
 
 ** Search for TODO in trx.ml
 
@@ -264,7 +239,56 @@ and
 produces
   .<let rec f x = f x in f 0>.
 
+
+
+* Installation notes
+
+configuration line
+./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
+-no-camlp4 -no-graph
+
+
+* Old Future work
+
+** Get rid of .! as a kernel form
+
+The syntax .! may remain, but only as syntax. The parser would just 
+expand .! x  to {Trx.cde = x}. To really run the code, we would write
+    Run.run .! .<1>.
+Incidentally, we can have Run.run_bytecode and Run.run_native.
+Since it is possible now to dynamically load native code into
+bytecode, we can separate the mode of running the generated code
+(bytecode/native) from the mode of running the generator.
+
+We don't have to add the record 'a cde to predef. We can add it to
+Trx. The only drawback is that pretty-printer may print {cde = x} with
+the Trx qualification. But it is easy to adjust the pretty-printer to
+omit the Trx qualification.
+
+[BER N101 removed environment classifiers altogether. Therefore, run
+ became ordinary function and is moved out of the kernel.]
+
+Then BER MetaOCaml becomes BE MetaOCaml?
+
+** without environment classifiers, more programs type check
+let tr7 = .<fun x -> !. x>.;;
+(*
+val tr7 : ('a code -> 'a) code = .<fun x_63  -> Runcode.( !. )  x_63>. 
+
+Was:
+Characters 24-25:
+  let tr7 = .<fun x -> !. x>.;;
+                          ^
+Error: !. error: 'a not generalizable in ('a, 'b) code
+*)
+But the code was legitimate:
+let 10 = !. tr7 .<10>.;;
+
+BER N101 accepts it and runs.
+
+
 ** well-formedness check for let rec
+[This check is implemented in BER N101]
 
   let rec x = x in x;;
               ^
@@ -275,8 +299,9 @@ It is not well-formed. But it is well-typed:
 let c1 = .<let rec x = x in x>.;;
    val c1 : ('cl, 'a) code = .<let rec x_142 = x_142 in x_142>. 
 
-and it is accepted by MetaOCaml. It is only when we try to compile
-(that is, run) the generated code, we see a problem
+and it is accepted by all versions of MetaOCaml before N101.  It is
+only when we try to compile (that is, run) the generated code, we see
+a problem
 
 .! c1;;
    Exception: Translcore.Error (_, 1).
@@ -320,8 +345,7 @@ bindings and also the following legitimate code
         let rec f = Stream ("stream", fun () -> f) in f;;
 Perhaps it may be worth noting the issue and leave it for now?
 
-
-* Installation notes
+** Installation notes
 When linking the first time, beware!
 Since we added to predef.ml[i], we have changed the timestamps of the
 pre-defined identifiers and exceptions, and so created inconsistency
@@ -330,13 +354,20 @@ the first time, after applying the patches to OCaml, do
     make core
     make coreboot
     make all
+[This is fixed in N101, which is now binary compatible with OCaml]
 
-configuration line
-./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
--no-camlp4 -no-graph
+** Type-checking of run
+Type-checking of run  (in typing/typecore.ml) can be done differently,
+using polymorphic/universally quantified variables (Tpoly/Tunivar)
 
-
-* Old Future work
+One may think that we can pre-process the ParseTree before we hand it
+over to the type-checker, replacing Pexp_constant that occurs within
+the brackets with a node Pexp_apply "mk_constant", etc. However, we
+have problems with generalizing second-stage let. Since the let-form
+will be replaced with a function call, generalization won't be
+performed!
+[As of BER N101, this is no longer relevant since there are no
+environment classifiers any more.]
 
 ** The problem of the constructor environment (signature)
 

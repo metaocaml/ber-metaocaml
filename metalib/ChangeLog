@@ -1,3 +1,22 @@
+November 26, 2013
+	Release N101
+	Removed environment classifiers.
+	Syntax .! is replaced with the ordinary prefix operation
+	!.  (alias run) in the module Runcode. Runcode.run is an
+	ordinary function, and is not part of the MetaOCaml kernel.
+	New API for running code, encouraging the development of new ways
+	to execute code values (see metalib/runcode.mli).
+	BER N101 is binary compatible with OCaml 4.01. Building it
+	no longer involves bootstrapping.
+	Printing code is now part of OCaml (Pprintast, which was influenced by
+        MetaOCaml).
+	Scope-extrusion check works with delimited control.
+	Added a test for the well-formedness of recursive let.
+	Faster generation of code (especially for functions and nonbinding
+	functions).
+	More precise tracking of free variables and reporting of scope
+	extrusion.
+
 February 20, 2013
 	Re-enabled ocamlbuild.byte target in the Makefile, so to
 	to build ocamlbuild as part of the make all.

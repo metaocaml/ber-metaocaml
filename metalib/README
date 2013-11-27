@@ -1,5 +1,5 @@
 		BER MetaOCaml
-		N100 January 2013
+		N101 November 2013
 
 0. TABLE OF CONTENTS
 
@@ -30,25 +30,26 @@ which was licensed according to ORIGINAL-LICENSE-META
     bracket: .< e >.  to delay computation (to the future stage)
     escape:  .~ e     to perform a computation within brackets
                       and splice-in the result
-    run:     .! e     to run a future-stage computation, or code, now
+    run:     !. e     to run a future-stage computation, or code, now
 
   A special type constructor, called 'code' builds the type of
   future-stage computations, or code expressions. For example, 
 
     # .< 2 + 4 >.;;
-    - : ('cl, int) code = .<(2 + 4)>.
+    - : int code = .<2 + 4>. 
 
-  The type constructor code takes two arguments. The first argument
-  is always a type variable, usually named 'cl. It is called an environment
-  classifier, and is used to correctly type the run (.!)  construct.
+  The type constructor 'code' takes as its argument the type of the
+  future-stage expression. Future-stage expressions are executed later,
+  but are type-checked now. Therefore, the generated code is assuredly
+  well-typed.
 
   Code fragments can be spliced into larger code contexts by using the
   escape construct: 
 
     # let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
-    - : ('cl, int) code = .<((2 + 4) + (2 + 4))>.
+    - : int code = .<(2 + 4) + (2 + 4)>. 
 
-  The escape construct takes an expression of type ((_,t) code) and
+  The escape construct takes an expression of type (t code) and
   produces an expression of type t, but only inside of a
   code-constructing context (i.e., inside inside code brackets).
   Attempting to escape code outside of a code-building context results
@@ -62,20 +63,30 @@ which was licensed according to ORIGINAL-LICENSE-META
 
 
   The run construct takes a code value, executes it and returns its result. 
-  For example: 
+  It is actually an ordinary function Runcode.run, which is also bound 
+  to the prefix operation (!.). These operations are in the module
+  Runcode (which is not opened by default). For example: 
 
-    # .! .< 2 + 3 >.;;
+    # Runcode.run .< 2 + 3 >.;;
+    - : int = 5
+    # open Runcode;;
+    # !. .<fun x y -> x + y >. 2 3;;
     - : int = 5
 
-  The run construct only works on code values which are polymorphic in
-  their environment classifier, which prevents nonsensical programs 
-  such as the following:
+  The run construct only works on closed code values. Attempting to run
+  open code leads to an exception in the generator (which can be traced
+  as any other exception).
 
-    # .< fun x -> .~ (let u = .!.< x >. in .<()>.) >.;;
-    Characters 24-33:
-      .< fun x -> .~ (let u = .!.< x >. in .<()>.) >.;;
-                              ^^^^^^^^^
-    Error: .! error: 'cl not generalizable in ('cl, 'a) code
+    # .< fun x -> .~ (let u = !. .< x >. in .<()>.) >.;;
+    Exception:
+    Failure
+     "The code built at Characters 7-8:
+      .< fun x -> .~ (let u = !. .< x >. in .<()>.) >.;;
+             ^
+     is not closed: identifier x_91 bound at Characters 7-8:
+      .< fun x -> .~ (let u = !. .< x >. in .<()>.) >.;;
+             ^
+    is free".
 
   Please see many more examples in test/trivial.ml and other files
   in the test/ directory.
