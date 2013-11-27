@@ -112,7 +112,8 @@ typing/printtyped.cmi : typing/typedtree.cmi
 typing/stypes.cmi : typing/typedtree.cmi parsing/location.cmi \
     typing/annot.cmi
 typing/subst.cmi : typing/types.cmi typing/path.cmi typing/ident.cmi
-typing/trx.cmi : typing/typedtree.cmi parsing/parsetree.cmi
+typing/trx.cmi : typing/typedtree.cmi parsing/parsetree.cmi \
+    parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi
 typing/typeclass.cmi : typing/types.cmi typing/typedtree.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
     typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi
