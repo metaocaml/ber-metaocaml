@@ -1,6 +1,6 @@
 # Make the distribution directory
 
-DEST=/tmp/ber-metaocaml-100
+DEST=/tmp/ber-metaocaml-101
 
 mkdir $DEST
 
