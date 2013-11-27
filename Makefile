@@ -121,7 +121,8 @@ defaultentry:
 	@echo "should work.  But see the file INSTALL for more details."
 
 # Recompile the system using the bootstrap compiler
-all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml 
+all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
+	otherlibraries ocamlbuild.byte $(DEBUGGER) ocamldoc
 # NNNN  otherlibraries ocamlbuild.byte $(CAMLP4OUT) $(DEBUGGER) ocamldoc
 # NNN Since MetaOcaml is no binary compatible with OCaml, there is
 # no need to be rebuilding libraries
