@@ -91,6 +91,7 @@ test:
 	$(BINDIR)/metaocaml test/quick_test.ml
 	$(BINDIR)/metaocaml test/test21.ml
 	$(BINDIR)/metaocaml test/pythagorian_triples.ml
+	$(BINDIR)/metaocaml test/test_levels.ml
 #	$(BINDIR)/metaocaml test/t4.ml
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) MOCAMLTOP="../metaocaml -I .." testv_top
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top

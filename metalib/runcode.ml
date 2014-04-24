@@ -90,8 +90,15 @@ let load_lambda ppf lam =
 (* Patterned after toploop.ml:execute_phrase *)
 
 let run_bytecode' exp =
-  if !initial_env = Env.empty then initial_env := Compmisc.initial_env();
-  Ctype.init_def(Ident.current_time()); 
+  if !initial_env = Env.empty then begin
+    let old_time = Ident.current_time() in
+    (* does Ident.reinit() and may corrupt the timestamp if we
+       run in top-level. See Ident.reinit code
+     *)
+    initial_env := Compmisc.initial_env(); 
+    Ident.set_current_time old_time
+   end;
+  (* Ctype.init_def(Ident.current_time());  *)
   with_disabled_warnings [Warnings.Partial_match "";
 			  Warnings.Unused_argument;
 			  Warnings.Unused_var "";
@@ -113,6 +120,7 @@ let run_bytecode' exp =
             "Error type-checking generated code: scope extrusion?")
   in
   let lam = Translmod.transl_toplevel_definition str in
+  Warnings.check_fatal ();
   load_lambda Format.std_formatter lam
  )
 

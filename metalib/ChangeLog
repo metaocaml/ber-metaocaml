@@ -1,3 +1,11 @@
+April 24, 2014
+	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.
+	If the first Runcode.run is used after a type declaration,
+	the defined type is considered locally scoped, which causes
+	type checking errors or assettion faliures in typechecking.
+	Preparing the environment for Runcode.run has a side-effect,
+	of corrupting Ident timestamps. The timestamps are preserved now.
+
 November 26, 2013
 	Release N101
 	Removed environment classifiers.
