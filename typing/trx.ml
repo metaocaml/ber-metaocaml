@@ -171,13 +171,16 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
    compiler invoked by run can get the definition for the identifier from
    a .cmi file. The value of an external identifier can be obtained from
    a .cmo file.
+   If a path containst several components like
+   M1.M2.M3.ident, we should check if the top-most component, that is, M1,
+   is external.
 *)
-let is_external = function
+let rec is_external = function
   | Path.Pident id ->           (* not qualified *)
       Ident.persistent id || Ident.global id || Ident.is_predef_exn id
-  | Path.Papply _  -> false
-  | Path.Pdot(Path.Pident id, _,_) -> Ident.persistent id
-  | _             -> false
+  | Path.Papply _     -> false
+  | Path.Pdot(p, _,_) -> is_external p
+  | _                 -> false
 
 (* Convert a path to an identifier. Since the path is assumed to be
    `global', time stamps don't matter and we can use just strings.
