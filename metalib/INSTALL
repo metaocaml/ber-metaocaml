@@ -1,0 +1,68 @@
+INSTALLATION
+
+You need the source OCaml 4.01 distribution, which you can download from
+    http://caml.inria.fr/download.en.html
+See also
+    http://ocaml.org/install.html
+
+1. Download, un-tar the OCaml distribution and configure it as described
+   in its INSTALL file
+
+   For example, in the OCaml distribution directory, do
+
+    ./configure -prefix `pwd` -no-pthread -no-tk
+
+  You may chose any other installation prefix. It is best however
+  to chose the prefix different from that of the standard OCaml installation,
+  so to keep the existing OCaml installation intact.
+
+1a. Update the Makefile in the ber-metaocaml directory
+
+    change CAMLROOT= at the beginning of the ber-metaocaml/Makefile
+    to point to the OCaml distribution directory 
+
+2. Patch the OCaml distribution
+
+   In the ber-metaocaml directory, do
+
+   make patch
+
+
+3. Compile and install OCaml as usual. For example, in the OCaml 
+   distribution directory, do
+
+    make world
+    make -i install
+
+
+4. Build the BER MetaOCaml library, the top-level, and the
+   compilation script
+
+   In the ber-metaocaml directory, do
+
+    make all
+    make install
+
+  The BER MetaOCaml top-level can be started afterwards as
+    $prefix/bin/metaocaml 
+
+  The batch compiler can be run using the command file metaocamlc. 
+
+5. Optionally run sample tests
+   
+   In the ber-metaocaml directory, do
+
+   make test
+   make test-compile
+
+
+Installation of BER MetaOCaml on Windows has not been tested. Original
+MetaOCaml contained the following note about the Windows platform:
+
+      To use MetaOCaml under MS Windows, please do not use "Windows
+      OCaml".  Rather, use the standard OCaml system under cygwin.  If you
+      happened to install the "Windows OCaml" in the past, manually remove
+      some environment variables before you can install the standard system
+      successfully.  To do that, goto START -> Control Panel -> System ->
+      Advanced -> Environment variables, and edit the OCAMLLIB variable and
+      remove any entries in that entry.

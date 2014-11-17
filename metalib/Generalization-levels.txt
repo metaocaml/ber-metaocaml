@@ -1,0 +1,309 @@
+Type checking: generalization and regions
+
+OCaml implements type generalization in an efficient and interesting
+way, which also ensures that types defined within (nested) modules do
+not escape their scope. The technique hence enforces the region
+discipline for locally introduced type constructors. It is intriguing
+how generalization and regions are handled so uniformly. Truly they
+are deeply related.
+
+Unfortunately, this technique does not seem to be documented at all,
+aside from a couple of brief puzzling comments in the OCaml source
+code (directory typing/ in the OCaml distribution).  The present
+document is probably its only explanation.
+
+To be certain, the type generalization in OCaml achieves the same
+result as the textbook algorithm: a free variable in the type of the
+expression 'e' that occurs in 'let x = e in body' is generalized if
+the variable does not occur in the type environment and 'e' is
+syntactically a value (more precisely, nonexpansive -- that is, has no
+visible effect). OCaml achieves this goal in an unexpected way.
+
+Every type expression in OCaml -- type variable, type constant, a
+constructor expression etc. has a so-called _level_. (See type_expr in
+typing/types.mli.) The level is a positive integer, starting with 1
+(see typing/ctype.ml). A very large positive integer -- which should
+be treated as the inaccessible ordinal omega -- is dedicated to a
+generic_level. [Aside: A rare code comment, in ctype.ml, claims that
+levels decrease from generic_level. It is a but misleading. Also, type
+levels, which are mutable, are overloaded for type tree traversal.  I
+don't know how much efficiency it buys but it makes the code confusing
+and fragile: one cannot nest traversal functions.] A mutable global
+current_level (in ctype.ml) tracks the current level. A new type
+expression (created by newty () or newvar ()) receives the
+current_level. The current_level is increased by enter_def() and
+decreased by end_def(), which should be properly nested.
+
+When two types are unified, their levels are updated to be the
+smallest of the two. Alas, this crucial property is documented nowhere
+and has to be deduced from the code for the unification algorithm,
+which takes 1634 lines of code, in ctype.ml. Yes, it is that long.
+
+Let's take an example. The (very simplified) code for type-checking
+'let x = e in body' is as follows
+
+        let e_typed =
+          enter_def ();
+          let r = type_check env e_source in
+          end_def (); 
+          r
+        in
+        generalize e_typed.exp_type;
+        let new_env = bind env x e_typed.exp_type in
+        type_check new_env body_source
+
+Here, e_source is the AST (Parsetree) for the expression 'e' and
+e_typed is the Typedtree version of the expression (with the attached
+inferred type, in the field exp_type).
+
+Suppose at the beginning of the code, curr_level was 1 and e_source
+was the AST for the identity function "fun x -> x". The statement
+enter_def() increases the level by 1. When handling "fun x -> x" the
+type checker creates a new type-variable, call it ty_a, for the type
+of the argument. That variable receives the current level, which is
+now 2. The type-checked expression e_typed will have the type of
+Tarrow (ty_a,ty_a). Next comes generalize, defined in ctype.ml. It
+traverses the argument type expression and checks the level of every
+component. If that level is greater than the current_level and is not
+already generic_level, it is set to generic_level. In the code above,
+generalize is executed after end_def(), when the current_level is back
+to 1. When generalize traverses e_typed and comes across ty_a (whose
+level is 2), it sets the level of ty_a to generic_level. Hence ty_a
+becomes implicitly universally quantified. Type variables of
+generic_level are printed like "'a"; the type variables of other
+levels are printed as "'_a".
+
+To see that the algorithm is sound, consider the type checking of
+
+        fun x -> let f = fun z -> x in  ...
+
+When handling "fun z -> x", the type-checker will create a type
+variable for the argument, call it ty_z, and the type argument for the
+result, call it ty_r. Both will have the level 2 (assuming initially
+the current_level was 1). The variable ty_r is then unified with the
+type of x, which is ty_x. Technically, ty_x is modified to be Tlink
+(ty_r).  Importantly, the level of ty_r is set to the smallest of ty_r
+and ty_x, which is 1, the level of ty_x. The type of f is hence
+Tarrow(ty_z,ty_r).  When generalize traverses this type, it will
+generalize ty_z (since its level was 2, greater than the current 1),
+but not ty_r, since its level is 1. The difference is seen here:
+
+ # fun x -> let f = fun z -> x in (f true, f false, f true = 1);;
+ - : int -> int * int * bool = <fun>
+
+ # fun x -> let f = fun z -> x in (f true, f false, f true = 1, f false = false)
+                                                                          ^^^^^
+  Error: This expression has type bool but an expression was expected of type
+         int
+
+In summary: if we want to type check an expression and generalize its
+type, we should do
+
+       let ty =
+           enter_def ();
+           let r = ... let tv = newvar() in ... (... tv ...)
+           end_def ();
+           r
+       generalize ty
+
+If tv wasn't unified with something that existed in the environment
+before enter_def(), the variable will be generalized.  Levels thus is
+a neat technique to avoid traversing the whole environment checking
+for free occurrence of a particular type variable.
+
+Interestingly, levels have another use, enforcing the region
+discipline for local type declarations. Before we get to it, let's
+take a moment to appreciate the true complexity of generalization.
+The let-generalization in OCaml is far more complex than I have
+outlined. First, the let-statement has the general form
+
+        let [rec] pattern = exp and pattern = exp ... in body
+
+The type checker receives the list of pattern-expression pairs,
+and the recursion-flag. The complete code takes 160 lines. Here is the
+end of it
+
+   begin_def ();
+   ...
+   let exp_list =
+    List.map2
+      (fun (spat, sexp) (pat, slot) -> .... (* type checking of expressions *)
+        type_expect exp_env sexp pat.pat_type)
+      spat_sexp_list pat_slot_list in
+  ...
+   end_def();
+   List.iter2
+    (fun pat exp ->
+       if not (is_nonexpansive exp) then
+         iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat)
+    pat_list exp_list;
+  List.iter
+    (fun pat -> iter_pattern (fun pat -> generalize pat.pat_type) pat)
+    pat_list;
+  (List.combine pat_list exp_list, new_env, unpacks)
+
+
+We see the general template: 
+   begin_def(); ... newvar () ... end_def(); generalize. 
+But there is another traversal of the type, with
+generalize_expansive. That function is invoked only if the expression
+is expansive, that is, may have a visible effect -- for example, it is
+an application.  The procedure generalize_expansive (in ctype.ml)
+traverses its argument type_expression; when it comes across a
+constructed type Tconstr(p,args) (such as list type, etc), its checks
+for the variance of the arguments. If an arg is covariant (to be
+precise, `weakly covariant'), arg's levels that are greater than the
+current level are set to generic_level. Otherwise, arg's levels that
+are greater than the current_level are set to the current_level. The
+subsequent generalize will leave those levels as they
+are. Incidentally, the argument of the type 'a ref is not weakly
+covariant. This is how a so-called relaxed value restriction is
+implemented, which is responsible for
+
+        # let x = (fun y -> print_string "ok"; y) [];;
+        ok
+        val x : 'a list = []
+
+Here, x is bound to an application, which is not a value, which has
+effects, and which is expansive. And yet the type of x is generalized.
+SML would not. (BTW, all examples are checked with the MetaOCaml 4.00,
+which is a superset of OCaml 4.00).  Without the relaxed value
+restriction, MetaOCaml will be hardly usable. For example,
+        let x = .<1 + .~(...)>.
+is an expression, so the classifier cannot be generalized and hence
+x cannot be run.
+
+Finally we come to regions. ML has modules, which may define (local)
+types. The locally introduced types can be used within the scope of
+the module and in children modules. But the local type should not escape
+the scope of the module. OCaml type-checker thus implements Regions
+for type constructors.
+
+Here is the example of an escaping type constructor (taken from a rare
+comment in OCaml type checker, ctype.ml)
+
+      let x = ref []
+      module M = struct type t let _ = (x : t list ref) end
+
+The module M defines a local type t. The variable x has the
+non-generic type '_a list ref. The type attribution causes x to have
+the type (x : t list ref), so the local type constructor t escapes.
+
+To see how levels help, consider type checking of local modules
+
+        let module M = struct type t let foo = ... end in
+        M.foo
+
+If 'foo' has the type that mentions M.t, then M.t would've escaped.
+Here is the code for the type-checking of local modules (excerpted
+from typecore.ml).
+
+  | Pexp_letmodule(name, smodl, sbody) ->
+      let ty = newvar() in
+      (* remember original level *)
+      begin_def ();
+      Ident.set_current_time ty.level;
+      let context = Typetexp.narrow () in
+      let modl = !type_module env smodl in
+      let (id, new_env) = Env.enter_module name.txt modl.mod_type env in
+      Ctype.init_def(Ident.current_time());
+      Typetexp.widen context;
+      let body = type_expect new_env sbody ty_expected in
+      (* go back to original level *)
+      end_def ();
+      (* Unification of body.exp_type with the fresh variable ty
+         fails if and only if the prefix condition is violated,
+         i.e. if generative types rooted at id show up in the
+         type body.exp_type.  Thus, this unification enforces the
+         scoping condition on "let module". *)
+      begin try
+        Ctype.unify_var new_env ty body.exp_type
+      with Unify _ ->
+        raise(Error(loc, Scoping_let_module(name.txt, body.exp_type)))
+      end;
+      re {
+        exp_desc = Texp_letmodule(id, name, modl, body);
+        exp_loc = loc; exp_extra = [];
+        exp_type = ty;
+        exp_env = env }
+
+To understand what is going on, we should examine
+        unify_var env tvar t2
+which unifies the type variable tvar with the type t2. As usual,
+unify_var does the occurs check, and then makes tvar to be Tlink
+(t2). It also sets the level of t2 to be the min(t2.level,
+tvar.level). The function does something else: if t2.level >
+tvar.level, more checks are done.  When the above condition is true,
+the type expression t2 was added at a higher level (or, at an inner
+level) compared to tvar. There is a danger than unification will leak
+the local type variables.
+
+The extra check, in Ctype.update_level, checks if t2 is a
+TConstr, object, variant, record or package. If t2 is Tconstr(p,_,_)
+where p is the `identifier' of a type constructor, we check if
+the binding time of p is less or equal than tvar.level. If not, an
+error is reported. We should explain binding time: when an identifier
+is seen in a binding position and entered into the environment, the
+identifier is timestamped with the current `time', which is an
+increasing integer. Remember the line
+              Ident.set_current_time ty.level;
+in the above code? It sets the time stamp counter to the level of an
+external type variable ty plus one (see begin_def()).  If the local
+module defines a type constructor, its binding time will be greater
+than the level of ty. If that type constructor is mentioned in the
+type of the body, Ctype.unify_var will encounter it while lowering the
+levels to ty.level, and reports the error.  Thus the type checker
+enforces the invariant that the binding type of every type constructor
+is strictly less than its level of a type it forms. The invariant
+ensures the region discipline.
+
+
+
+Appendix. How to create fresh type variables
+
+There are two functions to create fresh type variables: 
+
+      newvar    : ?name:string -> unit -> type_exp
+      newgenvar : ?name:string -> unit -> type_exp
+
+Both take the optional argument ?name to give the name to the
+variable. The name will be chosen automatically otherwise.
+
+The function newvar() creates a variable at the current_level whereas
+newgenvar() creates at the generic_level. In the code
+
+            let ty1 = newvar () in
+            unify env ty1 some_type
+
+            let ty2 = newgenvar () in
+            unify env ty2 some_type
+
+both ty1 and ty2 behave similarly: the level of ty1 will be lowered to
+that of some_type (if some_type has level less than the current). The
+level of ty2 will most definitely will be lowered (unless some_type is
+also at generic_level) since generic_level is the highest.
+
+The difference emerges in
+
+            let ty1 = newvar () in
+            let list_type = newgenty (Tconstr(p_list, [ty1])) in
+            let texp = instance env list_type in
+            unify env texp some_type
+
+            let ty2 = newgenvar () in
+            let list_type = newgenty (Tconstr(p_list, [ty2])) in
+            let texp = instance env list_type in
+            unify env texp some_type
+
+The function instance copies the type (creates a Tsubst node, to be
+precise), if it is generic. That is, in
+          let ty = newvar () in instance env ty
+instance is the identity function. Nowever, in
+          let ty = newgenvar () in instance env ty
+instance copies the variable. Therefore, in the first snippet above,
+the final unification may affect list_type (instantiating ty1). It
+will not in the second snippet since unify will act on the copy of
+ty2.
+
+
+
