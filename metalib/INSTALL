@@ -10,7 +10,7 @@ See also
 
    For example, in the OCaml distribution directory, do
 
-    ./configure -prefix `pwd` -no-pthread -no-tk
+    ./configure -prefix `pwd` -no-pthread -no-graph
 
   You may chose any other installation prefix. It is best however
   to chose the prefix different from that of the standard OCaml installation,

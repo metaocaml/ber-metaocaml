@@ -244,8 +244,13 @@ produces
 * Installation notes
 
 configuration line
+OLD (before N102)
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-tk -no-pthread
 -no-camlp4 -no-graph
+
+N102
+./configure -prefix /home/oleg/Cache/ncaml4/ -no-debugger 
+  -no-ocamlbuild -no-graph
 
 
 * Old Future work
