@@ -120,6 +120,17 @@ and ident_nil = ident_create "[]"
 and ident_cons = ident_create "::"
 and ident_none = ident_create "None"
 and ident_some = ident_create "Some"
+
+(* NNN ident_create "code" must be placed at the end of all other
+   ident creation expressions, to make sure that creating ident_code
+   does not shift the timestamps of other standard idents like 
+   Eof, etc. Otherwise, binary compatibility with OCaml breaks,
+   and we have to do the expensive bootstrapping.
+*)
+let ident_code = ident_create "code"    (* NNN *)
+let path_code  = Pident ident_code      (* NNN *)
+let type_code t = newgenty (Tconstr(path_code, [t], ref Mnil)) (* NNN *)
+
 let common_initial_env add_type add_extension empty_env =
   let decl_bool =
     {decl_abstr with
@@ -157,6 +168,13 @@ let common_initial_env add_type add_extension empty_env =
      type_params = [tvar];
      type_arity = 1;
      type_variance = [Variance.covariant]}
+      (* NNN added decl_code *)
+  and decl_code =
+    let tvar = newgenvar() in
+    {decl_abstr with
+     type_params = [tvar];
+     type_arity = 1;
+     type_variance = [Variance.covariant]}
   in
 
   let add_extension id l =
@@ -184,6 +202,7 @@ let common_initial_env add_type add_extension empty_env =
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
   add_extension ident_undefined_recursive_module
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
+  add_type ident_code decl_code (       (* NNN *)
   add_type ident_int64 decl_abstr (
   add_type ident_int32 decl_abstr (
   add_type ident_nativeint decl_abstr (
@@ -198,7 +217,8 @@ let common_initial_env add_type add_extension empty_env =
   add_type ident_string decl_abstr (
   add_type ident_char decl_abstr (
   add_type ident_int decl_abstr (
-    empty_env))))))))))))))))))))))))))
+    empty_env)))))))))))))))))))))))))) ) (* NNN extra parenthesis *)
+
 
 let build_initial_env add_type add_exception empty_env =
   let common = common_initial_env add_type add_exception empty_env in
