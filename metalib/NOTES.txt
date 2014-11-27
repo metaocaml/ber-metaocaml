@@ -2,6 +2,35 @@
 
 * Main differences from the original MetaOCaml
 
+
+Use attributes for bracket and escape.
+Why not extension nodes: the type checker ignores extension nodes
+ (or reports them as errors) at many places (for example, when
+ traversing the AST to find free variables; when checking for
+ non-expansiveness, etc). But nodes with attributes are treated
+ normally, which is exactly waht we want.
+
+So, .< exp >. is represented as
+   exp [@metaocaml.bracket]
+or
+   begin[@metaocaml.bracket] exp end
+Likewise, .~exp is represented as
+   exp [@metaocaml.escape]
+
+
+We may need an extension node for CSP.
+
+Instead of the Level environment, carry the level as the attribute
+to the value, in value attributes.
+
+See typing/typetexp.ml
+  on how to handle attributes check_deprecated loc attrs s =
+
+let string_of_payload = function
+  | PStr[{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant c},_)}] ->
+      string_of_cst c
+  | _ -> None
+
 ** Substantial changes
 
  -- Constructor restriction: all data constructors and record labels 
