@@ -31,6 +31,9 @@ let string_of_payload = function
       string_of_cst c
   | _ -> None
 
+Taking advantage of the extensible error-reporting mechanism
+provided by Location.register_error_of_exn.
+
 ** Substantial changes
 
  -- Constructor restriction: all data constructors and record labels 

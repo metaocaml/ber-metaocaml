@@ -6,10 +6,10 @@ Search for NNN in each files for concrete changes
 
 done    ./parsing/lexer.mll
 done    ./parsing/parser.mly
-./parsing/parsetree.mli
-./parsing/printast.ml       trivial
+        ./parsing/parsetree.mli
+        ./parsing/printast.ml       trivial
 ./parsing/pprintast.ml      new in 4.01
-./parsing/ast_mapper.ml     new in 4.01, trivial 
+        ./parsing/ast_mapper.ml     new in 4.01, trivial 
 
 ./typing/typedtree.mli
 ./typing/typedtree.ml
