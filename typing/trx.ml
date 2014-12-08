@@ -124,10 +124,9 @@ open Types
 (* BER MetaOCaml version string *)
 let meta_version  = "N 101"
 
-(* Co-opt Camlp4 class of warnings *)
-let debug_print : string -> unit = fun msg ->
- ignore(Warnings.print Format.err_formatter 
-          (Warnings.Camlp4 msg))
+(* Co-opt Preprocessor class of warnings *)
+let debug_print ?(loc = Location.none) : string -> unit = fun msg ->
+  Location.prerr_warning ~loc (Warnings.Preprocessor msg)
 
 (* Emit a translation-time error *)
 let trx_error ?(loc = Location.none) fn =
@@ -145,6 +144,79 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
         let (h,acc) = f acc h in
         let (t,acc) = map_accum f acc t in
         (h::t, acc)
+
+(* Attributes *)
+
+let attr_bracket = (Location.ghloc "metaocaml.bracket",PStr [])
+
+let attr_escape = (Location.ghloc "metaocaml.escape",PStr [])
+
+(* In a Parsetree, brackets and escape are attributes on the corresponding
+   nodes. 
+*)
+
+(* This attribute is set on the value_description in the Typedtree *)
+(* This attribute is set on the value_description in the Typedtree *)
+let attr_level n = 
+  (Location.ghloc "metaocaml.level",PStr [
+   Ast_helper.Str.eval 
+     (Ast_helper.Exp.constant (Const_int n))])
+
+
+let rec get_attr : string -> attributes -> structure option =
+  fun name -> function
+    | [] -> None
+    | {txt = n, PStr str} :: _ when n = name -> Some str
+    | _ :: t -> get_attr name t
+
+type stage_attr_elim = 
+  | Stage0
+  | Bracket of attribute * (* bracket attribute *)
+               attributes  (* other attributes  *)
+  | Escape  of attribute * (* escape attribute *)
+               attributes  (* other attributes  *)
+  | CSP     of attribute * (* CSP attribute *)
+               attributes  (* other attributes  *)
+
+let what_stage_attr : attributes -> stage_attr_elim =
+  let rec loop acc = function
+    | [] -> Stage0
+    | (({txt = "metaocaml.bracket"},_) as a) :: t -> 
+        Bracket (a,acc @ t)
+    | (({txt = "metaocaml.escape"},_) as a) :: t -> 
+        Escape (a,acc @ t)
+    | a :: t -> loop (a::acc) t
+  in loop []
+
+(* In a Typedtree, <e> is represented as a sequence
+        begin 0; e end
+   again, with the corresponding attribute.
+   I chose 0 rather than () because if we forget to handle
+   bracket/escape properly, we get a warning. Still, begin 0; e end
+   is syntactically and type-correct .
+   Ditto for Escape.
+*)
+
+(* Make a bracket or an escape node
+   Here, the attr argument is a bracket/escape attribute
+*)
+let texp_zero = (* TExp node for 0 *)
+  {exp_desc = Texp_constant (Constant_int 0);
+   exp_loc = Location.none; exp_extra = [];
+   exp_type = instance_def Predef.type_int;
+   exp_attributes = [];
+   exp_env = Env.initial_safe_string }
+
+let make_texp_staged : 
+  attribute -> Typedtree.expression -> Env.t -> type_expr -> 
+  Typedtree.expression =
+  fun attr exp env ty ->
+    {
+     exp_desc = Texp_sequence (texp_zero, exp);
+     exp_loc = exp.exp_loc; exp_extra = [];
+     exp_type = ty;
+     exp_attributes = attr :: exp.exp_attributes;
+     exp_env = env })
 
 (*}}}*)
 

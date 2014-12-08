@@ -12,6 +12,31 @@ val meta_version : string
 *)
 val trx_structure: Typedtree.structure -> Typedtree.structure
 
+(* The following functions deal with the representation of brackets,
+   escapes and CPS in Parsetree and Typedtree.
+   Staging annotations and other levels are distinguished by
+   attributes.
+   The following functions are used by the typecore.ml as well
+   when building the Typedtree.
+*)
+val attr_level : int -> Parsetree.attribute
+
+type stage_attr_elim = 
+  | Stage0
+  | Bracket of Parsetree.attribute * (* bracket attribute *)
+               Parsetree.attributes  (* other attributes  *)
+  | Escape  of Parsetree.attribute * (* escape attribute *)
+               Parsetree.attributes  (* other attributes  *)
+  | CSP     of Parsetree.attribute * (* CSP attribute *)
+               Parsetree.attributes  (* other attributes  *)
+
+val what_stage_attr : Parsetree.attributes -> stage_attr_elim
+
+val make_texp_staged : 
+  Parsetree.attribute -> Typedtree.expression -> Env.t -> Types.type_expr -> 
+  Typedtree.expression
+
+
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
    it is not available in the bootstrap compiler.
