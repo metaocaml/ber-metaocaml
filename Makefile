@@ -63,9 +63,9 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/mtype.cmo typing/envaux.cmo typing/includecore.cmo \
   typing/typedtreeIter.cmo typing/typedtreeMap.cmo typing/cmt_format.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
+  typing/trx.cmo \
   typing/stypes.cmo typing/typecore.cmo \
   typing/typedecl.cmo typing/typeclass.cmo \
-  typing/trx.cmo \
   typing/typemod.cmo
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
@@ -758,7 +758,7 @@ html_doc: ocamldoc
 partialclean::
 	cd ocamldoc && $(MAKE) clean
 
-alldepend::
+alldepen1d::
 	cd ocamldoc && $(MAKE) depend
 
 # The extra libraries

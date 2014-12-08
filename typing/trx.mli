@@ -42,7 +42,7 @@ val make_texp_csp :
   Parsetree.attribute -> Asttypes.constant -> Env.t -> Types.type_expr -> 
   Typedtree.expression
 
-
+(*
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
    it is not available in the bootstrap compiler.
@@ -157,3 +157,4 @@ val build_match :
 val build_try : 
   Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
   code_repr -> (code_repr array -> code_repr array) -> code_repr
+*)

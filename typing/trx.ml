@@ -114,7 +114,6 @@ traversal algorithm, the way of compiling Parsetree builders, dealing
 
 open Parsetree
 open Asttypes
-open Misc
 open Typedtree
 open Types
 
@@ -126,15 +125,23 @@ let meta_version  = "N 101"
 
 (* Co-opt Preprocessor class of warnings *)
 let debug_print ?(loc = Location.none) : string -> unit = fun msg ->
-  Location.prerr_warning ~loc (Warnings.Preprocessor msg)
+  Location.prerr_warning loc (Warnings.Preprocessor msg)
 
 (* Emit a translation-time error *)
-let trx_error ?(loc = Location.none) fn =
-  raise (Typecore.Error (loc, Env.initial, Typecore.Trx_error fn))
+exception Error of Location.error
+
+let trx_error loc_err = raise @@ Error loc_err
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some err
+      | _         -> None
+    )
 
 let not_supported loc msg =
-  trx_error ~loc:loc (fun ppf -> Format.fprintf ppf 
-      "%s is not yet supported within brackets" msg)
+  trx_error @@ Location.errorf ~loc
+      "%s is not yet supported within brackets" msg
 
 (* left-to-right accumulating map *)
 let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
@@ -145,29 +152,40 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
         let (t,acc) = map_accum f acc t in
         (h::t, acc)
 
+let initial_env = Env.initial_safe_string
+
 (* Attributes *)
 
-let attr_bracket = (Location.ghloc "metaocaml.bracket",PStr [])
+type stage = int
 
-let attr_escape = (Location.ghloc "metaocaml.escape",PStr [])
+let attr_bracket = (Location.mknoloc "metaocaml.bracket",PStr [])
+
+let attr_escape = (Location.mknoloc "metaocaml.escape",PStr [])
 
 (* In a Parsetree, brackets and escape are attributes on the corresponding
    nodes. 
 *)
 
 (* This attribute is set on the value_description in the Typedtree *)
-(* This attribute is set on the value_description in the Typedtree *)
 let attr_level n = 
-  (Location.ghloc "metaocaml.level",PStr [
+  (Location.mknoloc "metaocaml.level",PStr [
    Ast_helper.Str.eval 
      (Ast_helper.Exp.constant (Const_int n))])
 
 
-let rec get_attr : string -> attributes -> structure option =
+let rec get_attr : string -> attributes -> Parsetree.structure option =
   fun name -> function
     | [] -> None
-    | {txt = n, PStr str} :: _ when n = name -> Some str
+    | ({txt = n}, PStr str) :: _ when n = name -> Some str
     | _ :: t -> get_attr name t
+
+let get_level : Parsetree.attributes -> stage = fun attrs ->
+  match get_attr "metaocaml.level" attrs with
+  | None -> 0
+  | Some [{pstr_desc = 
+            Pstr_eval ({pexp_desc=Pexp_constant (Const_int n)},_)}] -> 
+     assert (n>=0); n
+  | _ -> assert false  (* Invalid level attribute *)
 
 type stage_attr_elim = 
   | Stage0
@@ -201,9 +219,9 @@ let what_stage_attr : attributes -> stage_attr_elim =
    Here, the attr argument is a bracket/escape attribute
 *)
 let texp_zero = (* TExp node for 0 *)
-  {exp_desc = Texp_constant (Constant_int 0);
+  {exp_desc = Texp_constant (Const_int 0);
    exp_loc = Location.none; exp_extra = [];
-   exp_type = instance_def Predef.type_int;
+   exp_type = Ctype.instance_def Predef.type_int;
    exp_attributes = [];
    exp_env = Env.initial_safe_string }
 
@@ -216,7 +234,21 @@ let make_texp_staged :
      exp_loc = exp.exp_loc; exp_extra = [];
      exp_type = ty;
      exp_attributes = attr :: exp.exp_attributes;
-     exp_env = env })
+     exp_env = env }
+
+(* A CSP is in essence a constant. So, we represent CSP as a constant,
+   with an annotation that contains the name of the identifier
+ *)
+
+let make_texp_csp : 
+  attribute -> Asttypes.constant -> Env.t -> type_expr -> Typedtree.expression =
+  fun attr cnt env ty ->
+    {
+     exp_desc = Texp_constant cnt;
+     exp_loc = Location.none; exp_extra = [];
+     exp_type = ty;
+     exp_attributes = [attr];
+     exp_env = env }
 
 (*}}}*)
 
@@ -252,7 +284,6 @@ let rec is_external = function
       Ident.persistent id || Ident.global id || Ident.is_predef_exn id
   | Path.Papply _     -> false
   | Path.Pdot(p, _,_) -> is_external p
-  | _                 -> false
 
 (* Convert a path to an identifier. Since the path is assumed to be
    `global', time stamps don't matter and we can use just strings.
@@ -290,10 +321,11 @@ let path_replace_last : Path.t -> Path.t -> Path.t = fun p1 p2 ->
 *)
 let check_path_quotable msg path =
   if not (is_external path) then
-    trx_error (fun ppf ->
-      Format.fprintf ppf 
+    trx_error @@ Location.errorf
         "%s %s cannot be used within brackets. Put into a separate file."
-        msg (Path.name path))
+        msg (Path.name path)
+
+(*  XXXXX
 
 (* Check to see that a constructor belongs to a type defined
    in a persistent module or in the initial environment.
@@ -337,24 +369,24 @@ let qualify_ctor :
   match (cdesc.cstr_tag, Ctype.repr cdesc.cstr_res) with
   | (Cstr_exception (p,_),_) ->
       if is_external p then Location.mkloc (path_to_lid p) loc else
-       trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+       trx_error @@ Location.errorf ~loc
        "Exception %s cannot be used within brackets. Put into a separate file."
-        (Path.name p))
+        (Path.name p)
   | (_,{desc = Tconstr((Path.Pident _ as ty_path), _, _)}) ->
      begin
-      try ignore (Env.find_type ty_path Env.initial); lid
+      try ignore (Env.find_type ty_path initial_env); lid
       with Not_found ->
-        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+        trx_error @@ Location.errorf ~loc
         "Unqualified constructor %s cannot be used within brackets. Put into a separate file."
-          cdesc.cstr_name)
+          cdesc.cstr_name
      end
   | (_,{desc = Tconstr(ty_path, _, _)}) ->
       if is_external ty_path then
         Location.mkloc (path_to_lid_but_last ty_path cdesc.cstr_name) loc
       else
-      trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+      trx_error @@ Location.errorf ~loc
       "Constructor %s cannot be used within brackets. Put into a separate file."
-          cdesc.cstr_name)
+          cdesc.cstr_name
   | _ -> Printtyp.type_expr Format.err_formatter cdesc.cstr_res;
            failwith ("qualify_ctor: cannot determine type_ctor from data_ctor "^
                      cdesc.cstr_name)
@@ -369,20 +401,20 @@ let qualify_label : Longident.t loc -> label_description -> Longident.t loc =
   match Ctype.repr ldesc.lbl_res with
   | {desc = Tconstr((Path.Pident _ as ty_path), _, _)} ->
     begin
-      try ignore (Env.find_type ty_path Env.initial); lid
+      try ignore (Env.find_type ty_path initial_env); lid
       with Not_found ->
-        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+        trx_error @@ Location.errorf ~loc
         "Unqualified label %s cannot be used within brackets. Put into a separate file."
-          ldesc.lbl_name)
+          ldesc.lbl_name
     end
   | {desc = Tconstr(ty_path, _, _)} ->
       if is_external ty_path then
         Location.mkloc 
           (path_to_lid_but_last ty_path ldesc.lbl_name) loc
       else
-        trx_error ~loc:loc (fun ppf -> Format.fprintf ppf
+        trx_error @@ Location.errorf ~loc
           "Label %s cannot be used within brackets. Put into a separate file."
-          ldesc.lbl_name)
+          ldesc.lbl_name
   | _ -> Printtyp.type_expr Format.err_formatter ldesc.lbl_res;
            failwith ("qualify_label: cannot determine type from label "^
                      ldesc.lbl_name)
@@ -431,7 +463,7 @@ let sample_override_flag : Asttypes.override_flag = Fresh
 
 (* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
-(* Env.initial is used for all look-ups. Unqualified identifiers
+(* initial_env is used for all look-ups. Unqualified identifiers
    must be found there. For qualified identifiers, Env.lookup
    functions look things up in the persistent structures, loading them
    up as needed.
@@ -439,7 +471,7 @@ let sample_override_flag : Asttypes.override_flag = Fresh
 
 let mk_texp : ?env:Env.t -> Typedtree.expression_desc -> type_expr -> 
   Typedtree.expression =
-  fun ?(env=Env.initial) desc ty ->
+  fun ?(env=initial_env) desc ty ->
   { exp_desc = desc; exp_type = ty;
     exp_loc  = Location.none; exp_extra = [];
     exp_env  = env }
@@ -449,10 +481,10 @@ let mk_texp : ?env:Env.t -> Typedtree.expression_desc -> type_expr ->
 (* Compiling an identifier with a given (qualified) name *)
 let texp_ident : string -> expression = fun name ->
   let lid     = Longident.parse name in
-  let (p, vd) = try Env.lookup_value lid Env.initial 
+  let (p, vd) = try Env.lookup_value lid initial_env 
                 with Not_found -> fatal_error ("Trx.find_value: " ^ name) in
   mk_texp (Texp_ident (p,mknoloc lid, vd))
-          (Ctype.instance Env.initial vd.val_type)
+          (Ctype.instance initial_env vd.val_type)
 
 
 (* Building an application *)
@@ -485,7 +517,7 @@ let texp_string_loc : string loc -> Typedtree.expression = fun name ->
 (* For prototype, see Typecore.option_none *)
 let texp_bool : bool -> Typedtree.expression = fun b ->
   let lid = Longident.Lident (if b then "true" else "false") in
-  let cdec = Env.lookup_constructor lid Env.initial in
+  let cdec = Env.lookup_constructor lid initial_env in
   mk_texp (Texp_construct(mknoloc lid, cdec, [], false))
           (Ctype.instance_def Predef.type_bool)
 
@@ -495,12 +527,12 @@ let texp_option : Typedtree.expression option -> Typedtree.expression =
   function
     | None -> 
         let lid = Longident.Lident "None" in
-        let cnone = Env.lookup_constructor lid Env.initial in
+        let cnone = Env.lookup_constructor lid initial_env in
         mk_texp (Texp_construct(mknoloc lid, cnone, [], false))
                 (Ctype.instance_def (Predef.type_option (Btype.newgenvar ())))
     | Some e ->
         let lid = Longident.Lident "Some" in
-        let csome = Env.lookup_constructor lid Env.initial in
+        let csome = Env.lookup_constructor lid initial_env in
         mk_texp (Texp_construct(mknoloc lid, csome, [e],false))
                 (Ctype.instance_def (Predef.type_option e.exp_type)) 
                 ~env:e.exp_env
@@ -1643,8 +1675,8 @@ let rec trx_bracket :
         let rec loop = function
           | [] -> []
           | ({pat_desc = Tpat_var (_,name)},_) :: rest -> name :: loop rest
-          | _ -> trx_error ~loc:exp.exp_loc (fun ppf -> Format.fprintf ppf
-                "Only variables are allowed as left-hand side of `let rec'")
+          | _ -> trx_error @@ Location.errorf ~loc:exp.exp_loc
+                "Only variables are allowed as left-hand side of `let rec'"
         in loop pel
       in
       (* code for body followed by the code for e's *)
@@ -1988,6 +2020,7 @@ let rec trx_bracket :
             exp_desc = new_desc}
 
 
+XXXXX *)
 
 (*{{{ Typedtree traversal to eliminate bracket/escapes *)
 
@@ -2000,6 +2033,8 @@ let rec trx_bracket :
    modified.
    This protocol helps minimize garbage and prevent useless tree
    duplication.
+
+   We do not traverse attributes.
 *)
 
 exception Not_modified
@@ -2034,23 +2069,30 @@ let rec trx_struct str =
   replace_list (fun si -> {si with str_desc = trx_struct_item si.str_desc})
            str.str_items}
 
+and trx_vb_list l = 
+  replace_list (fun vb -> {vb with vb_expr = trx_exp vb.vb_expr}) l
+
 and trx_struct_item = function
-| Tstr_eval e -> Tstr_eval (trx_exp e)
-| Tstr_value (rf,pel) ->
-    Tstr_value(rf, replace_list (fun (p,e) -> (p, trx_exp e)) pel)
-| Tstr_primitive (_,_,_) 
+| Tstr_eval (e,a) -> Tstr_eval (trx_exp e,a)
+| Tstr_value (rf,vbl) ->
+    Tstr_value(rf, trx_vb_list vbl)
+| Tstr_primitive _
 | Tstr_type _
-| Tstr_exception (_,_,_)
-| Tstr_exn_rebind (_,_,_,_) -> raise Not_modified
-| Tstr_module (i,l,me) -> Tstr_module (i, l, trx_me me)
-| Tstr_recmodule l ->
-  Tstr_recmodule (replace_list (fun (i,l,mt,me) -> (i,l,mt,trx_me me)) l)
-| Tstr_modtype (_,_,_)
-| Tstr_open (_,_,_) -> raise Not_modified
+| Tstr_typext _
+| Tstr_exception _   -> raise Not_modified
+| Tstr_module mb     -> Tstr_module (trx_mb mb)
+| Tstr_recmodule mbl -> Tstr_recmodule (replace_list trx_mb mbl)
+| Tstr_modtype _
+| Tstr_open _ -> raise Not_modified
 | Tstr_class l ->
     Tstr_class (replace_list (fun (dcl,sl,vf) -> (trx_cdcl dcl,sl,vf)) l)
 | Tstr_class_type _ -> raise Not_modified
-| Tstr_include (me,il) -> Tstr_include (trx_me me, il)
+| Tstr_include id ->
+    Tstr_include {id with incl_mod = trx_me id.incl_mod}
+| Tstr_attribute _ -> raise Not_modified
+
+and trx_mb mb = 
+  {mb with mb_expr = trx_me mb.mb_expr}
 
 and trx_me me = 
   {me with mod_desc = trx_me_desc me.mod_desc} 
@@ -2078,8 +2120,7 @@ and trx_cl_struct cs =
 
 and trx_ce_desc = function
 | Tcl_ident (_,_,_) -> raise Not_modified
-| Tcl_structure cs ->
-  Tcl_structure (trx_cl_struct cs)
+| Tcl_structure cs  -> Tcl_structure (trx_cl_struct cs)
 | Tcl_fun (l,p,el,ce,pa) ->
   let (el,ce) = 
         replace_pair (replace_list (fun (i,l,e) -> (i,l,trx_exp e)))
@@ -2089,52 +2130,58 @@ and trx_ce_desc = function
   let repel (l,eo,o) = (l,replace_opt trx_exp eo,o) in
   let (ce,el) = replace_pair trx_ce (replace_list repel) (ce,el) in
   Tcl_apply (ce,el)
-| Tcl_let (rf,el1,el2,ce) ->
-  let repel1 = replace_list (fun (p,e) -> (p,trx_exp e)) in
+| Tcl_let (rf,vbl,el2,ce) ->
   let repel2 = replace_list (fun (i,l,e) -> (i,l,trx_exp e)) in
-  let ((el1,el2),ce) = replace_pair (replace_pair repel1 repel2) trx_ce
-                        ((el1,el2),ce)
-  in Tcl_let (rf,el1,el2,ce)
+  let ((vbl,el2),ce) = replace_pair (replace_pair trx_vb_list repel2) trx_ce
+                        ((vbl,el2),ce)
+  in Tcl_let (rf,vbl,el2,ce)
 | Tcl_constraint (ce,ct,sl1,sl2,cty) ->
   Tcl_constraint (trx_ce ce,ct,sl1,sl2,cty)
 
 and trx_cf = function
-| Tcf_inher (ofl,ce,so,sl1,sl2) ->
-  Tcf_inher (ofl,trx_ce ce,so,sl1,sl2)
-| Tcf_val (_,_,_,_,Tcfk_virtual _,_) -> raise Not_modified
-| Tcf_val (s,l,mf,i,Tcfk_concrete e,b) ->
-  Tcf_val (s,l,mf,i,Tcfk_concrete (trx_exp e),b)
-| Tcf_meth (s,l,pf,Tcfk_virtual _,_) -> raise Not_modified
-| Tcf_meth (s,l,pf,Tcfk_concrete e,b) ->
-  Tcf_meth (s,l,pf,Tcfk_concrete (trx_exp e),b)
-| Tcf_constr (_,_) -> raise Not_modified
-| Tcf_init e -> Tcf_init (trx_exp e)
+| Tcf_inherit (ofl,ce,so,sl1,sl2) ->
+  Tcf_inherit (ofl,trx_ce ce,so,sl1,sl2)
+| Tcf_val (_,_,_,Tcfk_virtual _,_) -> raise Not_modified
+| Tcf_val (sl,mf,i,Tcfk_concrete (ovf,e),b) ->
+  Tcf_val (sl,mf,i,Tcfk_concrete (ovf,trx_exp e),b)
+| Tcf_method (sl,pf,Tcfk_virtual _) -> raise Not_modified
+| Tcf_method (sl,pf,Tcfk_concrete (ovf,e)) ->
+  Tcf_method (sl,pf,Tcfk_concrete (ovf,trx_exp e))
+| Tcf_constraint (_,_) -> raise Not_modified
+| Tcf_initializer e -> Tcf_initializer (trx_exp e)
+| Tcf_attribute _ -> raise Not_modified
 
 and trx_exp exp =
   {exp with exp_desc = trx_expression exp.exp_desc}
 
-and trx_pelist l = replace_list (fun (p,e) -> (p,trx_exp e)) l
+and trx_caselist l = replace_list (fun cas -> 
+   let (g,rhs) = replace_pair (replace_opt trx_exp) trx_exp 
+                     (cas.c_guard,cas.c_rhs) in
+   {cas with c_guard = g; c_rhs = rhs}) 
+ l
+
 and trx_expression = function
 | Texp_ident (_,_,_)
 | Texp_constant _ -> raise Not_modified
-| Texp_let (rf, el, e) ->
-  let (el,e) = replace_pair trx_pelist trx_exp (el,e)
-  in Texp_let (rf, el, e)
-| Texp_function (l,el,p) ->
-  Texp_function (l,trx_pelist el,p)
+| Texp_let (rf, vbl, e) ->
+  let (vbl,e) = replace_pair trx_vb_list trx_exp (vbl,e)
+  in Texp_let (rf, vbl, e)
+| Texp_function (l,cl,p) ->
+  Texp_function (l,trx_caselist cl,p)
 | Texp_apply (e,el) ->
   let repl (l,eo,op) = (l,replace_opt trx_exp eo,op) in
   let (e,el) = replace_pair trx_exp (replace_list repl) (e,el)
   in Texp_apply (e,el)
-| Texp_match (e,el,p) ->
-  let (e,el) = replace_pair trx_exp trx_pelist (e,el)
-  in Texp_match (e,el,p)
-| Texp_try (e,el) ->
-  let (e,el) = replace_pair trx_exp trx_pelist (e,el)
-  in Texp_try (e,el)
+| Texp_match (e,cl1,cl2,p) ->
+  let (e,(cl1,cl2)) = replace_pair 
+     trx_exp (replace_pair trx_caselist trx_caselist) (e,(cl1,cl2))
+  in Texp_match (e,cl1,cl2,p)
+| Texp_try (e,cl) ->
+  let (e,cl) = replace_pair trx_exp trx_caselist (e,cl)
+  in Texp_try (e,cl)
 | Texp_tuple l -> Texp_tuple (replace_list trx_exp l)
-| Texp_construct (l,cd,el,b) ->
-  Texp_construct (l,cd,replace_list trx_exp el,b)
+| Texp_construct (l,cd,el) ->
+  Texp_construct (l,cd,replace_list trx_exp el)
 | Texp_variant (l,eo) -> Texp_variant (l,replace_opt trx_exp eo)
 | Texp_record (ll,eo) ->
   let repll (l,ld,e) = (l,ld,trx_exp e) in
@@ -2155,13 +2202,10 @@ and trx_expression = function
 | Texp_while (e1,e2) ->
   let (e1,e2) = replace_pair trx_exp trx_exp (e1,e2)
   in Texp_while (e1,e2)
-| Texp_for (i,l,e1,e2,df,e3) ->
+| Texp_for (i,p,e1,e2,df,e3) ->
   let ((e1,e2),e3) = replace_pair (replace_pair trx_exp trx_exp) 
                                   trx_exp ((e1,e2),e3)
-  in Texp_for (i,l,e1,e2,df,e3)
-| Texp_when (e1,e2) ->
-  let (e1,e2) = replace_pair trx_exp trx_exp (e1,e2)
-  in Texp_when (e1,e2)
+  in Texp_for (i,p,e1,e2,df,e3)
 | Texp_send (e1,m,eo) ->
   let (e1,eo) = replace_pair trx_exp (replace_opt trx_exp) (e1,eo)
   in Texp_send (e1,m,eo)
@@ -2174,17 +2218,17 @@ and trx_expression = function
   let (me,e) = replace_pair trx_me trx_exp (me,e)
   in Texp_letmodule (i,l,me,e)
 | Texp_assert e -> Texp_assert (trx_exp e)
-| Texp_assertfalse -> raise Not_modified
 | Texp_lazy e -> Texp_lazy (trx_exp e)
 | Texp_object (cs,sl) -> Texp_object (trx_cl_struct cs,sl)
 | Texp_pack me -> Texp_pack (trx_me me)
-
+(* XXXXX
 | Texp_bracket e -> 
    let trx_exp e = try trx_exp e with Not_modified -> e in
   (trx_bracket trx_exp 1 e).exp_desc
 
 | Texp_escape _ -> assert false         (* Not possible in well-typed code *)
 | Texp_cspval (_,_) -> raise Not_modified
+*)
 
 
 (* public interface *)
