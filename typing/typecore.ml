@@ -107,8 +107,7 @@ let type_object =
  value env (unless the stage is 0).
 also check all val_attributes and Val_reg
 *)
-type stage = int
-let global_stage : stage ref  = ref 0
+let global_stage : Trx.stage ref  = ref 0
 
 (* Obsolete; kept for reference 
 
@@ -1582,8 +1581,15 @@ let rec approx_type env sty =
       approx_type env sty
   | _ -> newvar ()
 
-(* NNN XXX check *)
-let rec type_approx env sexp =
+let rec type_approx env sexp =          (* NNN the whole function *)
+  let open Trx in
+  match what_stage_attr sexp.pexp_attributes with
+  | Stage0 -> type_approx_orig env sexp
+  | Bracket (_,attrs) ->
+    instance env @@ Predef.type_code @@ type_approx_orig env sexp
+  | _ -> newvar ()
+and
+  type_approx_orig env sexp =          (* NNN end *)
   match sexp.pexp_desc with
     Pexp_let (_, _, e) -> type_approx env e
   | Pexp_fun (p, _, _, e) when is_optional p ->
@@ -1837,11 +1843,6 @@ and type_expect ?in_function env sexp ty_expected =
 (* Type checking staging constructs *)
 and type_expect_ ?in_function env sexp ty_expected =
   let loc = sexp.pexp_loc in
-  (* Record the expression type before unifying it with the expected type *)
-  let rue exp =
-    unify_exp env (re exp) (instance env ty_expected);
-    exp
-  in
   let open Trx in
   match what_stage_attr sexp.pexp_attributes with
   | Stage0 -> type_expect_orig ?in_function env sexp ty_expected
@@ -1878,18 +1879,14 @@ and type_expect_ ?in_function env sexp ty_expected =
          At that time we know that the expression that gave
          rise to CSP had the correct type. Therefore, we trust
          that the type was correct the first time around.
-         The second argument, li, is used for identification only.
         *)
-(*
-  | Pexp_cspval(obj,li) ->
-     re { 
-        exp_desc = Texp_cspval(obj,li);
-        exp_loc = loc; exp_extra = [];
-        exp_type = instance env ty_expected;
-        exp_env = env }
-*)
-       (* NNN end *)
-
+  | CSP(battr,attrs) -> begin
+     match sexp.pexp_desc with
+     | Pexp_constant cnt ->
+       re @@ make_texp_csp battr cnt env (instance env ty_expected)
+     | _ -> assert false                (* incorrectly placed CSP attribute *)
+     end
+  (* NNN end *)
 
 and type_expect_orig ?in_function env sexp ty_expected =  (* NNN *)
   let loc = sexp.pexp_loc in
@@ -1911,10 +1908,7 @@ and type_expect_orig ?in_function env sexp ty_expected =  (* NNN *)
           let name = Path.name ~paren:Oprint.parenthesized_ident path in
           Stypes.record (Stypes.An_ident (loc, name, annot))
         end;
-        let stage =				(* NNN begin *)
-              try snd (Env.lookup_stage lid.txt env)
-              with Not_found -> 0
-        in                                      (* NNN end *)
+        let stage = Trx.get_level desc.val_attributes in        (* NNN *)
         rue {
           exp_desc =
             begin match desc.val_kind with

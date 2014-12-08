@@ -19,7 +19,9 @@ val trx_structure: Typedtree.structure -> Typedtree.structure
    The following functions are used by the typecore.ml as well
    when building the Typedtree.
 *)
-val attr_level : int -> Parsetree.attribute
+type stage = int
+val attr_level : stage -> Parsetree.attribute
+val get_level : Parsetree.attributes -> stage
 
 type stage_attr_elim = 
   | Stage0
@@ -34,6 +36,10 @@ val what_stage_attr : Parsetree.attributes -> stage_attr_elim
 
 val make_texp_staged : 
   Parsetree.attribute -> Typedtree.expression -> Env.t -> Types.type_expr -> 
+  Typedtree.expression
+
+val make_texp_csp : 
+  Parsetree.attribute -> Asttypes.constant -> Env.t -> Types.type_expr -> 
   Typedtree.expression
 
 
