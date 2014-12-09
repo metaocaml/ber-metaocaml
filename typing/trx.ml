@@ -218,41 +218,6 @@ let get_level : Parsetree.attributes -> stage = fun attrs ->
    Ditto for Escape.
 *)
 
-(* Make a bracket or an escape node
-   Here, the attr argument is a bracket/escape attribute
-*)
-let texp_zero = (* TExp node for constant 0 *)
-  {exp_desc = Texp_constant (Const_int 0);
-   exp_loc = Location.none; exp_extra = [];
-   exp_type = Ctype.instance_def Predef.type_int;
-   exp_attributes = [];
-   exp_env = Env.initial_safe_string }
-
-let make_texp_staged : 
-  attribute -> Typedtree.expression -> Env.t -> type_expr -> 
-  Typedtree.expression =
-  fun attr exp env ty ->
-    {
-     exp_desc = Texp_sequence (texp_zero, exp);
-     exp_loc = exp.exp_loc; exp_extra = [];
-     exp_type = ty;
-     exp_attributes = attr :: exp.exp_attributes;
-     exp_env = env }
-
-(* A CSP is in essence a constant. So, we represent CSP as a constant,
-   with an annotation that contains the name of the identifier
- *)
-
-let make_texp_csp : 
-  attribute -> Asttypes.constant -> Env.t -> type_expr -> Typedtree.expression =
-  fun attr cnt env ty ->
-    {
-     exp_desc = Texp_constant cnt;
-     exp_loc = Location.none; exp_extra = [];
-     exp_type = ty;
-     exp_attributes = [attr];
-     exp_env = env }
-
 (*}}}*)
 
 
@@ -282,6 +247,8 @@ let make_texp_csp :
    M1.M2.M3.ident, we should check if the top-most component, that is, M1,
    is external.
 *)
+(* XXX call Env.normalize_path first? *)
+
 let rec is_external = function
   | Path.Pident id ->           (* not qualified *)
       Ident.persistent id || Ident.global id || Ident.is_predef_exn id
@@ -328,7 +295,6 @@ let check_path_quotable msg path =
         "%s %s cannot be used within brackets. Put into a separate file."
         msg (Path.name path)
 
-(*  XXXXX
 
 (* Check to see that a constructor belongs to a type defined
    in a persistent module or in the initial environment.
@@ -370,10 +336,10 @@ let qualify_ctor :
  fun lid cdesc ->
   let loc = lid.loc in
   match (cdesc.cstr_tag, Ctype.repr cdesc.cstr_res) with
-  | (Cstr_exception (p,_),_) ->
+  | (Cstr_extension (p,_),_) ->
       if is_external p then Location.mkloc (path_to_lid p) loc else
        trx_error @@ Location.errorf ~loc
-       "Exception %s cannot be used within brackets. Put into a separate file."
+       "Exception (extension) %s cannot be used within brackets. Put into a separate file."
         (Path.name p)
   | (_,{desc = Tconstr((Path.Pident _ as ty_path), _, _)}) ->
      begin
@@ -449,9 +415,6 @@ let sample_lid = dummy_lid "*sample*"
 (* Exported. Used as a template for constructing name expression *)
 let sample_name : string loc = mknoloc "*sample*"
 
-(* Exported. Used as a template for constructing Location.t expressions *)
-let sample_loc = Location.none
-
 (* Exported. Used as a template for constructing pattern lists expressions *)
 let sample_pat_list : Parsetree.pattern list = []
 let sample_pats_names : Parsetree.pattern list * string loc list = ([],[])
@@ -463,6 +426,7 @@ let sample_rec_flag : Asttypes.rec_flag = Nonrecursive
 let sample_override_flag : Asttypes.override_flag = Fresh
 
 (*}}}*)
+
 
 (* ------------------------------------------------------------------------ *)
 (* Building Texp nodes *)
@@ -477,7 +441,40 @@ let mk_texp : ?env:Env.t -> Typedtree.expression_desc -> type_expr ->
   fun ?(env=initial_env) desc ty ->
   { exp_desc = desc; exp_type = ty;
     exp_loc  = Location.none; exp_extra = [];
+    exp_attributes = [];
     exp_env  = env }
+
+(* Make a bracket or an escape node
+   Here, the attr argument is a bracket/escape attribute
+*)
+let texp_zero = (* TExp node for constant 0 *)
+  mk_texp ~env:Env.initial_safe_string (Texp_constant (Const_int 0))
+    (Ctype.instance_def Predef.type_int)
+
+let texp_braesc : 
+  attribute -> Typedtree.expression -> Env.t -> type_expr -> 
+  Typedtree.expression =
+  fun attr exp env ty ->
+    {exp_desc = Texp_sequence (texp_zero, exp);
+     exp_loc = exp.exp_loc; exp_extra = [];
+     exp_type = ty;
+     exp_attributes = attr :: exp.exp_attributes;
+     exp_env = env }
+
+(* A CSP is in essence a constant. So, we represent CSP as a constant,
+   with an annotation that contains the name of the identifier
+ *)
+
+let texp_csp_raw : 
+  attribute -> Asttypes.constant -> Env.t -> type_expr -> Typedtree.expression =
+  fun attr cnt env ty ->
+    {
+     exp_desc = Texp_constant cnt;
+     exp_loc = Location.none; exp_extra = [];
+     exp_type = ty;
+     exp_attributes = [attr];
+     exp_env = env }
+
 
 (* TODO: add memoization? *)
 
@@ -485,7 +482,8 @@ let mk_texp : ?env:Env.t -> Typedtree.expression_desc -> type_expr ->
 let texp_ident : string -> expression = fun name ->
   let lid     = Longident.parse name in
   let (p, vd) = try Env.lookup_value lid initial_env 
-                with Not_found -> fatal_error ("Trx.find_value: " ^ name) in
+                with Not_found -> 
+                  Misc.fatal_error ("Trx.find_value: " ^ name) in
   mk_texp (Texp_ident (p,mknoloc lid, vd))
           (Ctype.instance initial_env vd.val_type)
 
@@ -497,7 +495,8 @@ let texp_apply : Typedtree.expression -> Typedtree.expression list ->
 
 (* Compiling location data *)
 let texp_loc : Location.t -> Typedtree.expression = fun loc ->
-  let loc_exp = texp_ident "Trx.sample_loc" in (* this fills in the type, etc.*)
+  let loc_exp = texp_ident "Location.none" in (* this fills in the type, etc.*)
+  if loc == Location.none then loc_exp else
   {loc_exp with exp_desc = Texp_cspval (Obj.repr loc, dummy_lid "*loc*")}
 
 (* Compiling longident with location data *)
@@ -506,8 +505,11 @@ let texp_lid : Longident.t loc -> Typedtree.expression = fun lid ->
   {lid_exp with exp_desc = Texp_cspval (Obj.repr lid, dummy_lid "*lid*")}
 
 (* Compiling a string constant *)
+(* The second argument of Const_string is the delimiter,
+   the decorator in the {decorator| ... |decorator} notation.
+*)
 let texp_string : string -> Typedtree.expression = fun str ->
-  mk_texp (Texp_constant (Const_string str))
+  mk_texp (Texp_constant (Const_string (str,None)))
           (Ctype.instance_def Predef.type_string)
 
 (* Compiling a string with a location *)
@@ -869,6 +871,7 @@ let with_binding_region_gen :
      (remove prio vars, es)) in
   (new_names, vars, es)
 
+(*  XXXXX
 
 (* ------------------------------------------------------------------------ *)
 (* Building Parsetree nodes *)
@@ -1223,7 +1226,7 @@ let dyn_quote : Obj.t -> Longident.t loc -> code_repr =
     | false when Obj.tag v = Obj.double_tag ->
       Pexp_constant (Const_float (string_of_float (Obj.obj v)))
     | false when Obj.tag v = Obj.string_tag ->
-      Pexp_constant (Const_string (Obj.obj v))
+      Pexp_constant (Const_string (Obj.obj v,None))
     | _   -> dflt
    in 
    open_code

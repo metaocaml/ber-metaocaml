@@ -36,12 +36,12 @@ val what_stage_attr : Parsetree.attributes -> stage_attr_elim
 (* Build a Typedtree node for brackets or escape (the attribute tells
    which is which)
 *)
-val make_texp_staged : 
+val texp_braesc : 
   Parsetree.attribute -> Typedtree.expression -> Env.t -> Types.type_expr -> 
   Typedtree.expression
 
 (* Build a Typedtree node for a CSP *)
-val make_texp_csp : 
+val texp_csp_raw : 
   Parsetree.attribute -> Asttypes.constant -> Env.t -> Types.type_expr -> 
   Typedtree.expression
 
@@ -94,7 +94,6 @@ val set_with_stack_mark : stackmark_region_fn -> unit
 *)
 
 val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
-val sample_loc  : Location.t
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
 val sample_pats_names : Parsetree.pattern list * string Location.loc list

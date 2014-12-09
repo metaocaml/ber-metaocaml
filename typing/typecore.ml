@@ -1859,7 +1859,7 @@ and type_expect_ ?in_function env sexp ty_expected =
       let sexp = {sexp with pexp_attributes = attrs} in (* drop bracket attr *)
       let exp = type_expect env sexp ty in
       re @@
-       make_texp_staged battr exp env (instance env ty_expected))
+       texp_braesc battr exp env (instance env ty_expected))
 
        (* NNN:  Typechecking escapes *)
        (* If ~e is expected to have the type ty then
@@ -1871,7 +1871,7 @@ and type_expect_ ?in_function env sexp ty_expected =
        let sexp = {sexp with pexp_attributes = attrs} in (* drop bracket attr *)
        let exp = type_expect env sexp sexp_ty_expected in
        re @@
-         make_texp_staged battr exp env (instance env ty_expected))
+         texp_braesc battr exp env (instance env ty_expected))
 
        (* The rule says that CSP can have any desired type.
           Pexp_cspval nodes are added only by the builder of
@@ -1883,7 +1883,7 @@ and type_expect_ ?in_function env sexp ty_expected =
   | CSP(battr,attrs) -> begin
      match sexp.pexp_desc with
      | Pexp_constant cnt ->
-       re @@ make_texp_csp battr cnt env (instance env ty_expected)
+       re @@ texp_csp_raw battr cnt env (instance env ty_expected)
      | _ -> assert false                (* incorrectly placed CSP attribute *)
      end
   (* NNN end *)
