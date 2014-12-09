@@ -6,15 +6,36 @@ Search for NNN in each files for concrete changes
 
 done    ./parsing/lexer.mll
 done    ./parsing/parser.mly
-        ./parsing/parsetree.mli
-        ./parsing/printast.ml       trivial
 ./parsing/pprintast.ml      new in 4.01
-        ./parsing/ast_mapper.ml     new in 4.01, trivial 
+
+done    ./typing/predef.ml
+done    ./typing/predef.mli
+
+
+done    ./typing/typecore.ml
+done    ./typing/typemod.ml 
+
+./bytecomp/lambda.ml	Only adding Const_csp_value
+./bytecomp/lambda.mli
+./bytecomp/printlambda.ml
+./bytecomp/translcore.ml
+./bytecomp/symtable.ml
+
+./tools/dumpobj.ml (only printing Const_csp_value)
+
+
+	./typing/trx.mli
+	./typing/trx.ml 
+
+
+No longer changed in N102
+
+./parsing/parsetree.mli
+./parsing/printast.ml       trivial
+./parsing/ast_mapper.ml     new in 4.01, trivial 
 
 ./typing/typedtree.mli
 ./typing/typedtree.ml
-done    ./typing/predef.ml
-done    ./typing/predef.mli
 
 ./typing/printtyped.ml      did not exist before, trivial changes
 ./typing/typedtreeIter.ml   in 4.01, moved from tools, trivial changes
@@ -25,26 +46,15 @@ done    ./typing/predef.mli
 ./typing/envaux.ml   new in 4.01, trivial changes
 
 ./typing/typecore.mli
-./typing/typecore.ml
-./typing/typemod.ml 
-
-./bytecomp/lambda.ml	Only adding Const_csp_value
-./bytecomp/lambda.mli
-./bytecomp/printlambda.ml
-./bytecomp/translcore.ml
-./bytecomp/symtable.ml
 
 ./tools/depend.ml
-./tools/dumpobj.ml (only printing Const_csp_value)
+
 ./tools/ocamlprof.ml
 ./tools/untypeast.ml     did not exist before, trivial changes
 ./tools/tast_iter.ml new in 4.01
 
 
-	./typing/trx.mli
-	./typing/trx.ml 
-
-
+No longer changed in N101
 		./typing/ident.ml       No longer changed
 	        ./tools/addlabels.ml not built any more?
 		./typing/ident.mli      No longer changed

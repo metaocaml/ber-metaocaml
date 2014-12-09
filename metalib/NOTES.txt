@@ -18,21 +18,22 @@ Likewise, .~exp is represented as
    exp [@metaocaml.escape]
 
 
-We may need an extension node for CSP.
+We may need an extension node for CSP. Actually, CSPs are just
+constants. So, we keep CSP as constants, but annotate them.
+Feature request: new constant type, structure constant (like block
+constant in IR lambda). It must be used with a type coercion.
+The type checker checks for the presence of the coercion and the
+code geneator makes a cursory check that the structure agrees
+with the defined type.
 
 Instead of the Level environment, carry the level as the attribute
 to the value, in value attributes.
 
-See typing/typetexp.ml
-  on how to handle attributes check_deprecated loc attrs s =
-
-let string_of_payload = function
-  | PStr[{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant c},_)}] ->
-      string_of_cst c
-  | _ -> None
-
 Taking advantage of the extensible error-reporting mechanism
 provided by Location.register_error_of_exn.
+
+In the future, think about moving the hook of MetaOcaml from typemod
+to drivers (and the top-level).
 
 ** Substantial changes
 
