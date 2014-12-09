@@ -19,10 +19,8 @@ val trx_structure: Typedtree.structure -> Typedtree.structure
    The following functions are used by the typecore.ml as well
    when building the Typedtree.
 *)
-type stage = int
-val attr_level : stage -> Parsetree.attribute
-val get_level : Parsetree.attributes -> stage
 
+(* The result of what_stage_attr *)
 type stage_attr_elim = 
   | Stage0
   | Bracket of Parsetree.attribute * (* bracket attribute *)
@@ -32,15 +30,27 @@ type stage_attr_elim =
   | CSP     of Parsetree.attribute * (* CSP attribute *)
                Parsetree.attributes  (* other attributes  *)
 
+(* Determining if an AST node bears a staging attribute *)
 val what_stage_attr : Parsetree.attributes -> stage_attr_elim
 
+(* Build a Typedtree node for brackets or escape (the attribute tells
+   which is which)
+*)
 val make_texp_staged : 
   Parsetree.attribute -> Typedtree.expression -> Env.t -> Types.type_expr -> 
   Typedtree.expression
 
+(* Build a Typedtree node for a CSP *)
 val make_texp_csp : 
   Parsetree.attribute -> Asttypes.constant -> Env.t -> Types.type_expr -> 
   Typedtree.expression
+
+(* Staging level 
+   It is set via an attribute on the value_description in the Typedtree 
+*)
+type stage = int                        (* staging level *)
+val attr_level : stage -> Parsetree.attribute
+val get_level  : Parsetree.attributes -> stage
 
 (*
 (* The following functions operate on untyped code_repr.

@@ -121,7 +121,7 @@ open Types
 (*{{{ Preliminaries, common functions *)
 
 (* BER MetaOCaml version string *)
-let meta_version  = "N 101"
+let meta_version  = "N 102"
 
 (* Co-opt Preprocessor class of warnings *)
 let debug_print ?(loc = Location.none) : string -> unit = fun msg ->
@@ -155,23 +155,13 @@ let rec map_accum : ('accum -> 'a -> 'b * 'accum) -> 'accum -> 'a list ->
 let initial_env = Env.initial_safe_string
 
 (* Attributes *)
-
-type stage = int
+(* In a Parsetree, brackets, escape and CSPs are attributes on 
+   the corresponding nodes. 
+*)
 
 let attr_bracket = (Location.mknoloc "metaocaml.bracket",PStr [])
 
 let attr_escape = (Location.mknoloc "metaocaml.escape",PStr [])
-
-(* In a Parsetree, brackets and escape are attributes on the corresponding
-   nodes. 
-*)
-
-(* This attribute is set on the value_description in the Typedtree *)
-let attr_level n = 
-  (Location.mknoloc "metaocaml.level",PStr [
-   Ast_helper.Str.eval 
-     (Ast_helper.Exp.constant (Const_int n))])
-
 
 let rec get_attr : string -> attributes -> Parsetree.structure option =
   fun name -> function
@@ -179,14 +169,8 @@ let rec get_attr : string -> attributes -> Parsetree.structure option =
     | ({txt = n}, PStr str) :: _ when n = name -> Some str
     | _ :: t -> get_attr name t
 
-let get_level : Parsetree.attributes -> stage = fun attrs ->
-  match get_attr "metaocaml.level" attrs with
-  | None -> 0
-  | Some [{pstr_desc = 
-            Pstr_eval ({pexp_desc=Pexp_constant (Const_int n)},_)}] -> 
-     assert (n>=0); n
-  | _ -> assert false  (* Invalid level attribute *)
 
+(* The result of what_stage_attr *)
 type stage_attr_elim = 
   | Stage0
   | Bracket of attribute * (* bracket attribute *)
@@ -196,6 +180,7 @@ type stage_attr_elim =
   | CSP     of attribute * (* CSP attribute *)
                attributes  (* other attributes  *)
 
+(* Determining if an AST node bears a staging attribute *)
 let what_stage_attr : attributes -> stage_attr_elim =
   let rec loop acc = function
     | [] -> Stage0
@@ -205,6 +190,24 @@ let what_stage_attr : attributes -> stage_attr_elim =
         Escape (a,acc @ t)
     | a :: t -> loop (a::acc) t
   in loop []
+
+(* Staging level 
+   It is set via an attribute on the value_description in the Typedtree 
+*)
+type stage = int                        (* staging level *)
+
+let attr_level n = 
+  (Location.mknoloc "metaocaml.level",PStr [
+   Ast_helper.Str.eval (Ast_helper.Exp.constant (Const_int n))])
+
+let get_level : Parsetree.attributes -> stage = fun attrs ->
+  match get_attr "metaocaml.level" attrs with
+  | None -> 0
+  | Some [{pstr_desc = 
+            Pstr_eval ({pexp_desc=Pexp_constant (Const_int n)},_)}] -> 
+     assert (n>=0); n
+  | _ -> assert false  (* Invalid level attribute *)
+
 
 (* In a Typedtree, <e> is represented as a sequence
         begin 0; e end
@@ -218,7 +221,7 @@ let what_stage_attr : attributes -> stage_attr_elim =
 (* Make a bracket or an escape node
    Here, the attr argument is a bracket/escape attribute
 *)
-let texp_zero = (* TExp node for 0 *)
+let texp_zero = (* TExp node for constant 0 *)
   {exp_desc = Texp_constant (Const_int 0);
    exp_loc = Location.none; exp_extra = [];
    exp_type = Ctype.instance_def Predef.type_int;
