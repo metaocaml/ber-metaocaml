@@ -123,7 +123,7 @@ open Types
 (* BER MetaOCaml version string *)
 let meta_version  = "N 102"
 
-(* Co-opt Preprocessor class of warnings *)
+(* Co-opt the Preprocessor class of warnings *)
 let debug_print ?(loc = Location.none) : string -> unit = fun msg ->
   Location.prerr_warning loc (Warnings.Preprocessor msg)
 
@@ -419,12 +419,6 @@ let sample_name : string loc = mknoloc "*sample*"
 let sample_pat_list : Parsetree.pattern list = []
 let sample_pats_names : Parsetree.pattern list * string loc list = ([],[])
 
-(* Exported. Used as a template for passing the Asttypes.rec_flag *)
-let sample_rec_flag : Asttypes.rec_flag = Nonrecursive
-
-(* Exported. Used as a template for passing the Asttypes.override_flag *)
-let sample_override_flag : Asttypes.override_flag = Fresh
-
 (*}}}*)
 
 
@@ -436,12 +430,14 @@ let sample_override_flag : Asttypes.override_flag = Fresh
    up as needed.
 *)
 
-let mk_texp : ?env:Env.t -> Typedtree.expression_desc -> type_expr -> 
+let mk_texp : ?env:Env.t -> ?attrs:Parsetree.attributes ->
+              ?loc:Location.t ->
+              Typedtree.expression_desc -> type_expr -> 
   Typedtree.expression =
-  fun ?(env=initial_env) desc ty ->
+  fun ?(env=initial_env) ?(attrs=[]) ?(loc=Location.none) desc ty ->
   { exp_desc = desc; exp_type = ty;
-    exp_loc  = Location.none; exp_extra = [];
-    exp_attributes = [];
+    exp_loc  = loc; exp_extra = [];
+    exp_attributes = attrs;
     exp_env  = env }
 
 (* Make a bracket or an escape node
@@ -455,11 +451,9 @@ let texp_braesc :
   attribute -> Typedtree.expression -> Env.t -> type_expr -> 
   Typedtree.expression =
   fun attr exp env ty ->
-    {exp_desc = Texp_sequence (texp_zero, exp);
-     exp_loc = exp.exp_loc; exp_extra = [];
-     exp_type = ty;
-     exp_attributes = attr :: exp.exp_attributes;
-     exp_env = env }
+    mk_texp ~env ~attrs:(attr :: exp.exp_attributes)
+            ~loc:exp.exp_loc (Texp_sequence (texp_zero, exp)) ty
+
 
 (* A CSP is in essence a constant. So, we represent CSP as a constant,
    with an annotation that contains the name of the identifier
@@ -493,17 +487,6 @@ let texp_apply : Typedtree.expression -> Typedtree.expression list ->
  Typedtree.expression_desc = fun f args ->
    Texp_apply(f, List.map (fun arg -> ("",Some arg, Required)) args)
 
-(* Compiling location data *)
-let texp_loc : Location.t -> Typedtree.expression = fun loc ->
-  let loc_exp = texp_ident "Location.none" in (* this fills in the type, etc.*)
-  if loc == Location.none then loc_exp else
-  {loc_exp with exp_desc = Texp_cspval (Obj.repr loc, dummy_lid "*loc*")}
-
-(* Compiling longident with location data *)
-let texp_lid : Longident.t loc -> Typedtree.expression = fun lid ->
-  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills in the type, etc.*)
-  {lid_exp with exp_desc = Texp_cspval (Obj.repr lid, dummy_lid "*lid*")}
-
 (* Compiling a string constant *)
 (* The second argument of Const_string is the delimiter,
    the decorator in the {decorator| ... |decorator} notation.
@@ -512,19 +495,54 @@ let texp_string : string -> Typedtree.expression = fun str ->
   mk_texp (Texp_constant (Const_string (str,None)))
           (Ctype.instance_def Predef.type_string)
 
-(* Compiling a string with a location *)
-let texp_string_loc : string loc -> Typedtree.expression = fun name ->
-  let name_exp = texp_ident "Trx.sample_name" in
-  {name_exp with
-   exp_desc = Texp_cspval (Obj.repr name, dummy_lid "*name*")} 
-
 (* Compiling a boolean *)
 (* For prototype, see Typecore.option_none *)
 let texp_bool : bool -> Typedtree.expression = fun b ->
   let lid = Longident.Lident (if b then "true" else "false") in
   let cdec = Env.lookup_constructor lid initial_env in
-  mk_texp (Texp_construct(mknoloc lid, cdec, [], false))
+  mk_texp (Texp_construct(mknoloc lid, cdec, []))
           (Ctype.instance_def Predef.type_bool)
+
+(* Given a value v, create a Typedtree node for an expression
+   that will evaluate to v.
+   This the the CSP used by the MetaOCaml itself.
+   Since this is an internal CSP, we don't put any attributes.
+*)
+let texp_csp : Obj.t -> Typedtree.expression = fun v ->
+  if Obj.is_int v then
+    mk_texp (Texp_constant (Const_int (Obj.obj v)))
+            (Ctype.instance_def Predef.type_int)
+   (* We treat strings and bytes identically *)
+  else if Obj.tag v = Obj.string_tag then texp_string (Obj.obj v)
+  else 
+    let vstr = Marshal.to_string v [] in
+    let () = debug_print ("texp_cps, marshall: size " ^ 
+                string_of_int (String.length vstr)) in
+    mk_texp
+        (texp_apply (texp_ident "Marshal.from_string")
+         [texp_string vstr; texp_zero])
+        (Btype.newgenvar ())
+
+
+(* Compiling location data *)
+(* We could have made texp_loc an alias to texp_csp... We keep the
+   type information for location though, just to be fully correct.
+*)
+let texp_loc : Location.t -> Typedtree.expression = fun loc ->
+  let loc_exp = texp_ident "Location.none" in (* this fills in the type, etc.*)
+  if loc == Location.none then loc_exp else
+  {loc_exp with exp_desc = (texp_csp (Obj.repr loc)).exp_desc}
+
+(* Compiling longident with location data *)
+let texp_lid : Longident.t loc -> Typedtree.expression = fun lid ->
+  let lid_exp = texp_ident "Trx.sample_lid" in (* this fills in the type, etc.*)
+  {lid_exp with exp_desc = (texp_csp (Obj.repr lid)).exp_desc}
+
+(* Compiling a string with a location *)
+let texp_string_loc : string loc -> Typedtree.expression = fun name ->
+  let name_exp = texp_ident "Trx.sample_name" in
+  {name_exp with
+   exp_desc = (texp_csp (Obj.repr name)).exp_desc}
 
 (* Compiling an option *)
 (* For prototype, see Typecore.option_none *)
@@ -533,12 +551,12 @@ let texp_option : Typedtree.expression option -> Typedtree.expression =
     | None -> 
         let lid = Longident.Lident "None" in
         let cnone = Env.lookup_constructor lid initial_env in
-        mk_texp (Texp_construct(mknoloc lid, cnone, [], false))
+        mk_texp (Texp_construct(mknoloc lid, cnone, []))
                 (Ctype.instance_def (Predef.type_option (Btype.newgenvar ())))
     | Some e ->
         let lid = Longident.Lident "Some" in
         let csome = Env.lookup_constructor lid initial_env in
-        mk_texp (Texp_construct(mknoloc lid, csome, [e],false))
+        mk_texp (Texp_construct(mknoloc lid, csome, [e]))
                 (Ctype.instance_def (Predef.type_option e.exp_type)) 
                 ~env:e.exp_env
 
@@ -570,7 +588,7 @@ let texp_pats_names : Parsetree.pattern list -> string loc list ->
   Typedtree.expression = fun pats names ->
     let pn_exp = texp_ident "Trx.sample_pats_names" in
     {pn_exp with
-     exp_desc = Texp_cspval (Obj.repr (pats,names), dummy_lid "*pn*")}
+     exp_desc = (texp_csp (Obj.repr (pats,names))).exp_desc}
 
 (* ------------------------------------------------------------------------ *)
 (* Stack marks, a simple form of dynamic binding *)
@@ -736,9 +754,8 @@ let open_code : closed_code_repr -> code_repr = fun ast ->
 let texp_code : ?node_id:string ->
   Location.t -> Parsetree.expression_desc -> Typedtree.expression_desc =
   fun ?(node_id="") loc desc ->
-  let ast = {pexp_loc = loc; pexp_desc = desc}
-  in Texp_cspval (Obj.repr (open_code ast), dummy_lid node_id)
-
+  let ast = Ast_helper.Exp.mk ~loc desc in
+  (texp_csp (Obj.repr ast)).exp_desc
 
 
 (* ------------------------------------------------------------------------ *)
@@ -838,9 +855,8 @@ let with_binding_region :
      let prio = !prio_counter in
      let var_code = (* code that corresponds to the bound variable *)
        Code (HNode (prio,mark,new_name,Nil,Nil),
-          {pexp_loc  = name.loc;        (* the loc of the binder *)
-           pexp_desc = 
-            Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)}) in
+          Ast_helper.Exp.mk ~loc:name.loc   (* the loc of the binder *)
+           (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc))) in
      let Code (vars,e) = validate_vars l (f var_code) in
      (remove prio vars, e)) in
   (new_name, vars, e)
@@ -860,9 +876,8 @@ let with_binding_region_gen :
      let vars_code = Array.of_list (List.map (fun new_name ->
                       (* code that corresponds to a bound variable *)
        Code (HNode (prio,mark,new_name,Nil,Nil),
-          {pexp_loc  = new_name.loc;        (* the loc of the binder *)
-           pexp_desc = 
-            Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)}))
+          Ast_helper.Exp.mk ~loc:new_name.loc    (* the loc of the binder *)
+            (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc))))
        new_names) in
      let cs = Array.to_list (f vars_code) in
      let (es,vars) = map_accum (fun vars c -> 
@@ -1151,6 +1166,8 @@ let build_letrec :
   {pexp_loc = l; 
    pexp_desc = Pexp_let (Recursive, pel, ebody)})
 
+ XXXXX 
+*)
 
 (*{{{ CSP *)
 
@@ -1186,25 +1203,22 @@ let lift_as_literal :
     | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_bool ->
         texp_apply (texp_ident "Trx.lift_constant_bool") [exp]
           (* double and string are handled by dyn_quote *)
+          (* which hence handles polymorphic functions instantiated
+             to double and string.
+           *)
     | _ -> raise CannotLift
 
 (* TODO: similarly handle Const_nativeint, Const_int32, Const_int64 *)
 let lift_constant_int : int -> code_repr = fun x -> 
-  open_code
-  {pexp_loc  = Location.none;
-   pexp_desc = Pexp_constant (Const_int x)}
+  open_code @@ Ast_helper.Exp.constant (Const_int x)
 
 let lift_constant_char : char -> code_repr = fun x -> 
-  open_code
-  {pexp_loc  = Location.none;
-   pexp_desc = Pexp_constant (Const_char x)}
+  open_code @@ Ast_helper.Exp.constant (Const_char x)
 
 let lift_constant_bool : bool -> code_repr = fun x -> 
   let b = if x then "true" else "false" in 
-  open_code
-  {pexp_loc  = Location.none;
-   pexp_desc = Pexp_construct (Location.mknoloc (Longident.Lident b), 
-                               None, false)}
+  open_code @@ Ast_helper.Exp.construct 
+                 (Location.mknoloc (Longident.Lident b)) None
 
 
 (* Lift the run-time value v into a Parsetree for the code that, when
@@ -1229,8 +1243,7 @@ let dyn_quote : Obj.t -> Longident.t loc -> code_repr =
       Pexp_constant (Const_string (Obj.obj v,None))
     | _   -> dflt
    in 
-   open_code
-   {pexp_loc = li.loc; pexp_desc = desc}
+   open_code @@ Ast_helper.Exp.mk ~loc:li.loc desc
 
        
 (* Build the Typedtree that lifts the variable with the given path and type.
@@ -1282,6 +1295,7 @@ old code
 
 (*}}}*)
 
+(* XXXXX
 
 (*{{{ Translating patterns and expressions using patterns *)
 

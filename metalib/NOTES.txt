@@ -27,8 +27,34 @@ code generator makes a cursory check that the structure agrees
 with the defined type. To be precise, we want
    Const_structural Obj.t (* or structural const from Lambda *)
                     * core_type
-Another alternative is Pexp_ident node with the value being in the
-attribute.
+There is no longer any specific node for CSP. We do not need them:
+old CSP nodes are represented as an application (Obj.obj <csp-val>).
+Since the CSP nodes are assumed type-checked, we get around typing --
+as we did before with the PExp_csp node. Obj.obj serves exactly the
+same purpose.
+A better design: if CSP is represented as an integer, we compile
+CSP v as if it were .<Obj.obj .~(Obj.repr v)>..
+If Obj.repr is block (a heap value), presently we compile it as
+the same. However, in the future we should do
+.<Marshall.from_string .~(Marshall.to_string v)>.
+(perhaps with the flags to preserve sharing and permit marshalling of
+functional values). We attach the attribute carrying the name of the
+CSP variable, for the sake of pretty-printing functions
+(They may want to print that name in the comments). Finally we get the
+output format that is compilable even in the presence of CSP.
+To estimate when to switch to the new format, the dyn_quoter now
+checks the CSP to and prints a warning if the CSP is a closure or
+if it is ``too deep''.
+
+In any case, CSPs that are used by the MetaOCaml itself (for the
+Parsetree fragments) are already in the new format. Therefore,
+metaocaml (the compiler itself) can be natively compiled.
+
+
+For future work: avoid the extra translation pass. The type-checker
+should invoke the trx_bracket after type-cheking the bracket at level
+0.
+
 
 
 Instead of the Level environment, carry the level as the attribute

@@ -52,7 +52,6 @@ type stage = int                        (* staging level *)
 val attr_level : stage -> Parsetree.attribute
 val get_level  : Parsetree.attributes -> stage
 
-(*
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
    it is not available in the bootstrap compiler.
@@ -97,8 +96,6 @@ val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
 val sample_pats_names : Parsetree.pattern list * string Location.loc list
-val sample_rec_flag : Asttypes.rec_flag
-val sample_override_flag : Asttypes.override_flag
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
@@ -107,6 +104,7 @@ val lift_constant_int  : int  -> code_repr
 val lift_constant_char : char -> code_repr
 val lift_constant_bool : bool -> code_repr
 
+(*
 (* Builders of the Parsetree *)
 val build_assert   : Location.t -> code_repr -> code_repr
 val build_lazy     : Location.t -> code_repr -> code_repr
