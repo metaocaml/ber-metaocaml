@@ -27,7 +27,8 @@ type stage_attr_elim =
                Parsetree.attributes  (* other attributes  *)
   | Escape  of Parsetree.attribute * (* escape attribute *)
                Parsetree.attributes  (* other attributes  *)
-  | CSP     of Parsetree.attribute * (* CSP attribute *)
+  | CSP     of Parsetree.attribute * 
+               Longident.t Location.loc * (* CSP attribute and lid *)
                Parsetree.attributes  (* other attributes  *)
 
 (* Determining if an AST node bears a staging attribute *)

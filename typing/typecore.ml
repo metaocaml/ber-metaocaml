@@ -1873,19 +1873,10 @@ and type_expect_ ?in_function env sexp ty_expected =
        re @@
          texp_braesc battr exp env (instance env ty_expected))
 
-       (* The rule says that CSP can have any desired type.
-          Pexp_cspval nodes are added only by the builder of
-          code expressions, by the builder of AST in trx.ml
-         At that time we know that the expression that gave
-         rise to CSP had the correct type. Therefore, we trust
-         that the type was correct the first time around.
+       (* There is nothing special in type-checking CSPs.
+          After lifting, a CSP value becomes an ordinaru expression.
         *)
-  | CSP(battr,attrs) -> begin
-     match sexp.pexp_desc with
-     | Pexp_constant cnt ->
-       re @@ texp_csp_raw battr cnt env (instance env ty_expected)
-     | _ -> assert false                (* incorrectly placed CSP attribute *)
-     end
+  | _ -> type_expect_orig ?in_function env sexp ty_expected
   (* NNN end *)
 
 and type_expect_orig ?in_function env sexp ty_expected =  (* NNN *)

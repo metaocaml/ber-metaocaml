@@ -169,7 +169,11 @@ let rec get_attr : string -> attributes -> Parsetree.structure option =
     | ({txt = n}, PStr str) :: _ when n = name -> Some str
     | _ :: t -> get_attr name t
 
+let attr_csp : Longident.t loc -> attribute = fun lid ->
+  (Location.mknoloc "metaocaml.csp",PStr [
+     Ast_helper.Str.eval (Ast_helper.Exp.ident lid)])
 
+  
 (* The result of what_stage_attr *)
 type stage_attr_elim = 
   | Stage0
@@ -177,7 +181,7 @@ type stage_attr_elim =
                attributes  (* other attributes  *)
   | Escape  of attribute * (* escape attribute *)
                attributes  (* other attributes  *)
-  | CSP     of attribute * (* CSP attribute *)
+  | CSP     of attribute * Longident.t loc * (* CSP attribute and lid *)
                attributes  (* other attributes  *)
 
 (* Determining if an AST node bears a staging attribute *)
@@ -188,6 +192,9 @@ let what_stage_attr : attributes -> stage_attr_elim =
         Bracket (a,acc @ t)
     | (({txt = "metaocaml.escape"},_) as a) :: t -> 
         Escape (a,acc @ t)
+    | (({txt = "metaocaml.csp"},PStr [{pstr_desc = 
+            Pstr_eval ({pexp_desc=Pexp_ident lid},_)}]) as a) :: t -> 
+        CSP (a,lid,acc @ t)
     | a :: t -> loop (a::acc) t
   in loop []
 
@@ -516,7 +523,7 @@ let texp_csp : Obj.t -> Typedtree.expression = fun v ->
   else if Obj.tag v = Obj.string_tag then texp_string (Obj.obj v)
   else 
     let vstr = Marshal.to_string v [] in
-    let () = debug_print ("texp_cps, marshall: size " ^ 
+    let () = debug_print ("texp_csp, marshall: size " ^ 
                 string_of_int (String.length vstr)) in
     mk_texp
         (texp_apply (texp_ident "Marshal.from_string")
@@ -1191,8 +1198,8 @@ exception CannotLift
    for them and use the tree for building Texp_apply.
 *)
 let lift_as_literal : 
-  Typedtree.expression -> Path.t -> Longident.t loc -> 
-  Typedtree.expression_desc = fun exp p li ->
+  Typedtree.expression -> Longident.t loc -> Typedtree.expression_desc = 
+  fun exp li ->
   let exp_ty =
         Ctype.expand_head exp.exp_env (Ctype.correct_levels exp.exp_type) in
   match Ctype.repr exp_ty with
@@ -1206,6 +1213,7 @@ let lift_as_literal :
           (* which hence handles polymorphic functions instantiated
              to double and string.
            *)
+          (* Deal with code type *)
     | _ -> raise CannotLift
 
 (* TODO: similarly handle Const_nativeint, Const_int32, Const_int64 *)
@@ -1226,24 +1234,57 @@ let lift_constant_bool : bool -> code_repr = fun x ->
    We do not have the type information for v, but we can examine
    its run-time representation, to decide if we lift it is a source
    literal or as a CSP.
+   We attach the CSP attribute to an expression, for the sake of better
+   printing (also to simplify translation when CSP occurs within nested
+   brackets).
 
   TODO: also check for double_array_tag
    and create a (structured) constant for a double array
 *)
+let obj_magic_exp = 
+  Ast_helper.Exp.ident (Location.mknoloc @@
+   (Longident.Ldot (Longident.Lident "Obj","magic")))
+
+(* Check to see if a value is easy to serialize *)
+let easy_to_serialize : Obj.t -> bool =
+  let depth_bound = 5 in
+  let rec loop n v = 
+    Obj.is_int v || 
+    let tag = Obj.tag v in
+    tag = Obj.string_tag ||
+    tag = Obj.double_tag ||
+    tag = Obj.double_array_tag ||
+    if n <= 0  ||
+      tag = Obj.closure_tag ||
+      tag >= Obj.no_scan_tag
+    then false
+    else let rec inner i = 
+      if i < 0 then true else
+      loop (n-1) (Obj.field v i) && inner (i-1) 
+      in inner (Obj.size v - 1)
+  in loop depth_bound
+
+
 let dyn_quote : Obj.t -> Longident.t loc -> code_repr =
   fun v li ->
-   let dflt = Pexp_cspval(v,li) in        (* By default, we build CSP *)
-   let desc = 
-    match Obj.is_int v with
-    | true -> dflt  (* If v looks like an int, it can represent many things: *)
-                    (* can't lift *)
+   let csp_attr = attr_csp li in
+   open_code @@   
+   match Obj.is_int v with
+    | true ->   (* Looks like an integer: coerce from it using Obj.magic *)
+        Ast_helper.Exp.apply ~attrs:[csp_attr] ~loc:li.loc
+          obj_magic_exp [("",Ast_helper.Exp.constant (Const_int (Obj.obj v)))]
     | false when Obj.tag v = Obj.double_tag ->
-      Pexp_constant (Const_float (string_of_float (Obj.obj v)))
+      Ast_helper.Exp.constant (Const_float (string_of_float (Obj.obj v)))
     | false when Obj.tag v = Obj.string_tag ->
-      Pexp_constant (Const_string (Obj.obj v,None))
-    | _   -> dflt
-   in 
-   open_code @@ Ast_helper.Exp.mk ~loc:li.loc desc
+      Ast_helper.Exp.constant (Const_string (Obj.obj v,None))
+    | _   ->           (* general case *)
+        let () =
+          if not @@ easy_to_serialize v then
+            debug_print ~loc:li.loc 
+             "The CSP value is a closure or too deep to serialize" in
+        Ast_helper.Exp.apply ~attrs:[csp_attr] ~loc:li.loc
+          obj_magic_exp [("",Ast_helper.Exp.constant 
+                               (Const_string (Obj.obj v,None)))]
 
        
 (* Build the Typedtree that lifts the variable with the given path and type.
@@ -1261,7 +1302,7 @@ let trx_csp :
   Typedtree.expression -> Path.t -> Longident.t loc ->
   Typedtree.expression_desc = fun exp p li ->
   (* First we try lifting as a constant *)
-  try lift_as_literal exp p li 
+  try lift_as_literal exp li 
   with CannotLift ->
   (* Then check if we can pass by reference *)
   if ident_can_be_quoted p then
