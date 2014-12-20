@@ -13,7 +13,6 @@ done    ./typing/predef.mli
 
 
 done    ./typing/typecore.ml
-done    ./typing/typemod.ml 
 
 ./bytecomp/lambda.ml	Only adding Const_csp_value
 ./bytecomp/lambda.mli
@@ -46,6 +45,7 @@ No longer changed in N102
 ./typing/envaux.ml   new in 4.01, trivial changes
 
 ./typing/typecore.mli
+./typing/typemod.ml 
 
 ./tools/depend.ml
 
