@@ -1634,6 +1634,9 @@ let build_try :
 
 (*}}}*)
 
+XXXXX
+*)
+
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
    an expression at the level n > 0.
@@ -1644,7 +1647,7 @@ let build_try :
 
 TODO: an optimization idea. Consider <assert e> as a typical expression.
 We translate it to the invocation of build_assert that will construct
-the Parsetree node at run-time. However, of 'e' is simple (e.g., a constant)
+the Parsetree node at run-time. However, if 'e' is simple (e.g., a constant)
 then we can construct the Parsetree node at compile time and pass it
 as a CSP. There are no longer any functions calls to make at run-time.
 So, we can modify the translation of <assert e> below to detect
@@ -1686,18 +1689,12 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
   | Some x -> Some (f x)
 
 
-let rec trx_bracket : 
-  (expression -> expression) -> (* 0-level traversal *)
-  int -> (expression -> expression) = fun trx_exp n exp ->
+let trx_bracket : int -> expression -> expression = fun n exp ->
   let new_desc = match exp.exp_desc with
     (* Don't just do when vd.val_kind = Val_reg 
        because (+) or Array.get are Val_prim *)
   | Texp_ident (p,li,vd)  ->
-    let stage = try Env.find_stage p exp.exp_env
-	        with Not_found ->
-                  if false then
-                    debug_print ("Stage for var is set to implicit 0:" ^ 
-	                         Path.name p ^ "\n");  0 in
+    let stage = get_level vd.val_attributes in
     (* We make CSP only if the variable is bound at the stage 0.
        Variables bound at stage > 0 are subject to renaming.
        They are translated into stage 0 variable but of a different
@@ -1719,6 +1716,7 @@ let rec trx_bracket :
   | Texp_constant cst -> 
       texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
 
+(*
      (* Recursive let: 
          let rec f = e1 [and g = e2 ...] in body
         According to transl_let in bytecomp/translcore.ml,
@@ -2051,18 +2049,24 @@ let rec trx_bracket :
         [texp_loc exp.exp_loc; trx_bracket trx_exp (n-1) e]
   | Texp_cspval (v,li) ->               (* CSP is a sort of a constant *)
       texp_code ~node_id:"*csp*" exp.exp_loc (Pexp_cspval(v,li))
+XXXXX *)
 
-  (* | _ -> not_supported exp.exp_loc "not yet supported" *)
+  | _ -> not_supported exp.exp_loc "not yet supported"
   in                               
-  let trx_extra (extra, loc) exp = (* See untype_extra in tools/untypeast.ml *)
+  (* See untype_extra in tools/untypeast.ml *)
+  let trx_extra (extra, loc, attr) exp =  (* TODO: take care of attr *)
    let desc =
     match extra with
       (* Should check that cty1 and cty2 contain only globally declared
          type components
        *)
-    | Texp_constraint (cty1, cty2) -> 
+    | Texp_constraint cty -> 
         not_supported loc "Texp_constraint"
+    | Texp_coerce (cto,ct) ->
+        not_supported loc "Texp_coerce"
     | Texp_open (ovf, path, lid, _) -> 
+        not_supported loc "Texp_open"
+(* XXXX
        check_path_quotable "Texp_open" path;
        let ovf_exp = texp_ident "Trx.sample_override_flag" in
        let ovf_exp = {ovf_exp with exp_desc = 
@@ -2072,6 +2076,7 @@ let rec trx_bracket :
          texp_lid (mkloc (path_to_lid path) lid.loc);
          ovf_exp;
          exp]      (* exp is the result of trx_bracket *)
+*)
     | Texp_poly cto  -> not_supported loc "Texp_poly"
     | Texp_newtype s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
@@ -2081,7 +2086,6 @@ let rec trx_bracket :
             exp_desc = new_desc}
 
 
-XXXXX *)
 
 (*{{{ Typedtree traversal to eliminate bracket/escapes *)
 

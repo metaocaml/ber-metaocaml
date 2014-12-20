@@ -7,10 +7,11 @@
 val meta_version : string
 (** [meta_version] is the version of BER MetaOCaml*)
 
-(* The function to post-process the typed tree and translate away
-   brackets and escapes 
+(* The function to process the body of the bracket at level n.
+   This function `lifts' the Typedtree to the code that will evaluate
+   to the corresponding Parsetree.
 *)
-val trx_structure: Typedtree.structure -> Typedtree.structure
+val trx_bracket : int -> Typedtree.expression -> Typedtree.expression
 
 (* The following functions deal with the representation of brackets,
    escapes and CPS in Parsetree and Typedtree.

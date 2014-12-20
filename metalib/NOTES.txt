@@ -51,9 +51,11 @@ Parsetree fragments) are already in the new format. Therefore,
 metaocaml (the compiler itself) can be natively compiled.
 
 
-For future work: avoid the extra translation pass. The type-checker
-should invoke the trx_bracket after type-cheking the bracket at level
-0.
+We now avoid the extra translation pass. The type-checker
+should invoke the trx_bracket after type-checking the bracket at level
+0. Therefore, if there are no staging constructs, the typedtree is
+not traversed at all after type checking. Typemod.ml no longer has to
+be modified.
 
 
 
@@ -65,6 +67,9 @@ provided by Location.register_error_of_exn.
 
 In the future, think about moving the hook of MetaOCaml from typemod
 to drivers (and the top-level).
+
+
+Use -dtypedtree option on the top level to see the generated tree.
 
 ** Substantial changes
 

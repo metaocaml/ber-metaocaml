@@ -1841,6 +1841,10 @@ and type_expect ?in_function env sexp ty_expected =
 
 (* NNN This whole function type_expect_ *)
 (* Type checking staging constructs *)
+(* If we are type-checking bracket at level 0, don't build the
+   bracket Texp node. Rather, invoke trx_bracket to translate 
+   the bracket body and convert it to the c ode generator.
+*)
 and type_expect_ ?in_function env sexp ty_expected =
   let loc = sexp.pexp_loc in
   let open Trx in
@@ -1855,11 +1859,17 @@ and type_expect_ ?in_function env sexp ty_expected =
       let ty = newgenvar() in     (* expected type for the bracketed sexp *)
       let to_unify = Predef.type_code ty in
       unify_exp_types loc env to_unify ty_expected;
-      with_stage_up (fun () ->
-      let sexp = {sexp with pexp_attributes = attrs} in (* drop bracket attr *)
-      let exp = type_expect env sexp ty in
+      let exp =
+        with_stage_up (fun () ->
+                (* drop bracket attr *)
+          let sexp = {sexp with pexp_attributes = attrs} in
+          type_expect env sexp ty) in
       re @@
-       texp_braesc battr exp env (instance env ty_expected))
+      if !global_stage = 0 then
+        let exp = trx_bracket 1 exp in
+        {exp with exp_type = instance env ty_expected}
+      else
+        texp_braesc battr exp env (instance env ty_expected)
 
        (* NNN:  Typechecking escapes *)
        (* If ~e is expected to have the type ty then
