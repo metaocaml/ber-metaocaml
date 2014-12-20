@@ -1585,8 +1585,7 @@ let rec type_approx env sexp =          (* NNN the whole function *)
   let open Trx in
   match what_stage_attr sexp.pexp_attributes with
   | Stage0 -> type_approx_orig env sexp
-  | Bracket (_,attrs) ->
-    instance env @@ Predef.type_code @@ type_approx_orig env sexp
+    (* instance env @@ Predef.type_code @@ type_approx_orig env sexp *)
   | _ -> newvar ()
 and
   type_approx_orig env sexp =          (* NNN end *)
@@ -3912,12 +3911,28 @@ let type_expression env sexp =
   end_def();
   if is_nonexpansive exp then generalize exp.exp_type
   else generalize_expansive env exp.exp_type;
+  (* NNN The original code 
   match sexp.pexp_desc with
     Pexp_ident lid ->
       (* Special case for keeping type variables when looking-up a variable *)
       let (path, desc) = Env.lookup_value lid.txt env in
       {exp with exp_type = desc.val_type}
   | _ -> exp
+  We have to modify it since <x> is also Pexp_ident, with the additional
+  attribute though. So, either we have to check for metaocaml.bracket 
+  attribute, or, better, check exp. After type-checking, <x> is no longer
+  Pexp_ident. For ordinary identifiers though, Pexp_ident li maps to
+  Texp_ident (..,li,..) -- with the exception of instance vars, which
+  don't matter at the ttoplevel anyway.
+*)
+ (* NNN new code *)
+  match exp.exp_desc with
+    Texp_ident (_,lid,_) ->
+      (* Special case for keeping type variables when looking-up a variable *)
+      let (path, desc) = Env.lookup_value lid.txt env in
+      {exp with exp_type = desc.val_type}
+  | _ -> exp
+ (* NNN end *)
 
 (* Error report *)
 
