@@ -762,7 +762,7 @@ let texp_code : ?node_id:string ->
   Location.t -> Parsetree.expression_desc -> Typedtree.expression_desc =
   fun ?(node_id="") loc desc ->
   let ast = Ast_helper.Exp.mk ~loc desc in
-  (texp_csp (Obj.repr ast)).exp_desc
+  (texp_csp (Obj.repr (open_code ast))).exp_desc
 
 
 (* ------------------------------------------------------------------------ *)
