@@ -21,9 +21,11 @@ close_code .<1>.;;
    type checker
 *)
 List.rev;;
+(* - : 'a list -> 'a list = <fun> *)
 
 (* Also check the generalization *)
 .<List.rev>.;;
+(* - : ('a list -> 'a list) code = .<List.rev>. *)
 
 .<fun x -> .~(let y = x in y)>.;;
 (*
@@ -69,14 +71,14 @@ let x = 'a' in .<x>.;;
 *)
 let x = ['a'] in .<x>.;;
 (*
-- : char list code = .<(* cross-stage persistent value (as id: x) *)>.
+- : char list code = .<(* CSP x *)>. 
 *)
 
 let l x = .<x>.;;                       (* polymorphic *)
 (* val l : 'a -> ('cl, 'a) code = <fun> *)
 l 1;;
 (*
-- : int code = .<(* cross-stage persistent value (as id: x) *)>.
+- : int code = .<(* CSP x *) Obj.magic 1>. 
 *)
 let 1 = !. (l 1);;
 l 1.0;;                  (* better printing in N100 *)
@@ -84,6 +86,20 @@ l 1.0;;                  (* better printing in N100 *)
 - : float code = .<1.>.
 *)
 let 1.0 = !. (l 1.0);;
+l [];;                                  (* serializable code in N102 *)
+(*
+- : 'a list code = .<(* CSP x *) Obj.magic 0>. 
+*)
+let [] = !. (l []);;
+
+l (fun x -> x + 1);;
+(*
+Characters 12-13:
+  l (fun x -> x + 1);;
+              ^
+Warning 22: The CSP value is a closure or too deep to serialize
+- : (int -> int) code = .<(* CSP x *)>. 
+*)
 
 .<List.rev>.;;
 (*

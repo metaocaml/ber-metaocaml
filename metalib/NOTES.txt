@@ -55,6 +55,16 @@ To estimate when to switch to the new format, the dyn_quoter now
 checks the CSP to and prints a warning if the CSP is a closure or
 if it is ``too deep''.
 
+Better printing of CSP; now in simple cases CSP are serializable
+and hence present no problems.
+let l x = .<x>.;;                       (* polymorphic *)
+l 1;;
+  - : int code = .<(* CSP x *) Obj.magic 1>. 
+l 1.0;;                  (* better printing in N100 *)
+  - : float code = .<1.>.
+l [];;                                  (* serializable code in N102 *)
+ - : 'a list code = .<(* CSP x *) Obj.magic 0>. 
+
 In any case, CSPs that are used by the MetaOCaml itself (for the
 Parsetree fragments) are already in the new format. Therefore,
 metaocaml (the compiler itself) can be natively compiled.
