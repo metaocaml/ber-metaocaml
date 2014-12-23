@@ -9,10 +9,6 @@ Or, perhaps make a file metaocamlink?
 
 Add letrec code: Jun suggestion.
 
-New function in Runcode, for the benefit of offshoring
-val typecheck_code : 'a closed_code -> Typedtree.expression
-
-
 * Main differences from the original MetaOCaml
 
 
@@ -77,10 +73,6 @@ to the value, in value attributes.
 
 Taking advantage of the extensible error-reporting mechanism
 provided by Location.register_error_of_exn.
-
-In the future, think about moving the hook of MetaOCaml from typemod
-to drivers (and the top-level).
-
 
 Use -dtypedtree option on the top level to see the generated tree.
 

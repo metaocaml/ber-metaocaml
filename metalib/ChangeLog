@@ -1,3 +1,8 @@
+December 2014
+	New function Runcode.typecheck_code for the benefit of offshoring
+	New function Runcode.add_search_path to add a directory to
+	he search path for .cmi/.cmo files -- report by Nicolas Ojeda Bar
+
 April 24, 2014
 	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.
 	If the first Runcode.run is used after a type declaration,

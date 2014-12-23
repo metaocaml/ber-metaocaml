@@ -5,6 +5,16 @@ open Format
 type 'a closed_code = Trx.closed_code_repr
 
 
+(* Add a directory to search for .cmo/.cmi files, needed
+   for the sake of running the generated code .
+   The specified directory is prepended to the load_path.
+*)
+let add_search_path : string -> unit = fun dir ->
+  let dir = Misc.expand_directory Config.standard_library dir in
+  Config.load_path := dir :: !Config.load_path;
+  Env.reset_cache ()
+
+
 (* Check that the code is closed and return the closed code *)
 let close_code : 'a code -> 'a closed_code = fun cde ->
   Trx.close_code_repr (Obj.magic cde)

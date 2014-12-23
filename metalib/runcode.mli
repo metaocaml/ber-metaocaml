@@ -34,4 +34,9 @@ val run_bytecode : 'a closed_code -> 'a
 val run  : 'a code -> 'a
 val (!.) : 'a code -> 'a
 
-
+(* Add a directory to search for .cmo/.cmi files, needed
+   for the sake of running the generated code.
+   The directory name may be given as +dir to refer to stdlib.
+   The specified directory is prepended to the load_path.
+*)
+val add_search_path : string -> unit
