@@ -1,5 +1,18 @@
 			BER MetaOCaml
 
+Make metaocamlc a simple ocaml file that invokes ocamlc
+after setting up arguments. Assume that the path to metaocaml
+coincides with ocamlc. If there is a flag -a, don't link OCaml
+libraries! Actually, link OCaml libraries only if there are no
+flags -c and -a.
+Or, perhaps make a file metaocamlink?
+
+Add letrec code: Jun suggestion.
+
+New function in Runcode, for the benefit of offshoring
+val typecheck_code : 'a closed_code -> Typedtree.expression
+
+
 * Main differences from the original MetaOCaml
 
 

@@ -19,6 +19,11 @@ val close_code_delay_check : 'a code -> 'a closed_code * (unit -> unit)
 (* Total: a closed code can always be used in slices, etc. *)
 val open_code : 'a closed_code -> 'a code
 
+(* Type-check the generated code and return the typed tree.
+   Offshoring takes it from here.
+*)
+val typecheck_code : 'a closed_code -> Typedtree.expression
+
 (* Run closed code by bytecode compiling it and then executing *)
 val run_bytecode : 'a closed_code -> 'a
 

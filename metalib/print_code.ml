@@ -13,15 +13,13 @@
 
 open Format
 open Runcode
-open Parsetree
 
 
 (* print code as a parse tree. Useful for debugging *)
 let print_code_as_ast cde =
   let cde = (cde : Trx.closed_code_repr :> Parsetree.expression) in
   Printast.implementation Format.std_formatter
-  [{ pstr_desc = Pstr_eval (cde);
-     pstr_loc  = Location.none }]
+  [Ast_helper.Str.eval cde]
 
 let format_code : Format.formatter -> 'a closed_code -> unit = fun ppf cde ->
   let cde = (cde : Trx.closed_code_repr :> Parsetree.expression) in

@@ -1,7 +1,6 @@
 (* Run the closed code: byte-code and native code *)
 
 open Format
-open Parsetree
 
 type 'a closed_code = Trx.closed_code_repr
 
@@ -36,6 +35,7 @@ let with_disabled_warnings warnings thunk =
     String.concat "" 
       (List.map 
 	 (fun w -> snd (List.assoc w warnings_descr)) warnings) in
+(*
   let curr_str = 
     String.concat "" 
       (List.map 
@@ -43,15 +43,15 @@ let with_disabled_warnings warnings thunk =
 	   let state = Warnings.is_active w in
 	   (if state then fst else snd) (List.assoc w warnings_descr))
 	 warnings) in
+*)
+  let warnings_old = Warnings.backup () in
   let () = Warnings.parse_options false disable_str in
   try
     let r = thunk () in
-    Warnings.parse_options false curr_str; r
+    Warnings.restore warnings_old; r
   with e ->
-    Warnings.parse_options false curr_str;
+    Warnings.restore warnings_old;
     raise e
-
-
 
 
 let initial_env = ref Env.empty
@@ -72,24 +72,29 @@ let load_lambda ppf lam =
   Symtable.patch_object code reloc;
   Symtable.check_global_initialized reloc;
   Symtable.update_global_table();
+  (* let initial_bindings = !toplevel_value_bindings in *)
   try
+    Toploop.may_trace := true;
     let retval = (Meta.reify_bytecode code code_size) () in
+    Toploop.may_trace := false;
     if can_free then begin
       Meta.static_release_bytecode code code_size;
       Meta.static_free code;
     end;
     retval
   with x ->
+    Toploop.may_trace := false;
     if can_free then begin
       Meta.static_release_bytecode code code_size;
       Meta.static_free code;
     end;
+    (* let initial_bindings = !toplevel_value_bindings in *)
     Symtable.restore_state initial_symtable;
     raise x
 
 (* Patterned after toploop.ml:execute_phrase *)
 
-let run_bytecode' exp =
+let typecheck_code' : Parsetree.expression -> Typedtree.structure = fun exp ->
   if !initial_env = Env.empty then begin
     let old_time = Ident.current_time() in
     (* does Ident.reinit() and may corrupt the timestamp if we
@@ -99,34 +104,45 @@ let run_bytecode' exp =
     Ident.set_current_time old_time
    end;
   (* Ctype.init_def(Ident.current_time());  *)
+  let ppf = std_formatter in
   with_disabled_warnings [Warnings.Partial_match "";
 			  Warnings.Unused_argument;
 			  Warnings.Unused_var "";
 			  Warnings.Unused_var_strict ""]
  (fun () ->
-   let sstr = [{pstr_desc = Pstr_eval exp; pstr_loc = Location.none}] in
-   let str = try
+   let sstr = [Ast_helper.Str.eval exp] in
+   if !Clflags.dump_source then Pprintast.structure ppf sstr;
+   try
     begin
        Typecore.reset_delayed_checks ();
        let (str, sg, newenv) = Typemod.type_toplevel_phrase !initial_env sstr in
+       if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
        let sg' = Typemod.simplify_signature sg in
+       if !Clflags.dump_typedtree then Printtyp.signature ppf sg';
        ignore (Includemod.signatures !initial_env sg sg');
        Typecore.force_delayed_checks (); str
     end
    with 
-    x -> (Errors.report_error Format.std_formatter x;
-	  Format.pp_print_newline Format.std_formatter ();
+    x -> (Errors.report_error ppf x;
+	  Format.pp_print_newline ppf ();
 	  failwith 
             "Error type-checking generated code: scope extrusion?")
-  in
-  let lam = Translmod.transl_toplevel_definition str in
-  Warnings.check_fatal ();
-  load_lambda Format.std_formatter lam
  )
 
+(* For the benefit of offshoring, etc. *)
+let typecheck_code : 'a closed_code -> Typedtree.expression = fun cde ->
+  let str = typecheck_code' 
+      (cde : Trx.closed_code_repr :> Parsetree.expression) in
+  match str.Typedtree.str_items with 
+  | [{Typedtree.str_desc = Typedtree.Tstr_eval (texp,_)}] -> texp
+  | _  -> failwith "cannot happen: Parsetree was not an expression?"
+
 let run_bytecode : 'a closed_code -> 'a = fun cde ->
-  Obj.obj (
-    run_bytecode' (cde : Trx.closed_code_repr :> Parsetree.expression))
+  let str = typecheck_code' 
+      (cde : Trx.closed_code_repr :> Parsetree.expression) in
+  let lam = Translmod.transl_toplevel_definition str in
+  Warnings.check_fatal ();
+  Obj.obj @@ load_lambda Format.std_formatter lam
 
 (* Abbreviations for backwards compatibility *)
 let run cde = run_bytecode (close_code cde)
