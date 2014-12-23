@@ -6,22 +6,13 @@ Search for NNN in each files for concrete changes
 
 done    ./parsing/lexer.mll
 done    ./parsing/parser.mly
-./parsing/pprintast.ml      new in 4.01
+done    ./parsing/pprintast.ml      new in 4.01
 
 done    ./typing/predef.ml
 done    ./typing/predef.mli
 
 
 done    ./typing/typecore.ml
-
-./bytecomp/lambda.ml	Only adding Const_csp_value
-./bytecomp/lambda.mli
-./bytecomp/printlambda.ml
-./bytecomp/translcore.ml
-./bytecomp/symtable.ml
-
-./tools/dumpobj.ml (only printing Const_csp_value)
-
 
 	./typing/trx.mli
 	./typing/trx.ml 
@@ -66,3 +57,11 @@ No longer changed in N101
 
 done ./asmcomp/cmmgen.ml	Const_csp_value will cause fatal error
 			Const_csp_value must not appear in native code
+
+./bytecomp/lambda.ml	Only adding Const_csp_value
+./bytecomp/lambda.mli
+./bytecomp/printlambda.ml
+./bytecomp/translcore.ml
+./bytecomp/symtable.ml
+
+./tools/dumpobj.ml (only printing Const_csp_value)
