@@ -17,6 +17,13 @@ let 1 = !. .<1>.;;
 close_code .<1>.;;
 (* - : int Runcode.closed_code = .<1>.  *)
 
+(* Problem with special treatment of top-level identifiers by the
+   type checker
+*)
+List.rev;;
+
+(* Also check the generalization *)
+.<List.rev>.;;
 
 .<fun x -> .~(let y = x in y)>.;;
 (*
