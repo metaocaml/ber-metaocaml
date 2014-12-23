@@ -121,11 +121,13 @@ val build_escape   : Location.t -> code_repr -> code_repr
 val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
 val build_while    : Location.t -> code_repr -> code_repr -> code_repr
 val build_when     : Location.t -> code_repr -> code_repr -> code_repr
+*)
 
 val build_apply : Location.t -> (Asttypes.label * code_repr) array -> code_repr
 
 val build_tuple : Location.t -> code_repr array -> code_repr
 val build_array : Location.t -> code_repr array -> code_repr
+(*
 val build_ifthenelse : 
   Location.t -> code_repr -> code_repr -> code_repr option -> code_repr
 val build_construct  :

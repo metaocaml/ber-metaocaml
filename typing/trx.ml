@@ -977,35 +977,36 @@ let build_when : Location.t -> code_repr -> code_repr -> code_repr =
     let Code (vars2,e2) = validate_vars l e2 in
     Code (merge vars1 vars2,
           {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) })
+*)
 
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
 let build_apply : Location.t -> (label * code_repr) array -> code_repr = 
-  fun l ea -> 
+  fun loc ea -> 
     assert (Array.length ea > 1);
     match map_accum (fun vars (lbl,e) -> 
-                   let Code (var,e) = validate_vars l e in
+                   let Code (var,e) = validate_vars loc e in
                    ((lbl,e),merge var vars))
           Nil (Array.to_list ea) with
     | (("",eh)::elt,vars) ->
        Code (vars, 
-              {pexp_loc  = l; 
-               pexp_desc = Pexp_apply (eh, elt)})
+             Ast_helper.Exp.apply ~loc eh elt)
     | _ -> assert false
 
 
 let build_tuple : Location.t -> code_repr array -> code_repr =
- fun l ea -> 
-  let (els,vars) = validate_vars_list l (Array.to_list ea) in
+ fun loc ea -> 
+  let (els,vars) = validate_vars_list loc (Array.to_list ea) in
   Code (vars, 
-    {pexp_loc = l; pexp_desc = Pexp_tuple els })
+        Ast_helper.Exp.tuple ~loc els)
 
 let build_array : Location.t -> code_repr array -> code_repr =
- fun l ea -> 
-  let (els,vars) = validate_vars_list l (Array.to_list ea) in
-  Code (vars, 
-    {pexp_loc = l; pexp_desc = Pexp_array els })
+ fun loc ea -> 
+  let (els,vars) = validate_vars_list loc (Array.to_list ea) in
+  Code (vars,
+        Ast_helper.Exp.array ~loc els)
 
+(*
 let build_ifthenelse : 
  Location.t -> code_repr -> code_repr -> code_repr option -> code_repr =
  fun l e1 e2 eo -> 
@@ -1870,7 +1871,7 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
              }
            ]
       end
-
+*)
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
      let lel = List.fold_right (function                 (* keep the order! *)
@@ -1880,8 +1881,8 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
       texp_apply (texp_ident "Trx.build_apply")
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (l,e) ->
-           texp_tuple [texp_string l;trx_bracket trx_exp n e]) lel)]
-
+           texp_tuple [texp_string l;trx_bracket n e]) lel)]
+(*
   (* Pretty much like a function *)
   | Texp_match (e,pel,_) ->
       let (pl,names,binding_pat) = 
@@ -1916,12 +1917,12 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
                        Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
          }
        ]
-
+*)
   | Texp_tuple el ->
       texp_apply (texp_ident "Trx.build_tuple")
         [texp_loc exp.exp_loc; 
-	 texp_array (List.map (trx_bracket trx_exp n) el)]
-
+	 texp_array (List.map (trx_bracket n) el)]
+(*
   | Texp_construct (li, cdesc, args, explicit_arity) ->
       let lid = qualify_ctor li cdesc in
       texp_apply (texp_ident "Trx.build_construct")
@@ -1956,12 +1957,12 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
          trx_bracket trx_exp n e1;
          texp_lid (qualify_label li ldesc);
          trx_bracket trx_exp n e2]
-
+*)
   | Texp_array el ->
       texp_apply (texp_ident "Trx.build_array")
         [texp_loc exp.exp_loc; 
-	 texp_array (List.map (trx_bracket trx_exp n) el)]
-
+	 texp_array (List.map (trx_bracket n) el)]
+(*
   | Texp_ifthenelse (e,et,efo) ->
       texp_apply (texp_ident "Trx.build_ifthenelse")
         [texp_loc exp.exp_loc; 
