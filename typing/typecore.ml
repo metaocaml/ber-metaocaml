@@ -1467,6 +1467,7 @@ let rec final_subexpression sexp =
 (* Generalization criterion for expressions *)
 
 let rec is_nonexpansive exp =
+  List.memq Trx.attr_nonexpansive exp.exp_attributes ||   (* NNN *)
   match exp.exp_desc with
     Texp_ident(_,_,_) -> true
   | Texp_constant _ -> true
@@ -1865,8 +1866,13 @@ and type_expect_ ?in_function env sexp ty_expected =
           type_expect env sexp ty) in
       re @@
       if !global_stage = 0 then
+        (* Check if the expression non-expansive before the translation *)
+        let nonexp = is_nonexpansive exp in
         let exp = trx_bracket 1 exp in
-        {exp with exp_type = instance env ty_expected}
+        {exp with exp_type = instance env ty_expected;
+                  exp_attributes = 
+                    if nonexp then attr_nonexpansive :: exp.exp_attributes
+                              else exp.exp_attributes}
       else
         texp_braesc battr exp env (instance env ty_expected)
 

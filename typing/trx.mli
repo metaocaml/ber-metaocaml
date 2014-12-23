@@ -54,6 +54,11 @@ type stage = int                        (* staging level *)
 val attr_level : stage -> Parsetree.attribute
 val get_level  : Parsetree.attributes -> stage
 
+(* If the attribute is present, the expression is non-expansive 
+   We use physical equality comparison, to speed things up
+*)
+val attr_nonexpansive : Parsetree.attribute
+
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
    it is not available in the bootstrap compiler.

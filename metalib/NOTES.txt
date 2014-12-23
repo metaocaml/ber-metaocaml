@@ -65,7 +65,10 @@ should invoke the trx_bracket after type-checking the bracket at level
 0. Therefore, if there are no staging constructs, the typedtree is
 not traversed at all after type checking. Typemod.ml no longer has to
 be modified.
-
+However, we pay the price: the check on non-epxansiveness is done
+on the type-checked expression. So, we have to arrange so that we
+check if an expression is non-expansive before the translation.
+We carry this information in the dedicated attribute.
 
 
 Instead of the Level environment, carry the level as the attribute

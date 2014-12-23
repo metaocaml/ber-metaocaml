@@ -173,6 +173,12 @@ let attr_csp : Longident.t loc -> attribute = fun lid ->
   (Location.mknoloc "metaocaml.csp",PStr [
      Ast_helper.Str.eval (Ast_helper.Exp.ident lid)])
 
+(* If the attribute is present, the expression is non-expansive 
+   We use physical equality comparison, to speed things up
+*)
+let attr_nonexpansive : attribute = 
+  (Location.mknoloc "metaocaml.nonexpansive",PStr [])
+
   
 (* The result of what_stage_attr *)
 type stage_attr_elim = 
