@@ -899,8 +899,6 @@ let with_binding_region_gen :
      (remove prio vars, es)) in
   (new_names, vars, es)
 
-(*  XXXXX
-
 (* ------------------------------------------------------------------------ *)
 (* Building Parsetree nodes *)
 
@@ -917,7 +915,7 @@ fun f l e ->
 (* building a typical Parsetree node: Pexp_assert of expression*)
 let build_assert : Location.t -> code_repr -> code_repr = 
   code_wrapper
-  (fun l e -> {pexp_loc = l; pexp_desc = Pexp_assert e})
+  (fun loc e -> Ast_helper.Exp.assert_ ~loc e)
 
 (* When we translate the typed-tree, we have to manually compile
    the above code 
@@ -952,7 +950,8 @@ Texp_record must be sorted, in their declared order!
 (* Other similar builders *)
 let build_lazy : Location.t -> code_repr -> code_repr = 
   code_wrapper
-    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_lazy e})
+    (fun loc e -> Ast_helper.Exp.lazy_ ~loc e)
+(*  XXXXX
 let build_bracket : Location.t -> code_repr -> code_repr= 
   code_wrapper
     (fun l e -> {pexp_loc = l; pexp_desc = Pexp_bracket e})
@@ -1695,7 +1694,7 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
   | Some x -> Some (f x)
 
 
-let trx_bracket : int -> expression -> expression = fun n exp ->
+let rec trx_bracket : int -> expression -> expression = fun n exp ->
   let new_desc = match exp.exp_desc with
     (* Don't just do when vd.val_kind = Val_reg 
        because (+) or Array.get are Val_prim *)
@@ -2015,7 +2014,7 @@ let trx_bracket : int -> expression -> expression = fun n exp ->
          texp_string (match m with
                         | Tmeth_name name -> name
                         | Tmeth_val id -> Ident.name id)]
-
+*)
   | Texp_new (p,li,_) ->
       check_path_quotable "Class" p;
       texp_code ~node_id:"*new*" exp.exp_loc 
@@ -2034,17 +2033,15 @@ let trx_bracket : int -> expression -> expression = fun n exp ->
 
   | Texp_assert e ->
       texp_apply (texp_ident "Trx.build_assert")
-        [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
-  | Texp_assertfalse ->
-      texp_code ~node_id:"*af*" exp.exp_loc Pexp_assertfalse
+        [texp_loc exp.exp_loc; trx_bracket n e]
 
   | Texp_lazy e ->
       texp_apply (texp_ident "Trx.build_lazy")
-        [texp_loc exp.exp_loc; trx_bracket trx_exp n e]
+        [texp_loc exp.exp_loc; trx_bracket n e]
 
   | Texp_object (cl,fl) -> not_supported exp.exp_loc "Objects"
   | Texp_pack _         -> not_supported exp.exp_loc "First-class modules"
-
+(*
   | Texp_bracket e ->
       texp_apply (texp_ident "Trx.build_bracket")
         [texp_loc exp.exp_loc; trx_bracket trx_exp (n+1) e]

@@ -111,10 +111,10 @@ val lift_constant_int  : int  -> code_repr
 val lift_constant_char : char -> code_repr
 val lift_constant_bool : bool -> code_repr
 
-(*
 (* Builders of the Parsetree *)
 val build_assert   : Location.t -> code_repr -> code_repr
 val build_lazy     : Location.t -> code_repr -> code_repr
+(*
 val build_bracket  : Location.t -> code_repr -> code_repr
 val build_escape   : Location.t -> code_repr -> code_repr
 
