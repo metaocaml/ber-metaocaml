@@ -109,9 +109,14 @@ test-compile:
 	$(BINDIR)/metaocamlc -o pt test/pythagorian_triples.ml
 	./pt
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
+# Testing setting of the .cmo path
+	$(BINDIR)/metaocamlc test/test_path_a.ml
+	mv test/test_path_a.cm[io] /tmp
+	$(BINDIR)/metaocamlc -o tp test/test_path.ml
+	./tp
 
 clean::
-	rm -f simple_true quick_test t4 pt trivial.out simple.out
+	rm -f simple_true quick_test t4 pt trivial.out simple.out tp
 
 # Patch the OCaml distribution
 patch:
