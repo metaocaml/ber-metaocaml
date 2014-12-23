@@ -120,6 +120,7 @@ let x = true in .<assert x>.;;
 (*
 - : unit code = .<assert true>.
 *)
+!. .<assert (2>1)>.;;
 
 (* Applications and labels *)
 .<succ 1>.;;
