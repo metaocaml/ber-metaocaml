@@ -253,6 +253,35 @@ let 1 = !. !. (let x = .<1>. in .<.<.~x>.>.)
 *)
 let [3;2;1] = !. !. .<.<.~.<List.rev>.>.>. [1;2;3]
 
+(* we use a sequence internally to represent brackets and escapes
+   in a Typedtree
+*)
+.<.<begin assert true; 1 end>.>.
+(*
+- : int code code = .<.< assert true; 1  >.>. 
+*)
+let 1 = !. !. .<.<begin assert true; 1 end>.>.
+
+.<.~(.<begin assert true; 1 end>.)>.
+(*
+- : int code = .<assert true; 1>. 
+*)
+let x = .<begin assert true; 1 end>. in .<.~x>.
+(*
+- : int code = .<assert true; 1>. 
+*)
+let x = .<begin assert true; 1 end>. in .<.~(assert true; x)>.
+(*
+- : int code = .<assert true; 1>. 
+*)
+let 1 =
+  let x = .<begin assert true; 1 end>. in !. .<.~(assert true; x)>.
+
+let x = .<begin assert true; 1 end>. in .<.~(ignore(!. x); x)>.
+(*
+- : int code = .<assert true; 1>. 
+*)
+
 
 (* Lazy *)
 .<lazy 1>.;;
@@ -552,6 +581,16 @@ ok 2 2
 ok 3 2
 *)
 
+(* Anonymous loop variable (new in 4.02?) *)
+.<for _ = 1 to 3 do print_string "ok" done>.
+(*
+- : unit code = .<for _for_11 = 1 to 3 do Pervasives.print_string "ok" done>. 
+*)
+!. .<for _ = 1 to 3 do print_string "ok" done>.
+(*
+okokok- : unit = ()
+*)
+
 (* Scope extrusion test *)
 
 .<fun x -> .~(!. .<x>.; .<1>.)>.;;
@@ -579,7 +618,7 @@ let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.;
 (*
 Exception:
 Failure
- "Scope extrusion detected at Characters 110-125:\n                       .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                         ^^^^^^^^^^^^^^^\n for code built at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n for the identifier i_14 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n".
+ "Scope extrusion detected at Characters 110-125:\n                       .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                         ^^^^^^^^^^^^^^^\n for code built at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n for the identifier i_3 bound at Characters 27-28:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n".
 *)
 print_endline "Error was expected";;
 

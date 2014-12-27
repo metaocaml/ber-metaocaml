@@ -608,6 +608,11 @@ let texp_pats_names : Parsetree.pattern list -> string loc list ->
     {pn_exp with
      exp_desc = (texp_csp (Obj.repr (pats,names))).exp_desc}
 
+(* Utility function to build the case list *)
+let texp_case : ?guard:expression -> pattern -> expression -> case =
+  fun ?guard pat exp ->
+    {c_lhs=pat; c_guard=guard; c_rhs=exp}
+
 (* ------------------------------------------------------------------------ *)
 (* Stack marks, a simple form of dynamic binding *)
 
@@ -1071,18 +1076,18 @@ let build_open :
   Code (vars,
         Ast_helper.Exp.open_ ~loc ovf l e)
 
-(*
 (* Build a function with a non-binding pattern, such as fun () -> ... *)
+(*
 let build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
   code_repr array -> code_repr =
-  fun l label pats bodies -> 
+  fun loc label pats bodies -> 
   let (ebodies,vars) = validate_vars_list l (Array.to_list bodies) in
   Code (vars,
     {pexp_loc = l; 
      pexp_desc = Pexp_function (label,None,
                                 List.map2 (fun p e -> (p,e)) pats ebodies)})
-
+*)
 
 (* Build a Parsetree for a future-stage identifier
    It is always in scope of with_binding_region:
@@ -1103,24 +1108,25 @@ let build_ident : Location.t -> string loc -> code_repr =
 *)
 let build_fun_simple : 
   Location.t -> string -> string loc -> (code_repr -> code_repr) -> code_repr =
-  fun l label old_name fbody -> 
-  let (name, vars, ebody) = with_binding_region l old_name fbody in
-  let pat = {ppat_loc  = name.loc; ppat_desc = Ppat_var name} in
+  fun loc label old_name fbody -> 
+  let (name, vars, ebody) = with_binding_region loc old_name fbody in
+  let pat = Ast_helper.Pat.var ~loc:name.loc name in
   Code (vars,
-    {pexp_loc = l; 
-     pexp_desc = Pexp_function (label,None,[(pat,ebody)])})
+        Ast_helper.Exp.fun_ ~loc label None pat ebody)
 
 let build_for : 
   Location.t -> string loc -> code_repr -> code_repr -> 
   bool -> (code_repr -> code_repr) -> code_repr =
-  fun l old_name elo ehi dir fbody -> 
-  let (name, varsb, ebody) = with_binding_region l old_name fbody in
-  let Code (varso,elo) = validate_vars l elo in
-  let Code (varsh,ehi) = validate_vars l ehi in
-  Code (merge varsb (merge varso varsh),
-  {pexp_loc = l; 
-   pexp_desc = Pexp_for (name,elo,ehi,(if dir then Upto else Downto), ebody) })
+  fun loc old_name elo ehi dir fbody -> 
+  let (name, varsb, ebody) = with_binding_region loc old_name fbody in
+  let Code (varsl,elo) = validate_vars loc elo in
+  let Code (varsh,ehi) = validate_vars loc ehi in
+  Code (merge varsb (merge varsl varsh),
+        Ast_helper.Exp.for_ ~loc 
+          (Ast_helper.Pat.var ~loc:name.loc name) elo ehi 
+            (if dir then Upto else Downto) ebody)
 
+(*
 (* deflt_flag = True, the let was Default (auto-geneterated by the type
    checker for the default function argument)
 *)
@@ -1853,16 +1859,18 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
           *)
          { exp with
            exp_desc = 
-             Texp_function ("",[(pat, trx_bracket trx_exp n ebody)],Total);
+             Texp_function
+  {pexp_loc = l; 
+   pexp_desc = Pexp_for (name, ("",[(pat, trx_bracket trx_exp n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
                Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
-  | Texp_function (l,pel,_) ->
+  | Texp_function (l,cl,_) ->
       begin
-      match trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) with
+      match trx_cl cl (wrap_ty_in_code n (Btype.newgenvar ())) with
       | (pl, [], _) ->                    (* non-binding pattern *)
           texp_apply (texp_ident "Trx.build_fun_nonbinding")
             [texp_loc exp.exp_loc; 
@@ -2007,32 +2015,36 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       texp_apply (texp_ident "Trx.build_while")
         [texp_loc exp.exp_loc; 
 	 trx_bracket n e1; trx_bracket n e2]
-(*
-  | Texp_for (id, name, elo, ehi, dir, ebody) ->
+
+  | Texp_for (id, pat, elo, ehi, dir, ebody) ->
+      let name =
+        begin
+          match pat.ppat_desc with
+          | Ppat_any -> mknoloc "_for"  (* the typechecker also makes a dummy*)
+          | Ppat_var x -> x
+          | _  -> assert false
+        end
+      in
       texp_apply (texp_ident "Trx.build_for") 
         [texp_loc exp.exp_loc;
          texp_string_loc name;
-         trx_bracket trx_exp n elo;
-         trx_bracket trx_exp n ehi;
+         trx_bracket n elo;
+         trx_bracket n ehi;
          texp_bool (dir = Upto);
          let var_typ = wrap_ty_in_code n (Ctype.instance_def Predef.type_int) in
          let pat = {pat_loc = exp.exp_loc; pat_extra = [];
+                    pat_attributes = [];
                     pat_type = var_typ; pat_env = exp.exp_env;
                     pat_desc = Tpat_var (id,name)} in
          { exp with
            exp_desc = 
-             Texp_function ("",[(pat, trx_bracket trx_exp n ebody)],Total);
+             Texp_function ("",[texp_case pat (trx_bracket n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
                Tarrow ("",var_typ, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
-  | Texp_when (e1,e2) ->
-      texp_apply (texp_ident "Trx.build_when")
-        [texp_loc exp.exp_loc; 
-	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-*)
   | Texp_send (e,m,_) ->
       (* We don't check the persistence of the method: after all,
          a method name is somewhat like a polymorphic variant.

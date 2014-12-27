@@ -145,13 +145,14 @@ val build_open :
 val build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
   code_repr array -> code_repr
-
+*)
 val build_fun_simple : 
   Location.t -> string -> string Location.loc -> 
   (code_repr -> code_repr) -> code_repr
 val build_for : 
   Location.t -> string Location.loc -> code_repr -> code_repr -> 
   bool -> (code_repr -> code_repr) -> code_repr
+(*
 val build_let_simple_nonrec : 
   Location.t -> string Location.loc -> bool -> code_repr -> 
     (code_repr -> code_repr) -> code_repr
