@@ -3,7 +3,8 @@ December 2014
 	New function Runcode.add_search_path to add a directory to
 	the search path for .cmi/.cmo files -- report by Nicolas Ojeda Bar
 	Better handling of CSP. For simple cases, there are no longer
-	ny serialization problems.
+	any serialization problems.
+	Overall better printing, of CSP, code and error messages
 
 April 24, 2014
 	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.

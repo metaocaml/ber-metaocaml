@@ -345,7 +345,10 @@ let Int 1 = !. .<Int 1>.;;
 module Foo = struct exception E end;;
 .<raise Foo.E>.;;
 (*
-Fatal error: exception Trx.TrxError("Exception Foo.E cannot be used within brackets. Put into a separate file.")
+Characters 8-13:
+  .<raise Foo.E>.;;
+          ^^^^^
+Exception (extension) Foo.E cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
@@ -355,7 +358,7 @@ type foo = Bar;;
 Characters 2-5:
   .<Bar>.;;
     ^^^
-Error: Unqualified constructor Bar cannot be used within brackets. Put into a separate file.
+Unqualified constructor Bar cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
@@ -365,7 +368,7 @@ module Foo = struct type foo = Bar end;;
 Characters 2-9:
   .<Foo.Bar>.;;
     ^^^^^^^
-Error: Constructor Bar cannot be used within brackets. Put into a separate file.
+Constructor Bar cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
@@ -385,7 +388,7 @@ Characters 44-46:
 Warning 40: re was selected from type Complex.t.
 It is not visible in the current scope, and will not 
 be selected if the type becomes unknown.
-- : float code = .<((* cross-stage persistent value (id: x) *)).Complex.re>. 
+- : float code = .<(* CSP x *).Complex.re>. 
 *)
 
 let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.;;
@@ -396,8 +399,7 @@ let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.;;
 let 1.0 = !.(let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.);;
 let x = ref 1 in .<x.contents>.;;       (* Pervasive record *)
 (*
-- : int code =
-.<((* cross-stage persistent value (as id: x) *)).contents>.
+- : int code = .<(* CSP x *).Pervasives.contents>. 
 *)
 let 1 = !.(let x = ref 1 in .<x.contents>.);;
 let x = ref 1 in .<x.contents <- 2>.;;
@@ -427,7 +429,7 @@ type foo = {fool : int};;
 Characters 3-7:
   .<{fool = 1}>.;;
      ^^^^
-Error: Unqualified label fool cannot be used within brackets. Put into a separate file.
+Unqualified label fool cannot be used within brackets. Put into a separate file.
 *)
 print_endline "Error was expected";;
 
@@ -463,12 +465,24 @@ val x : < foo : int > = <obj>
 *)
 f x;;
 (*
-- : int code = .<((* cross-stage persistent value (id: x) *))#foo>. 
+- : int code = .<(* CSP x *)#foo>. 
 *)
 let 1 = !. (f x);;
 
 (* Local open *)
+.<Complex.(norm {re=3.0; im = 4.0})>.;;
+(*
+- : float code = .<
+let open Complex in Complex.norm { Complex.re = 3.0; Complex.im = 4.0 }>. 
+*)
+
 let 5.0 = !. .<Complex.(norm {re=3.0; im = 4.0})>.;;
+
+.<let open Complex in norm {re=4.0; im = 3.0}>.;;
+(*
+- : float code = .<
+let open Complex in Complex.norm { Complex.re = 4.0; Complex.im = 3.0 }>. 
+*)
 
 let 5.0 = !. .<let open Complex in norm {re=4.0; im = 3.0}>.;;
 

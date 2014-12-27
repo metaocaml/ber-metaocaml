@@ -120,19 +120,15 @@ val build_escape   : Location.t -> code_repr -> code_repr
 
 val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
 val build_while    : Location.t -> code_repr -> code_repr -> code_repr
-(*
-val build_when     : Location.t -> code_repr -> code_repr -> code_repr
-*)
 
 val build_apply : Location.t -> (Asttypes.label * code_repr) array -> code_repr
 
 val build_tuple : Location.t -> code_repr array -> code_repr
 val build_array : Location.t -> code_repr array -> code_repr
-(*
 val build_ifthenelse : 
   Location.t -> code_repr -> code_repr -> code_repr option -> code_repr
 val build_construct  :
- Location.t -> Longident.t Location.loc -> code_repr array -> bool -> code_repr
+ Location.t -> Longident.t Location.loc -> code_repr array -> code_repr
 val build_record :
  Location.t -> (Longident.t Location.loc * code_repr) array ->
  code_repr option -> code_repr
@@ -145,6 +141,7 @@ val build_send     : Location.t -> code_repr -> string -> code_repr
 val build_open :
  Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
    code_repr -> code_repr
+(*
 val build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
   code_repr array -> code_repr

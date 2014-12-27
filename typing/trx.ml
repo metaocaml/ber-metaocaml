@@ -977,14 +977,6 @@ let build_while : Location.t -> code_repr -> code_repr -> code_repr =
     let Code (vars2,e2) = validate_vars loc e2 in
     Code (merge vars1 vars2,
           Ast_helper.Exp.while_ ~loc e1 e2)
-(*  XXXXX
-let build_when : Location.t -> code_repr -> code_repr -> code_repr = 
-  fun l e1 e2 -> 
-    let Code (vars1,e1) = validate_vars l e1 in
-    let Code (vars2,e2) = validate_vars l e2 in
-    Code (merge vars1 vars2,
-          {pexp_loc = l; pexp_desc = Pexp_when (e1,e2) })
-*)
 
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
@@ -1013,30 +1005,27 @@ let build_array : Location.t -> code_repr array -> code_repr =
   Code (vars,
         Ast_helper.Exp.array ~loc els)
 
-(*
 let build_ifthenelse : 
  Location.t -> code_repr -> code_repr -> code_repr option -> code_repr =
- fun l e1 e2 eo -> 
-    let Code (vars1,e1) = validate_vars l e1 in
-    let Code (vars2,e2) = validate_vars l e2 in
-    let (eo,varso)      = validate_vars_option l eo in
+ fun loc e1 e2 eo -> 
+    let Code (vars1,e1) = validate_vars loc e1 in
+    let Code (vars2,e2) = validate_vars loc e2 in
+    let (eo,varso)      = validate_vars_option loc eo in
     Code (merge vars1 (merge vars2 varso),
-      {pexp_loc = l; pexp_desc = Pexp_ifthenelse (e1,e2,eo) })
+          Ast_helper.Exp.ifthenelse ~loc e1 e2 eo)
 
 let build_construct :
- Location.t -> Longident.t loc -> code_repr array -> bool -> code_repr =
- fun loc lid args explicit_arity ->
+ Location.t -> Longident.t loc -> code_repr array -> code_repr =
+ fun loc lid args ->
   let (args,vars) = validate_vars_list loc (Array.to_list args) in
   Code (vars, 
-  {pexp_loc  = loc;
-   pexp_desc = Pexp_construct (lid,
-     begin
-      match args with
-      | []  -> None
-      | [x] -> Some x
-      | xl  -> Some { pexp_loc  = loc; pexp_desc = Pexp_tuple xl }
-     end,
-     explicit_arity) })
+        Ast_helper.Exp.construct ~loc lid
+          begin
+            match args with
+            | []  -> None
+            | [x] -> Some x
+            | xl  -> Some (Ast_helper.Exp.tuple ~loc xl)
+     end)
 
 let build_record : Location.t -> (Longident.t loc * code_repr) array ->
  code_repr option -> code_repr =
@@ -1046,15 +1035,14 @@ let build_record : Location.t -> (Longident.t loc * code_repr) array ->
                        ((lbl,e),merge var vars))
         Nil (Array.to_list lel) in
    let (eo,varo) = validate_vars_option loc eo in
-   Code (merge vars varo, 
-   {pexp_loc  = loc; pexp_desc = Pexp_record (lel,eo)})
+   Code (merge vars varo,
+         Ast_helper.Exp.record ~loc lel eo)
 
 let build_field : Location.t -> code_repr -> Longident.t loc -> code_repr =
  fun loc e lid ->
   let Code (vars,e) = validate_vars loc e in
-  Code (vars, 
-     {pexp_loc  = loc;
-      pexp_desc = Pexp_field (e,lid)})
+  Code (vars,
+        Ast_helper.Exp.field ~loc e lid)
 
 let build_setfield :
  Location.t -> code_repr -> Longident.t loc -> code_repr -> code_repr =
@@ -1062,31 +1050,28 @@ let build_setfield :
   let Code (vars1,e1) = validate_vars loc e1 in
   let Code (vars2,e2) = validate_vars loc e2 in
   Code (merge vars1 vars2,
-     {pexp_loc  = loc;
-      pexp_desc = Pexp_setfield (e1,lid,e2)})
+        Ast_helper.Exp.setfield ~loc e1 lid e2)
 
 let build_variant : Location.t -> string -> code_repr option -> code_repr =
  fun loc l eo ->
   let (eo,vars) = validate_vars_option loc eo in
-  Code (vars, 
-     {pexp_loc  = loc;
-      pexp_desc = Pexp_variant (l,eo)})
+  Code (vars,
+        Ast_helper.Exp.variant ~loc l eo)
 
 let build_send : Location.t -> code_repr -> string -> code_repr =
  fun loc e l ->
   let Code (vars,e) = validate_vars loc e in
-  Code (vars, 
-    {pexp_loc  = loc;
-     pexp_desc = Pexp_send (e,l)})
+  Code (vars,
+        Ast_helper.Exp.send ~loc e l)
 
 let build_open :
  Location.t -> Longident.t loc -> override_flag -> code_repr -> code_repr =
  fun loc l ovf e ->
   let Code (vars,e) = validate_vars loc e in
-  Code (vars, 
-     {pexp_loc  = loc;
-      pexp_desc = Pexp_open (ovf,l,e)})
+  Code (vars,
+        Ast_helper.Exp.open_ ~loc ovf l e)
 
+(*
 (* Build a function with a non-binding pattern, such as fun () -> ... *)
 let build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
@@ -1967,63 +1952,62 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       texp_apply (texp_ident "Trx.build_tuple")
         [texp_loc exp.exp_loc; 
 	 texp_array (List.map (trx_bracket n) el)]
-(*
-  | Texp_construct (li, cdesc, args, explicit_arity) ->
+
+  | Texp_construct (li, cdesc, args) ->
       let lid = qualify_ctor li cdesc in
       texp_apply (texp_ident "Trx.build_construct")
         [texp_loc exp.exp_loc; 
          texp_lid lid;
-	 texp_array (List.map (trx_bracket trx_exp n) args);
-         texp_bool explicit_arity]
+	 texp_array (List.map (trx_bracket n) args)]
 
   | Texp_variant (l,eo) ->              (* polymorphic variant *)
       texp_apply (texp_ident "Trx.build_variant")
         [texp_loc exp.exp_loc; 
          texp_string l;
-	 texp_option (map_option (trx_bracket trx_exp n) eo)]
+	 texp_option (map_option (trx_bracket n) eo)]
 
   | Texp_record (lel,eo) ->
       texp_apply (texp_ident "Trx.build_record")
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (li,ldesc,e) ->
            texp_tuple [texp_lid (qualify_label li ldesc);
-                       trx_bracket trx_exp n e]) lel);
-         texp_option (map_option (trx_bracket trx_exp n) eo)]
+                       trx_bracket n e]) lel);
+         texp_option (map_option (trx_bracket n) eo)]
 
   | Texp_field (e,li,ldesc) ->
       texp_apply (texp_ident "Trx.build_field")
         [texp_loc exp.exp_loc; 
-         trx_bracket trx_exp n e;
+         trx_bracket n e;
          texp_lid (qualify_label li ldesc)]
 
   | Texp_setfield (e1,li,ldesc,e2) ->
       texp_apply (texp_ident "Trx.build_setfield")
         [texp_loc exp.exp_loc; 
-         trx_bracket trx_exp n e1;
+         trx_bracket n e1;
          texp_lid (qualify_label li ldesc);
-         trx_bracket trx_exp n e2]
-*)
+         trx_bracket n e2]
+
   | Texp_array el ->
       texp_apply (texp_ident "Trx.build_array")
         [texp_loc exp.exp_loc; 
 	 texp_array (List.map (trx_bracket n) el)]
-(*
+
   | Texp_ifthenelse (e,et,efo) ->
       texp_apply (texp_ident "Trx.build_ifthenelse")
         [texp_loc exp.exp_loc; 
-         trx_bracket trx_exp n e;
-         trx_bracket trx_exp n et;
-	 texp_option (map_option (trx_bracket trx_exp n) efo)]
+         trx_bracket n e;
+         trx_bracket n et;
+	 texp_option (map_option (trx_bracket n) efo)]
 
   | Texp_sequence (e1,e2) ->
       texp_apply (texp_ident "Trx.build_sequence")
         [texp_loc exp.exp_loc; 
-	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
+	 trx_bracket n e1; trx_bracket n e2]
   | Texp_while (e1,e2) ->
       texp_apply (texp_ident "Trx.build_while")
         [texp_loc exp.exp_loc; 
-	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-
+	 trx_bracket n e1; trx_bracket n e2]
+(*
   | Texp_for (id, name, elo, ehi, dir, ebody) ->
       texp_apply (texp_ident "Trx.build_for") 
         [texp_loc exp.exp_loc;
@@ -2048,7 +2032,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       texp_apply (texp_ident "Trx.build_when")
         [texp_loc exp.exp_loc; 
 	 trx_bracket trx_exp n e1; trx_bracket trx_exp n e2]
-
+*)
   | Texp_send (e,m,_) ->
       (* We don't check the persistence of the method: after all,
          a method name is somewhat like a polymorphic variant.
@@ -2056,11 +2040,11 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       *)
       texp_apply (texp_ident "Trx.build_send")
         [texp_loc exp.exp_loc; 
-	 trx_bracket trx_exp n e;
+	 trx_bracket n e;
          texp_string (match m with
                         | Tmeth_name name -> name
                         | Tmeth_val id -> Ident.name id)]
-*)
+
   | Texp_new (p,li,_) ->
       check_path_quotable "Class" p;
       texp_code ~node_id:"*new*" exp.exp_loc 
@@ -2101,18 +2085,15 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
     | Texp_coerce (cto,ct) ->
         not_supported loc "Texp_coerce"
     | Texp_open (ovf, path, lid, _) -> 
-        not_supported loc "Texp_open"
-(* XXXX
+       (* TODO: do I even need local open since all the constructors
+          and identifiers are qualified anyway?
+        *)
        check_path_quotable "Texp_open" path;
-       let ovf_exp = texp_ident "Trx.sample_override_flag" in
-       let ovf_exp = {ovf_exp with exp_desc = 
-                        Texp_cspval (Obj.repr ovf, dummy_lid "*ovf*")} in
        texp_apply (texp_ident "Trx.build_open")
         [texp_loc exp.exp_loc;
          texp_lid (mkloc (path_to_lid path) lid.loc);
-         ovf_exp;
+         texp_csp (Obj.repr ovf);
          exp]      (* exp is the result of trx_bracket *)
-*)
     | Texp_poly cto  -> not_supported loc "Texp_poly"
     | Texp_newtype s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
