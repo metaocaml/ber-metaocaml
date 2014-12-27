@@ -515,15 +515,20 @@ class printer  ()= object(self:'self)
     | _ -> false
   method expression f x =
     (* NNN begin *)
+    (* Keep in mind that there may be several metaocaml
+       attributes, and the order matters *)
+    (* Here we assume that all metaocaml attributes are at the front,
+       which is how they are generated.
+    *)
     match x.pexp_attributes with
-    | [({txt="metaocaml.bracket"},_)] ->
-        pp f "@[<hov2>.<@ %a @ >.@]" self#expression {x with pexp_attributes=[]}
-    | [({txt="metaocaml.escape"},_)] ->
+    | ({txt="metaocaml.bracket"},_) :: t ->
+        pp f "@[<hov2>.<@ %a @ >.@]" self#expression {x with pexp_attributes=t}
+    | ({txt="metaocaml.escape"},_) :: t ->
         begin
         match x.pexp_desc with
-        | Pexp_ident li -> pp f ".~%a" self#longident_loc li
+        | Pexp_ident li when t = [] -> pp f ".~%a" self#longident_loc li
         | _ -> pp f ".~%a" (self#paren true self#expression)
-                              {x with pexp_attributes=[]}
+                              {x with pexp_attributes=t}
         end
     | [({txt = "metaocaml.csp"},PStr [{pstr_desc = 
             Pstr_eval ({pexp_desc=Pexp_ident li},_)}])] -> 

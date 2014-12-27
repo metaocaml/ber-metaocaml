@@ -112,7 +112,7 @@ Warning 22: The CSP value is a closure or too deep to serialize
 *)
 .<(+)>.;;
 (*
-- : (int -> int -> int) code = .<(+)>.
+- : (int -> int -> int) code = .<Pervasives.(+)>. 
 *)
 
 
@@ -166,16 +166,16 @@ let 1 = !. !. .<.<1>.>.;;
 (* - : int = 1 *)
 .<!. .<1>.>.;;
 (*
-- : int code = .<Runcode.( !. )  (.< 1  >.)>. 
+- : int code = .<Runcode.(!.)  (.< 1  >.)>. 
 *)
 let 1 = !. .<!. .<1>.>.;;
 .<1 + .~(let x = 2 in .<x>.)>.;;
 (*
-- : int code = .<(1 + 2)>.
+- : int code = .<1 + 2>.
 *)
 let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
 (*
-- : int code = .<((2 + 4) + (2 + 4))>.
+- : int code = .<(2 + 4) + (2 + 4)>. 
 *)
 let 12 = !. (let x = .< 2 + 4 >. in .< .~ x + .~ x >. );;
 
@@ -190,7 +190,7 @@ Error: This expression has type 'a code
 print_endline "Error was expected";;
 .<1 + !. .~(let x = 2 in .<.<x>.>.)>.;;
 (*
-- : int code = .<1 + (Runcode.( !. )  (.< 2  >.))>. 
+- : int code = .<1 + (Runcode.(!.) .< 2  >.)>. 
 *)
 let 3 = !. .<1 + !. .~(let x = 2 in .<.<x>.>.)>.;;
 !. .<1 + .~ (.~(let x = 2 in .<.<x>.>.))>.;;
@@ -204,18 +204,55 @@ print_endline "Error was expected";;
 
 .<.<.~(.<1>.)>.>.;;
 (*
-- : int code code = .<.< .~.< 1  >.  >.>. 
+- : int code code = .<.< .~(.< 1  >.)  >.>. 
 - : ('cl, ('cl0, int) code) code = .<.<.~(.<1>.)>.>.
 *)
 !. .<.<.~(.<1>.)>.>.;;
 (*
 - : int code = .<1>.
 *)
+let 1 = !. !. .<.<.~(.<1>.)>.>.;;
+
 .<.<.~.~(.<.<1>.>.)>.>.;;
 (*
-- : int code code = .<.< .~.< 1  >.  >.>. 
+- : int code code = .<.< .~(.< 1  >.)  >.>. 
 - : ('cl, ('cl0, int) code) code = .<.<.~(.<1>.)>.>.
 *)
+let 1 = !. !. .<.<.~.~(.<.<1>.>.)>.>.;;
+
+(* Nested brackets and escapes on the same identifier *)
+let x = .<1>. in .<.~x>.
+(*
+- : int code = .<1>. 
+*)
+let 1 = !. (let x = .<1>. in .<.~x>.)
+
+let x = .<1>. in .<.~.<x>.>.
+(*
+- : int code code = .<(* CSP x *)>. 
+*)
+!. (let x = .<1>. in .<.~.<x>.>.)
+(*
+- : int code = .<1>. 
+*)
+let 1 = !. !. (let x = .<1>. in .<.~.<x>.>.)
+
+let x = .<1>. in .<.<.~x>.>.
+(*
+- : int code code = .<.< .~((* CSP x *))  >.>. 
+*)
+let 1 = !. !. (let x = .<1>. in .<.<.~x>.>.)
+
+.<.<.~.<List.rev>.>.>.
+(*
+- : ('a list -> 'a list) code code = .<.< .~(.< List.rev  >.)  >.>. 
+*)
+!. .<.<.~.<List.rev>.>.>.
+(*
+- : ('_a list -> '_a list) code = .<List.rev>. 
+*)
+let [3;2;1] = !. !. .<.<.~.<List.rev>.>.>. [1;2;3]
+
 
 (* Lazy *)
 .<lazy 1>.;;

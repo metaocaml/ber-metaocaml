@@ -99,6 +99,7 @@ val set_with_stack_mark : stackmark_region_fn -> unit
    Therefore, do NOT rename the functions or change their types!
 *)
 
+val loc_none : Location.t
 val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
@@ -114,12 +115,12 @@ val lift_constant_bool : bool -> code_repr
 (* Builders of the Parsetree *)
 val build_assert   : Location.t -> code_repr -> code_repr
 val build_lazy     : Location.t -> code_repr -> code_repr
-(*
 val build_bracket  : Location.t -> code_repr -> code_repr
 val build_escape   : Location.t -> code_repr -> code_repr
 
 val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
 val build_while    : Location.t -> code_repr -> code_repr -> code_repr
+(*
 val build_when     : Location.t -> code_repr -> code_repr -> code_repr
 *)
 

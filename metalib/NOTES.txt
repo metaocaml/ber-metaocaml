@@ -26,6 +26,9 @@ or
 Likewise, .~exp is represented as
    exp [@metaocaml.escape]
 
+Keep in mind that an expreession can have several bracket and escape
+attributes, for example: .<.<1>.>.
+The order matters: .<.< .~ x >.>. vs .< .~.<x>. >.
 
 We may need an extension node for CSP. Actually, CSPs are just
 constants. So, we keep CSP as constants, but annotate them.

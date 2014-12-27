@@ -1848,6 +1848,9 @@ and type_expect ?in_function env sexp ty_expected =
 and type_expect_ ?in_function env sexp ty_expected =
   let loc = sexp.pexp_loc in
   let open Trx in
+  (* Keep in mind that there may be several metaocaml attributes,
+     and their order matters. 
+  *)
   match what_stage_attr sexp.pexp_attributes with
   | Stage0 -> type_expect_orig ?in_function env sexp ty_expected
   | Bracket(battr,attrs) ->

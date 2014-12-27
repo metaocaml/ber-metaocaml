@@ -419,6 +419,11 @@ let ident_can_be_quoted = is_external
 
 (*{{{ Templates for building Parsetree/Typedtree components *)
 
+(* Local reference: trx.cmi is available but location.cmi is not
+   necessarily is in the current path.
+*)
+let loc_none = Location.none
+
 let dummy_lid : string -> Longident.t loc = fun name ->
   Location.mknoloc (Longident.Lident name)
 
@@ -542,7 +547,7 @@ let texp_csp : Obj.t -> Typedtree.expression = fun v ->
    type information for location though, just to be fully correct.
 *)
 let texp_loc : Location.t -> Typedtree.expression = fun loc ->
-  let loc_exp = texp_ident "Location.none" in (* this fills in the type, etc.*)
+  let loc_exp = texp_ident "Trx.loc_none" in (* this fills in the type, etc.*)
   if loc == Location.none then loc_exp else
   {loc_exp with exp_desc = (texp_csp (Obj.repr loc)).exp_desc}
 
@@ -949,28 +954,30 @@ Texp_record must be sorted, in their declared order!
 
 (* Other similar builders *)
 let build_lazy : Location.t -> code_repr -> code_repr = 
-  code_wrapper
-    (fun loc e -> Ast_helper.Exp.lazy_ ~loc e)
-(*  XXXXX
-let build_bracket : Location.t -> code_repr -> code_repr= 
-  code_wrapper
-    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_bracket e})
+  code_wrapper @@
+    fun loc e -> Ast_helper.Exp.lazy_ ~loc e
+let build_bracket : Location.t -> code_repr -> code_repr = 
+  code_wrapper @@
+    fun _ e -> {e with pexp_attributes = 
+                   attr_bracket :: e.pexp_attributes }
 let build_escape : Location.t -> code_repr -> code_repr = 
-  code_wrapper
-    (fun l e -> {pexp_loc = l; pexp_desc = Pexp_escape e})
+  code_wrapper @@
+    fun _ e -> {e with pexp_attributes = 
+                        attr_escape :: e.pexp_attributes}
 
 let build_sequence : Location.t -> code_repr -> code_repr -> code_repr = 
-  fun l e1 e2 -> 
-    let Code (vars1,e1) = validate_vars l e1 in
-    let Code (vars2,e2) = validate_vars l e2 in
+  fun loc e1 e2 -> 
+    let Code (vars1,e1) = validate_vars loc e1 in
+    let Code (vars2,e2) = validate_vars loc e2 in
     Code (merge vars1 vars2,
-          {pexp_loc = l; pexp_desc = Pexp_sequence (e1,e2) })
+          Ast_helper.Exp.sequence ~loc e1 e2)
 let build_while : Location.t -> code_repr -> code_repr -> code_repr = 
-  fun l e1 e2 -> 
-    let Code (vars1,e1) = validate_vars l e1 in
-    let Code (vars2,e2) = validate_vars l e2 in
+  fun loc e1 e2 -> 
+    let Code (vars1,e1) = validate_vars loc e1 in
+    let Code (vars2,e2) = validate_vars loc e2 in
     Code (merge vars1 vars2,
-          {pexp_loc = l; pexp_desc = Pexp_while (e1,e2) })
+          Ast_helper.Exp.while_ ~loc e1 e2)
+(*  XXXXX
 let build_when : Location.t -> code_repr -> code_repr -> code_repr = 
   fun l e1 e2 -> 
     let Code (vars1,e1) = validate_vars l e1 in
@@ -1696,8 +1703,46 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
 
 
 let rec trx_bracket : int -> expression -> expression = fun n exp ->
+  (* Handle staging constructs, which are distinguished solely by
+     attributes *)
+  match what_stage_attr exp.exp_attributes with
+  | Stage0 -> trx_bracket_ n exp
+        (* see texp_braesc for the representation of brackets and escapes
+           in the Typedtree *)
+  | Bracket(_,attrs) -> 
+  begin
+    match exp.exp_desc with
+    | Texp_sequence (_,exp) ->
+      {exp with exp_type = wrap_ty_in_code n exp.exp_type;
+                exp_attributes = attrs;
+                exp_desc =
+                 texp_apply (texp_ident "Trx.build_bracket")
+                   [texp_loc exp.exp_loc; trx_bracket (n+1) exp]}
+    | _ -> assert false   (* corrupted representation of bracket *)
+  end
+  | Escape(_,attrs) -> 
+  begin
+    match exp.exp_desc with
+    | Texp_sequence (_,exp) ->
+        if n = 1 then exp	               (* switch to 0 level *)
+        else
+        {exp with 
+          exp_type = wrap_ty_in_code n exp.exp_type;
+          exp_attributes = attrs;
+          exp_desc = texp_apply (texp_ident "Trx.build_escape")
+                      [texp_loc exp.exp_loc; trx_bracket (n-1) exp]}
+    | _ -> assert false   (* corrupted representation of escape *)
+  end
+  | CSP(_,li,attrs) -> (* For CSP, we only need to propagate the CSP attr *)
+     {exp with 
+         exp_type = wrap_ty_in_code n exp.exp_type;
+         exp_attributes = attrs;
+         exp_desc = texp_apply 
+                     (texp_ident "Trx.dyn_quote") [exp; texp_lid li]}
+
+and trx_bracket_ : int -> expression -> expression = fun n exp ->
   let new_desc = match exp.exp_desc with
-    (* Don't just do when vd.val_kind = Val_reg 
+    (* Don't just do only for vd.val_kind = Val_reg 
        because (+) or Array.get are Val_prim *)
   | Texp_ident (p,li,vd)  ->
     let stage = get_level vd.val_attributes in
@@ -2042,19 +2087,6 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
 
   | Texp_object (cl,fl) -> not_supported exp.exp_loc "Objects"
   | Texp_pack _         -> not_supported exp.exp_loc "First-class modules"
-(*
-  | Texp_bracket e ->
-      texp_apply (texp_ident "Trx.build_bracket")
-        [texp_loc exp.exp_loc; trx_bracket trx_exp (n+1) e]
-  | Texp_escape e ->
-      if n = 1 then (trx_exp e).exp_desc	(* switch to 0 level *)
-      else
-      texp_apply (texp_ident "Trx.build_escape")
-        [texp_loc exp.exp_loc; trx_bracket trx_exp (n-1) e]
-  | Texp_cspval (v,li) ->               (* CSP is a sort of a constant *)
-      texp_code ~node_id:"*csp*" exp.exp_loc (Pexp_cspval(v,li))
-XXXXX *)
-
   | _ -> not_supported exp.exp_loc "not yet supported"
   in                               
   (* See untype_extra in tools/untypeast.ml *)
