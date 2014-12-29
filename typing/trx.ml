@@ -1694,6 +1694,13 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
 
 
 let rec trx_bracket : int -> expression -> expression = fun n exp ->
+      let _ = debug_print "Texp_bracket" in
+      let rec prattr = function
+        | [] -> ()
+        | ({txt=name},_) :: t -> 
+            debug_print ("attr: " ^ name); prattr t
+      in prattr   exp.exp_attributes;
+      let _ = Location.print Format.err_formatter (exp.exp_loc) in
   (* Handle staging constructs, which are distinguished solely by
      attributes *)
   match what_stage_attr exp.exp_attributes with
@@ -1845,9 +1852,12 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
                        Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
          }
        ]
-
+*)
      (* The most common case of functions: fun x -> body *)
-  | Texp_function (l,[({pat_desc = Tpat_var (_,name)} as pat,ebody)],_) ->
+  | Texp_function (l,[{c_guard=None; 
+                       c_lhs={pat_desc = Tpat_var (_,name)} as pat;
+                       c_rhs=ebody}],_) ->
+      let _ = debug_print "Texp_function" in
       let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
       texp_apply (texp_ident "Trx.build_fun_simple") 
         [texp_loc exp.exp_loc;
@@ -1860,14 +1870,13 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
          { exp with
            exp_desc = 
              Texp_function
-  {pexp_loc = l; 
-   pexp_desc = Pexp_for (name, ("",[(pat, trx_bracket trx_exp n ebody)],Total);
+               ("",[texp_case pat (trx_bracket n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
                Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
-
+(*
   | Texp_function (l,cl,_) ->
       begin
       match trx_cl cl (wrap_ty_in_code n (Btype.newgenvar ())) with
