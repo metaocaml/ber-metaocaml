@@ -593,11 +593,15 @@ okokok- : unit = ()
 
 (* Scope extrusion test *)
 
-.<fun x -> .~(!. .<x>.; .<1>.)>.;;
+.<for i=1 to 10 do  .~(let _ = !. .<0>. in .<()>.) done>.;;
+(*
+- : unit code = .<for i_2 = 1 to 10 do () done>. 
+*)
+.<for i=1 to 10 do  .~(let _ = !. .<i>. in .<()>.) done>.;;
 (*
 Exception:
 Failure
- "The code built at Characters 6-7:\n  .<fun x -> .~(!. .<x>.; .<1>.)>.;;\n        ^\n is not closed: identifier x_28 bound at Characters 6-7:\n  .<fun x -> .~(!. .<x>.; .<1>.)>.;;\n        ^\n is free".
+ "The code built at Characters 6-7:\n  .<for i=1 to 10 do  .~(let _ = !. .<i>. in .<()>.) done>.;;\n        ^\n is not closed: identifier i_3 bound at Characters 6-7:\n  .<for i=1 to 10 do  .~(let _ = !. .<i>. in .<()>.) done>.;;\n        ^\n is free".
 
 Was:
 Characters 14-22:
