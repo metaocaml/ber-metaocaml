@@ -2041,9 +2041,9 @@ and type_expect_orig ?in_function env sexp ty_expected =  (* NNN *)
       in
       type_expect ?in_function env sfun ty_expected
         (* TODO: keep attributes, call type_function directly *)
-  | Pexp_fun (l, None, spat, sexp) ->
+  | Pexp_fun (l, None, spat, sexp_body) -> (* NNN fixing the bug: sexp_body *)
       type_function ?in_function loc sexp.pexp_attributes env ty_expected
-        l [{pc_lhs=spat; pc_guard=None; pc_rhs=sexp}]
+        l [{pc_lhs=spat; pc_guard=None; pc_rhs=sexp_body}]
   | Pexp_function caselist ->
       type_function ?in_function
         loc sexp.pexp_attributes env ty_expected "" caselist
