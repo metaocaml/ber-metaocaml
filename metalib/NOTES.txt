@@ -223,21 +223,13 @@ Suggestions for the OCaml HQ
  Type checking will become more orthogonal since in type checking Pexp_letrec
  we don't need to care about GADTs, the exhaustiveness check and
  the type propagation from expression to patterns. 
+[reported on Mantis, Dec 29, 2014]
 
  -- Unify printing functions for various trees and make them
  prettier. The very same fmt_longident_aux occurs three times in 
  the OCaml code base (parsing/printast.ml, tools/pprintast.ml,
  typing/printtyped.ml)
 
- - Better and modular error handling. Currently, to add a new
- error, say, to typecore.ml one has to add the error to typecore.mli,
- make the same addition to typecore.ml, augment the printing function
- in typecore.ml. To add a new category, one has to augment
- driver/errors.ml. I have tried a uniform
-      exception Error of (format -> unit)
- The error carries the function that will print out the error
- message on the supplied ppf. Handler becomes much more extensible!
- This approach does seem to work out. It is used all throughout N101.   
 
  -- On one hand, it is tempting to eliminate Const_csp_value. There
  will no longer be a need to modify the code generator (in bytecomp/).
@@ -666,6 +658,24 @@ let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
 
 
 
+* Done in N102 (Dec 2014)
+
+** What part of MetaOCaml can be moved to the OCaml proper
+Suggestions for the OCaml HQ
+
+ - Better and modular error handling. Currently, to add a new
+ error, say, to typecore.ml one has to add the error to typecore.mli,
+ make the same addition to typecore.ml, augment the printing function
+ in typecore.ml. To add a new category, one has to augment
+ driver/errors.ml. I have tried a uniform
+      exception Error of (format -> unit)
+ The error carries the function that will print out the error
+ message on the supplied ppf. Handler becomes much more extensible!
+ This approach does seem to work out. It is used all throughout N101.   
+
+OCaml 4.02.1 introduces the modular error handling, by registering
+handlers for specific exceptions. See parsing/location.ml. BER N102
+takes advantage of this facility.
 
 * Done in N004 (Nov 7, 2012)
 Check to see if val_level field in the value_description structure can

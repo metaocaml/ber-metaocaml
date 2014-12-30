@@ -1,4 +1,9 @@
 December 2014
+	There is no longer a separate Typedtree traversal pass, after
+	the type checking, to translate brackets and escapes. The
+	translation is done right after the type-cheking of the 0-level
+	bracket. That means that for staging-annotation-free code,
+	MetaOCaml has no substatial overhead.
 	New function Runcode.typecheck_code for the benefit of offshoring
 	New function Runcode.add_search_path to add a directory to
 	the search path for .cmi/.cmo files -- report by Nicolas Ojeda Bar
