@@ -141,11 +141,9 @@ val build_send     : Location.t -> code_repr -> string -> code_repr
 val build_open :
  Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
    code_repr -> code_repr
-(*
 val build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
-  code_repr array -> code_repr
-*)
+  (code_repr option * code_repr) array -> code_repr
 val build_fun_simple : 
   Location.t -> string -> string Location.loc -> 
   (code_repr -> code_repr) -> code_repr
@@ -159,9 +157,12 @@ val build_let_simple_nonrec :
 val build_letrec : 
   Location.t -> string Location.loc array -> 
     (code_repr array -> code_repr array) -> code_repr
-val build_fun : Location.t -> string -> 
+*)
+val build_fun : 
+  Location.t -> string -> 
   (Parsetree.pattern list * string Location.loc list) -> 
-  (code_repr array -> code_repr array) -> code_repr
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr
+(*
 val build_let : 
   Location.t -> bool -> 
   (Parsetree.pattern list * string Location.loc list) -> code_repr array ->

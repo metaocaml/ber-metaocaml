@@ -844,12 +844,18 @@ let validate_vars_option : Location.t -> code_repr option ->
   | None -> (None,Nil)
   | Some e -> let Code (vars, e) = validate_vars l e in (Some e, vars)
 
+let validate_vars_map : Location.t -> 
+  ('a -> 'b * string loc heap) -> 'a list ->
+  'b list * string loc heap = fun loc f xs ->
+  map_accum (fun acc x -> 
+      let (y,vars) = f x in
+      (y, merge vars acc))
+    Nil xs
+
 let validate_vars_list : Location.t -> code_repr list -> 
   Parsetree.expression list * string loc heap = fun l cs ->
-  map_accum (fun acc c -> 
-      let Code (vars,e) = validate_vars l c in
-      (e, merge vars acc))
-    Nil cs
+  validate_vars_map l 
+      (fun c -> let Code (vars,e) = validate_vars l c in (e,vars)) cs
 
 (* Generate a fresh name off the given name, enter a new binding region
    and evaluate a function passing it the generated name as code_repr.
@@ -888,9 +894,10 @@ let with_binding_region :
    that use the bindings
  *)
 let with_binding_region_gen : 
-  Location.t -> string loc list -> (code_repr array -> code_repr array) -> 
-  string loc list * string loc heap * Parsetree.expression list
-  = fun l names f -> 
+  Location.t -> string loc list -> 
+  (Location.t -> 'a -> 'b * string loc heap) -> (code_repr array -> 'a array) ->
+  string loc list * string loc heap * 'b list
+  = fun l names tr f -> 
   let new_names = List.map genident names in
   let (vars,es) = 
    !with_stack_mark.stackmark_region_fn (fun mark ->
@@ -904,7 +911,7 @@ let with_binding_region_gen :
        new_names) in
      let cs = Array.to_list (f vars_code) in
      let (es,vars) = map_accum (fun vars c -> 
-                      let Code (var,e) = validate_vars l c in 
+                      let (e,var) = tr l c in
                       (e,merge var vars)) Nil cs in
      (remove prio vars, es)) in
   (new_names, vars, es)
@@ -1077,17 +1084,26 @@ let build_open :
         Ast_helper.Exp.open_ ~loc ovf l e)
 
 (* Build a function with a non-binding pattern, such as fun () -> ... *)
-(*
 let build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
-  code_repr array -> code_repr =
-  fun loc label pats bodies -> 
-  let (ebodies,vars) = validate_vars_list l (Array.to_list bodies) in
+  (code_repr option * code_repr) array -> code_repr =
+  fun loc label pats gbodies -> 
+  let (egbodies,vars) = 
+    validate_vars_map loc 
+      (fun (eo,e) ->
+        let (eo,vo)        = validate_vars_option loc eo in
+        let Code (vars,e)  = validate_vars loc e in
+        ((eo,e),merge vo vars)) 
+      (Array.to_list gbodies) in
   Code (vars,
-    {pexp_loc = l; 
-     pexp_desc = Pexp_function (label,None,
-                                List.map2 (fun p e -> (p,e)) pats ebodies)})
-*)
+        match (egbodies,pats) with
+        | ([(None,e)],[p]) ->
+            Ast_helper.Exp.fun_ ~loc label None p e
+        | _ when label="" ->
+          Ast_helper.Exp.function_ ~loc 
+            (List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
+              pats egbodies)
+        | _ -> assert false)
 
 (* Build a Parsetree for a future-stage identifier
    It is always in scope of with_binding_region:
@@ -1340,14 +1356,13 @@ old code
 
 (*}}}*)
 
-(* XXXXX
 
 (*{{{ Translating patterns and expressions using patterns *)
 
 
 (* Analyze and translate a pattern:
          Typedtree.pattern -> Parsetree.pattern
-  The function is somewhat similar to tools/untypeast.ml;untype_pattern
+  The function is somewhat similar to tools/untypeast.ml:untype_pattern
 
   However, we also determine and return the list of bound variables.
   The list is in the reverse of the order of variables occurring in the pattern.
@@ -1373,10 +1388,18 @@ old code
 let rec trx_pattern : 
     (Ident.t * string loc) list -> Typedtree.pattern -> 
      Parsetree.pattern * (Ident.t * string loc) list = fun acc pat ->
- if not (pat.pat_extra = []) then
-   not_supported pat.pat_loc
-    "patterns with unpack, constraints, and other pat_extra";
-  let (pd,acc) = match pat.pat_desc with
+  let (pd,acc) = match pat with
+  |  { pat_extra=[Tpat_unpack, _, _attrs]; pat_desc = Tpat_var (_,name); _ } ->
+        (Ppat_unpack name,acc)          (* name must have been upperase *)
+  | { pat_extra=[Tpat_type (_path, lid), _, _attrs]; _ } -> (Ppat_type lid,acc)
+  | { pat_extra= (Tpat_constraint ct, _, _attrs) :: rem; _ } ->
+      not_supported pat.pat_loc
+        "patterns with constraints, and other pat_extra";
+      (*
+        Ppat_constraint (untype_pattern { pat with pat_extra=rem },
+                         untype_core_type ct)
+       *)
+  | _ -> match pat.pat_desc with
   | Tpat_any -> (Ppat_any, acc)
   | Tpat_var (id, name) when 
       (match (Ident.name id).[0] with 'A'..'Z' -> true | _ -> false) ->
@@ -1390,15 +1413,14 @@ let rec trx_pattern :
   | Tpat_tuple lst ->
     let (pl,acc) = map_accum trx_pattern acc lst
     in (Ppat_tuple pl, acc)
-  | Tpat_construct (li, cdesc, args, explicit_arity) ->
+  | Tpat_construct (li, cdesc, args) ->
       let lid = qualify_ctor li cdesc in
       let (args,acc) = map_accum trx_pattern acc args in
       (Ppat_construct (lid,
           (match args with
           | []  -> None 
           | [x] -> Some x 
-          | _   -> Some {ppat_desc = Ppat_tuple args; ppat_loc = pat.pat_loc}),
-          explicit_arity),
+          | _   -> Some (Ast_helper.Pat.tuple ~loc:pat.pat_loc args))),
        acc)
   | Tpat_variant (label, None, _) -> (Ppat_variant (label,None),acc)
   | Tpat_variant (label, Some p, _) ->
@@ -1423,22 +1445,22 @@ let rec trx_pattern :
   | Tpat_lazy p -> 
       let (p,acc) = trx_pattern acc p in (Ppat_lazy p,acc)
   in
-  ({ ppat_desc = pd; ppat_loc = pat.pat_loc}, acc)
+  (Ast_helper.Pat.mk ~loc:pat.pat_loc ~attrs:pat.pat_attributes pd, acc)
 
 
-(* Process all patterns in the pattern-expression list *)
+(* Process all patterns in the case list *)
 (* Patterns are processed left-to-right. The result is the processed
    pattern list plus the list of names of the bound variables.
    The variables are listed in the order they occur in the pattern.
    Thus the following should hold:
-      let (pats,names,_) = trx_pel pel in
+      let (pats,names,_) = trx_cl cl in
       let (pats',acc) =  pattern_subst_list names pats in
       assert (pats = pats');
       assert (acc = [])
-   The final result of trx_pel is the pattern binding the names.
+   The final result of trx_cl is the pattern binding the names.
    We build an array pattern rather than a more appropriate tuple.
    Using array forces a single type to all arguments. Although
-   it is phantom anyway, it is still a bummer. But we the tuple
+   it is phantom anyway, it is still a bummer. But with the tuple
    we can't generically write build_fun.
    The second argument, typ_expr, should normally be a code type.
 
@@ -1446,20 +1468,23 @@ let rec trx_pattern :
    present-stage whose argument is an array of variables.
    See trx_bracket for functions, let, match and try
 *)
-let trx_pel : (Typedtree.pattern * Typedtree.expression) list -> type_expr ->
+let trx_cl : case list -> type_expr ->
      Parsetree.pattern list * string loc list * Typedtree.pattern
-   = fun pel typ -> 
-   let (pats, lst) = map_accum (fun acc (p,_) -> trx_pattern acc p) [] pel in
+   = fun cl typ -> 
+   let (pats, lst) = 
+     map_accum (fun acc {c_lhs} -> trx_pattern acc c_lhs) [] cl in
    let idnames = List.rev lst in
    let (loc,env) = 
-     match pel with (p,_)::_ -> (p.pat_loc, p.pat_env) |_ -> assert false in
+     match cl with {c_lhs=p}::_ -> (p.pat_loc, p.pat_env) |_ -> assert false in
     (* Pattern representing one binding variable *)
    let var_pat (id,name) =
     {pat_loc = loc; pat_extra = []; pat_env = env;
      pat_desc = Tpat_var (id,name);
+     pat_attributes=[];
      pat_type = typ} in
    (pats, List.map snd idnames,
     {pat_loc = loc; pat_extra = []; pat_env = env;
+     pat_attributes=[];
      pat_desc = Tpat_array (List.map var_pat idnames);
      pat_type = Ctype.instance_def (Predef.type_array typ)})
 
@@ -1521,10 +1546,10 @@ let rec pattern_subst : ?by_name:bool ->
   | Ppat_tuple pl ->
       let (pl,acc) = map_accum (pattern_subst ~by_name) acc pl in
       (Ppat_tuple pl,acc)
-  | Ppat_construct (_,None,_) as x -> (x,acc)
-  | Ppat_construct (lid,Some p,b) ->
+  | Ppat_construct (_,None) as x -> (x,acc)
+  | Ppat_construct (lid,Some p) ->
      let (p,acc) = pattern_subst ~by_name acc p in
-     (Ppat_construct (lid,Some p,b),acc)
+     (Ppat_construct (lid,Some p),acc)
   | Ppat_variant (_,None) as x -> (x,acc)
   | Ppat_variant (l,Some p) ->
      let (p,acc) = pattern_subst ~by_name acc p in
@@ -1548,6 +1573,7 @@ let rec pattern_subst : ?by_name:bool ->
      let (p,acc) = pattern_subst ~by_name acc p in
      (Ppat_lazy p, acc)
   | Ppat_unpack _ as x -> (x,acc)
+  | _ -> assert false (* we do not create other forms of Ppat *)
  in
  ({pat with ppat_desc = desc}, acc)
 
@@ -1566,19 +1592,33 @@ let build_fun :
      of the function, and the list of names of bound variables, in order.
   *)
   (Parsetree.pattern list * string loc list) -> 
-  (code_repr array -> code_repr array) -> code_repr =
-  fun l label (pats,old_names) fbodies -> 
-    let (names,vars,ebodies) = with_binding_region_gen l old_names fbodies in
+  (* The following function returns the list of pairs of guards and bodies,
+     for each clause of the function
+   *)
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
+  fun loc label (pats,old_names) fgbodies -> 
+    let tr loc (eo,e) = 
+        let (eo,vo)        = validate_vars_option loc eo in
+        let Code (vars,e)  = validate_vars loc e in
+        ((eo,e),merge vo vars) in
+    let (names,vars,egbodies) = 
+         with_binding_region_gen loc old_names tr fgbodies in
     let pats = 
       if names = [] then pats else
       let (pats,acc) = pattern_subst_list names pats in
       assert (acc = []); pats
     in
     Code(vars,
-      {pexp_loc = l; 
-       pexp_desc = Pexp_function (label,None,
-                                  List.map2 (fun p e -> (p,e)) pats ebodies)})
+        match (egbodies,pats) with
+        | ([(None,e)],[p]) ->
+            Ast_helper.Exp.fun_ ~loc label None p e
+        | _ when label="" ->
+          Ast_helper.Exp.function_ ~loc 
+            (List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
+              pats egbodies)
+        | _ -> assert false)
 
+(*
 (* Build the general let-Parsetree (like the fun-Parsetree) *)
 let build_let : 
   Location.t -> bool -> 
@@ -1694,6 +1734,7 @@ let map_option : ('a -> 'b) -> 'a option -> 'b option = fun f -> function
 
 
 let rec trx_bracket : int -> expression -> expression = fun n exp ->
+  (*
       let _ = debug_print "Texp_bracket" in
       let rec prattr = function
         | [] -> ()
@@ -1701,6 +1742,7 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
             debug_print ("attr: " ^ name); prattr t
       in prattr   exp.exp_attributes;
       let _ = Location.print Format.err_formatter (exp.exp_loc) in
+  *)
   (* Handle staging constructs, which are distinguished solely by
      attributes *)
   match what_stage_attr exp.exp_attributes with
@@ -1855,9 +1897,9 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
 *)
      (* The most common case of functions: fun x -> body *)
   | Texp_function (l,[{c_guard=None; 
-                       c_lhs={pat_desc = Tpat_var (_,name)} as pat;
+                       c_lhs={pat_extra=[]; 
+                              pat_desc = Tpat_var (_,name)} as pat;
                        c_rhs=ebody}],_) ->
-      let _ = debug_print "Texp_function" in
       let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
       texp_apply (texp_ident "Trx.build_fun_simple") 
         [texp_loc exp.exp_loc;
@@ -1876,7 +1918,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
                Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
-(*
+
   | Texp_function (l,cl,_) ->
       begin
       match trx_cl cl (wrap_ty_in_code n (Btype.newgenvar ())) with
@@ -1887,9 +1929,13 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
              begin 
                let pl_exp = texp_ident "Trx.sample_pat_list" in
                {pl_exp with
-                exp_desc = Texp_cspval (Obj.repr pl, dummy_lid "*pl*")}
+                exp_desc = (texp_csp (Obj.repr pl)).exp_desc}
              end;
-             texp_array (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel)
+             texp_array (List.map (fun {c_guard;c_rhs;_} -> 
+                 texp_tuple [texp_option @@ 
+                              map_option (trx_bracket n) c_guard;
+                             trx_bracket n c_rhs]) 
+                 cl)
            ]
       | (pl, names, binding_pat) ->
           texp_apply (texp_ident "Trx.build_fun") 
@@ -1908,17 +1954,21 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
                (* Pattern representing the function's argument:
                   array of variables bound by the original pattern, in order.
                 *)
-             let body = texp_array (List.map (fun (_,e) -> 
-                                     trx_bracket trx_exp n e) pel) in
+             let body = texp_array (List.map (fun {c_guard;c_rhs;_} -> 
+                 texp_tuple [texp_option @@ 
+                              map_option (trx_bracket n) c_guard;
+                             trx_bracket n c_rhs]) 
+                 cl) in
              { exp with
-                exp_desc = Texp_function ("",[(binding_pat, body)],Total);
+                exp_desc = 
+                        Texp_function ("",[texp_case binding_pat body],Total);
                 exp_type = {exp.exp_type with desc =
                             Tarrow ("",binding_pat.pat_type, body.exp_type, 
                                     Cok)}
              }
            ]
       end
-*)
+
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
      let lel = List.fold_right (function                 (* keep the order! *)
@@ -2126,6 +2176,8 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
 
 
 (*{{{ Typedtree traversal to eliminate bracket/escapes *)
+
+(* This part is obsolete *)
 
 (* ------------------------------------------------------------------------ *)
 (* Typedtree traversal to eliminate bracket/escapes *)
