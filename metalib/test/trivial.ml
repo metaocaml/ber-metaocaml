@@ -692,20 +692,20 @@ let 7 = !. (fhyg .<1>. 3);;
 (* pattern-matching, general functions *)
 
 .<fun () -> 1>.;;
-(* - : ('cl, unit -> int) code = .<fun () -> 1>. *)
+(* - : (unit -> int) code = .<fun () -> 1>. *)
 !. .<fun () -> 1>.;;
 (* - : unit -> int = <fun> *)
 let 1 = (!. .<fun () -> 1>.) ();;
 
 .<function true -> 1 | false -> 0>.;;
 (*
-- : ('cl, bool -> int) code = .<function | true -> 1 | false -> 0>. 
+- : (bool -> int) code = .<function | true -> 1 | false -> 0>. 
 *)
 let 1 = (!. .<function true -> 1 | false -> 0>.) true;;
 
 .<fun (true,[]) -> 1>.;;
 (*
-- : ('cl, bool * 'a list -> int) code = .<fun (true, []) -> 1>. 
+- : (bool * 'a list -> int) code = .<fun (true, []) -> 1>. 
 *)
 (!. .<fun (true,[]) -> 1>.) (true,[1]);;
 (*
@@ -716,26 +716,24 @@ let 1 = (!. .<fun (true,[]) -> 1>.) (true,[]);;
 
 .<fun [|true;false;false|] -> 1>.;;
 (*
-- : ('cl, bool array -> int) code = .<fun [|true; false; false|] -> 1>. 
+- : (bool array -> int) code = .<fun [|true; false; false|] -> 1>. 
 *)
 let 1 = (!. .<fun [|true;false;false|] -> 1>.) [|true;false;false|];;
 
 .<function `F 1 -> true | _ -> false>.;;
 (*
-- : ('cl, [> `F of int ] -> bool) code = .<
-function | (`F 1) -> true | _ -> false>. 
+- : ([> `F of int ] -> bool) code = .<function | `F 1 -> true | _ -> false>. 
 *)
 let true = (!. .<function `F 1 -> true | _ -> false>.) (`F 1);;
 .<function `F 1 | `G 2 -> true | _ -> false>.;;
 (*
-- : ('cl, [> `F of int | `G of int ] -> bool) code = .<
-function | ((`F 1) | (`G 2)) -> true | _ -> false>. 
+- : ([> `F of int | `G of int ] -> bool) code = .<
+function | `F 1|`G 2 -> true | _ -> false>. 
 *)
 
 .<function (1,"str") -> 1 | (2,_) -> 2>.;;
 (*
-- : ('cl, int * string -> int) code = .<
-function | (1, "str") -> 1 | (2, _) -> 2>. 
+- : (int * string -> int) code = .<function | (1,"str") -> 1 | (2,_) -> 2>. 
 *)
 let 1 = (!. .<function (1,"str") -> 1 | (2,_) -> 2>.) (1,"str");;
 let 2 = (!. .<function (1,"str") -> 1 | (2,_) -> 2>.) (2,"str");;
@@ -751,11 +749,11 @@ let 2 = (!. .<function (Some (Some true)) -> 1 | _ -> 2>.) None;;
 open Complex;;
 .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.;;
 (*
-- : ('cl, Complex.t -> int) code = .<
+- : (Complex.t -> int) code = .<
 function
-| {Complex.re = 1.0} -> 1
-| {Complex.re = 2.0; Complex.im = 2.0} -> 2
-| {Complex.im = _} -> 3>. 
+| { Complex.re = 1.0 } -> 1
+| { Complex.re = 2.0; Complex.im = 2.0 } -> 2
+| { Complex.im = _ } -> 3>. 
 *)
 
 let 1 = (!. .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.)
@@ -774,6 +772,8 @@ let 3 = (!. .<function {re=1.0} -> 1 | {im=2.0; re = 2.0} -> 2 | {im=_} -> 3>.)
 - : (unit -> int) code = .<fun ()  -> 1>. 
 *)
 let 1 = !. .<fun () -> 1>. ();;
+
+(* .<fun (type a) () -> 1>.;; *)
 
 .<fun _ -> true>.;;
 (* - : ('a -> bool) code = .<fun _  -> true>. *)
@@ -916,6 +916,30 @@ let 1.0 =
   (!. .<fun x -> match x with {re=x; im=2.0} -> x | {im=x; re=y} -> x -. y>.)
     {im=2.0; re=1.0};;
 
+(* exceptional cases *)
+.<match List.mem 1 [] with x -> x | exception Not_found -> false>.
+(*
+- : bool code = .<
+match List.mem 1 [] with | x_95 -> x_95 | exception Not_found  -> false>. 
+*)
+let false = 
+ !. .<match List.mem 1 [] with x -> x | exception Not_found -> false>.
+
+let f = .<fun x ->
+ match List.assoc 1 x with "1" as x -> x | x -> x
+ | exception Not_found -> "" | exception Invalid_argument x -> x>.
+(*
+val f : ((int * string) list -> string) code = .<
+  fun x_100  ->
+    match List.assoc 1 x_100 with
+    | "1" as x_101 -> x_101
+    | x_102 -> x_102
+    | exception Not_found  -> ""
+    | exception Invalid_argument x_103 -> x_103>.
+*)
+let "" = !. f []
+let "1" = !. f [(1,"1")]
+let "0" = !. f [(1,"0")]
 
 (* try *)
 .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.;;
@@ -943,7 +967,7 @@ fun x_43  ->
 
 let "1" = 
   (!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "1";;
-let "fail scanf: bad input at char number 0: 'character 'x' is not a decimal digit'" =
+let "fail scanf: bad input at char number 0: \"character 'x' is not a decimal digit\"" =
  (!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "xxx";;
 
 (* Simple let *)

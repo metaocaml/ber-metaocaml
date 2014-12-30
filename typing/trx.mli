@@ -128,19 +128,19 @@ val build_array : Location.t -> code_repr array -> code_repr
 val build_ifthenelse : 
   Location.t -> code_repr -> code_repr -> code_repr option -> code_repr
 val build_construct  :
- Location.t -> Longident.t Location.loc -> code_repr array -> code_repr
+  Location.t -> Longident.t Location.loc -> code_repr array -> code_repr
 val build_record :
- Location.t -> (Longident.t Location.loc * code_repr) array ->
- code_repr option -> code_repr
+  Location.t -> (Longident.t Location.loc * code_repr) array ->
+  code_repr option -> code_repr
 val build_field :
- Location.t -> code_repr -> Longident.t Location.loc -> code_repr
+  Location.t -> code_repr -> Longident.t Location.loc -> code_repr
 val build_setfield :
- Location.t -> code_repr -> Longident.t Location.loc -> code_repr -> code_repr
+  Location.t -> code_repr -> Longident.t Location.loc -> code_repr -> code_repr
 val build_variant  : Location.t -> string -> code_repr option -> code_repr
 val build_send     : Location.t -> code_repr -> string -> code_repr
 val build_open :
- Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
-   code_repr -> code_repr
+  Location.t -> Longident.t Location.loc -> Asttypes.override_flag -> 
+  code_repr -> code_repr
 val build_fun_nonbinding : 
   Location.t -> string -> Parsetree.pattern list -> 
   (code_repr option * code_repr) array -> code_repr
@@ -167,10 +167,12 @@ val build_let :
   Location.t -> bool -> 
   (Parsetree.pattern list * string Location.loc list) -> code_repr array ->
   (code_repr array -> code_repr array) -> code_repr
+*)
 val build_match : 
   Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
-  code_repr -> (code_repr array -> code_repr array) -> code_repr
+  code_repr -> int ->
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr
 val build_try : 
   Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
-  code_repr -> (code_repr array -> code_repr array) -> code_repr
-*)
+  code_repr ->
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr

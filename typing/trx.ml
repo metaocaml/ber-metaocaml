@@ -1,9 +1,9 @@
 (*
   This file is to post-process the Typedtree built by the type checker
-  before it is passed to the code generator -- to get rid of bracket and
-  escape. The main function is trx_structure, which initiates the
-  traversal and transforms every found expression with trx_exp. The
-  real transformation is done by trx_bracket.
+  when it finished parsing the present-stage bracket expression.
+  (Unlike versions before N102, the full Typedtree is not traversed;
+  only the bracket expressions are traversed and lifted.) The
+  transformation is done by trx_bracket.
 
   For example,
      <succ 1> 
@@ -458,12 +458,15 @@ let mk_texp : ?env:Env.t -> ?attrs:Parsetree.attributes ->
     exp_attributes = attrs;
     exp_env  = env }
 
+let texp_int : int -> Typedtree.expression = fun n ->
+  mk_texp ~env:Env.initial_safe_string (Texp_constant (Const_int n))
+    (Ctype.instance_def Predef.type_int)
+
 (* Make a bracket or an escape node
    Here, the attr argument is a bracket/escape attribute
 *)
 let texp_zero = (* TExp node for constant 0 *)
-  mk_texp ~env:Env.initial_safe_string (Texp_constant (Const_int 0))
-    (Ctype.instance_def Predef.type_int)
+  texp_int 0
 
 let texp_braesc : 
   attribute -> Typedtree.expression -> Env.t -> type_expr -> 
@@ -527,14 +530,12 @@ let texp_bool : bool -> Typedtree.expression = fun b ->
    Since this is an internal CSP, we don't put any attributes.
 *)
 let texp_csp : Obj.t -> Typedtree.expression = fun v ->
-  if Obj.is_int v then
-    mk_texp (Texp_constant (Const_int (Obj.obj v)))
-            (Ctype.instance_def Predef.type_int)
+  if Obj.is_int v then texp_int (Obj.obj v)
    (* We treat strings and bytes identically *)
   else if Obj.tag v = Obj.string_tag then texp_string (Obj.obj v)
   else 
     let vstr = Marshal.to_string v [] in
-    let () = debug_print ("texp_csp, marshall: size " ^ 
+    let () = if false then debug_print ("texp_csp, marshall: size " ^ 
                 string_of_int (String.length vstr)) in
     mk_texp
         (texp_apply (texp_ident "Marshal.from_string")
@@ -845,17 +846,17 @@ let validate_vars_option : Location.t -> code_repr option ->
   | Some e -> let Code (vars, e) = validate_vars l e in (Some e, vars)
 
 let validate_vars_map : Location.t -> 
-  ('a -> 'b * string loc heap) -> 'a list ->
+  (Location.t -> 'a -> 'b * string loc heap) -> 'a list ->
   'b list * string loc heap = fun loc f xs ->
   map_accum (fun acc x -> 
-      let (y,vars) = f x in
+      let (y,vars) = f loc x in
       (y, merge vars acc))
     Nil xs
 
 let validate_vars_list : Location.t -> code_repr list -> 
   Parsetree.expression list * string loc heap = fun l cs ->
   validate_vars_map l 
-      (fun c -> let Code (vars,e) = validate_vars l c in (e,vars)) cs
+      (fun l c -> let Code (vars,e) = validate_vars l c in (e,vars)) cs
 
 (* Generate a fresh name off the given name, enter a new binding region
    and evaluate a function passing it the generated name as code_repr.
@@ -1090,7 +1091,7 @@ let build_fun_nonbinding :
   fun loc label pats gbodies -> 
   let (egbodies,vars) = 
     validate_vars_map loc 
-      (fun (eo,e) ->
+      (fun loc (eo,e) ->
         let (eo,vo)        = validate_vars_option loc eo in
         let Code (vars,e)  = validate_vars loc e in
         ((eo,e),merge vo vars)) 
@@ -1586,8 +1587,12 @@ let pattern_subst_list :
 
 
 (* Build the general fun Parsetree *)
-let build_fun : 
-  Location.t -> string -> 
+
+(* Build the fresh variable name for cases and build the Parsetree
+   case list
+*)
+let prepare_cases : Location.t -> 
+  string loc heap ->     (* extra free variables used in kontinuation *)
   (* The following argument is a pair: a pattern list for the clauses
      of the function, and the list of names of bound variables, in order.
   *)
@@ -1595,8 +1600,10 @@ let build_fun :
   (* The following function returns the list of pairs of guards and bodies,
      for each clause of the function
    *)
-  (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
-  fun loc label (pats,old_names) fgbodies -> 
+  (code_repr array -> (code_repr option * code_repr) array) -> 
+  (* The continuation *)
+  (Parsetree.case list -> Parsetree.expression) -> code_repr =
+  fun loc evars (pats,old_names) fgbodies k -> 
     let tr loc (eo,e) = 
         let (eo,vo)        = validate_vars_option loc eo in
         let Code (vars,e)  = validate_vars loc e in
@@ -1608,15 +1615,21 @@ let build_fun :
       let (pats,acc) = pattern_subst_list names pats in
       assert (acc = []); pats
     in
-    Code(vars,
-        match (egbodies,pats) with
-        | ([(None,e)],[p]) ->
-            Ast_helper.Exp.fun_ ~loc label None p e
-        | _ when label="" ->
-          Ast_helper.Exp.function_ ~loc 
-            (List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
+    Code(merge evars vars,
+         k @@ List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
               pats egbodies)
-        | _ -> assert false)
+
+let build_fun : 
+  Location.t -> string -> 
+  (Parsetree.pattern list * string loc list) -> 
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
+  fun loc label pon fgbodies -> 
+  prepare_cases loc Nil pon fgbodies @@ function
+    | [{pc_lhs=p; pc_guard=None; pc_rhs=e}] ->
+        Ast_helper.Exp.fun_ ~loc label None p e
+    | cases when label="" -> 
+        Ast_helper.Exp.function_ ~loc cases
+    | _ -> assert false
 
 (*
 (* Build the general let-Parsetree (like the fun-Parsetree) *)
@@ -1638,23 +1651,29 @@ let build_let :
            pexp_desc = 
              Pexp_let ((if recf then Default else Nonrecursive), 
                        List.map2 (fun p e -> (p,e)) pats es,ebody)})
-
+*)
 
 (* build match and try: both are very similar and similar to build_fun *)
 let build_match : 
   Location.t -> (Parsetree.pattern list * string loc list) -> code_repr ->
-  (code_repr array -> code_repr array) -> code_repr =
-  fun l (pats,old_names) ec fbodies ->
-    let (names,bvars,ebodies) = with_binding_region_gen l old_names fbodies in
-    let pats = 
-      if names = [] then pats else
-      let (pats,acc) = pattern_subst_list names pats in
-      assert (acc = []); pats
+  int ->
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
+  fun loc pon ec nregular fgbodies ->
+    let Code (evars,exp) = validate_vars loc ec in
+    let split : int -> 'a list -> 'a list * 'a list = fun n lst ->
+      let rec loop n acc lst = match (n,lst) with
+      | (0,lst)  -> (List.rev acc,lst)
+      | (n,h::t) -> loop (n-1) (h::acc) t
+      | _        -> assert false
+      in loop n [] lst
     in
-    let Code (evars,exp) = validate_vars l ec in
-    Code (merge evars bvars,
-     {pexp_loc = l; 
-      pexp_desc = Pexp_match (exp, List.map2 (fun p e -> (p,e)) pats ebodies)})
+    prepare_cases loc evars pon fgbodies @@ fun cases ->
+      Ast_helper.Exp.match_ ~loc exp
+      (let (rc,ec) = split nregular cases in
+       rc @ List.map 
+          (fun c ->
+            let pat = {c.pc_lhs with ppat_desc = Ppat_exception c.pc_lhs}
+            in {c with pc_lhs = pat}) ec)
 
 
 (* Essentially the same as build_match.
@@ -1662,24 +1681,14 @@ let build_match :
 *)
 let build_try : 
   Location.t -> (Parsetree.pattern list * string loc list) -> code_repr ->
-  (code_repr array -> code_repr array) -> code_repr =
-  fun l (pats,old_names) ec fbodies ->
-    let (names,bvars,ebodies) = with_binding_region_gen l old_names fbodies in
-    let pats = 
-      if names = [] then pats else
-      let (pats,acc) = pattern_subst_list names pats in
-      assert (acc = []); pats
-    in
-    let Code (evars,exp) = validate_vars l ec in
-    Code (merge evars bvars,
-     {pexp_loc = l; 
-      pexp_desc = Pexp_try (exp, List.map2 (fun p e -> (p,e)) pats ebodies)})
-
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
+  fun loc pon ec fgbodies ->
+    let Code (evars,exp) = validate_vars loc ec in
+    prepare_cases loc evars pon fgbodies @@ fun cases ->
+      Ast_helper.Exp.try_ ~loc exp cases
 
 (*}}}*)
 
-XXXXX
-*)
 
 (* ------------------------------------------------------------------------ *)
 (* The main function to translate away brackets. It receives
@@ -1779,6 +1788,38 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
          exp_attributes = attrs;
          exp_desc = texp_apply 
                      (texp_ident "Trx.dyn_quote") [exp; texp_lid li]}
+
+  (* convert the case list to the function that receives the sequence
+     of bound variables and returns the array of translated guards and
+     bodies
+   *)
+and trx_case_list_body : int -> Typedtree.pattern -> 
+  expression ->  (* used as the template for the result: we use
+                    the env, location info *)
+  case list -> expression = fun n binding_pat exp cl ->
+  (* Translate the future-stage function as the present-stage 
+     function whose argument is an array of variables 
+     (should be a tuple, really) and the type
+     some_targ code array -> tres code array
+     Using array forces a single type to all arguments. Although
+     it is phantom anyway, it is still a bummer. Instead of
+     array, we should have used a tuple. But then we can't
+     generically write build_fun.
+   *)
+  (* Pattern representing the function's argument:
+     array of variables bound by the original pattern, in order.
+   *)
+  let body = 
+    texp_array (List.map (fun {c_guard;c_rhs;_} -> 
+      texp_tuple [texp_option @@ map_option (trx_bracket n) c_guard;
+                  trx_bracket n c_rhs])
+      cl) in
+  { exp with
+    exp_desc = Texp_function ("",[texp_case binding_pat body],Total);
+    exp_type = {exp.exp_type with desc =
+                   Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
+  }
+
 
 and trx_bracket_ : int -> expression -> expression = fun n exp ->
   let new_desc = match exp.exp_desc with
@@ -1942,30 +1983,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
             [texp_loc exp.exp_loc;
              texp_string l;
              texp_pats_names pl names;
-             (* Translate the future-stage function as the present-stage 
-                function whose argument is an array of variables 
-                (should be a tuple, really) and the type
-                   some_targ code array -> tres code array
-                Using array forces a single type to all arguments. Although
-                it is phantom anyway, it is still a bummer. Instead of
-                array, we should have used a tuple. But then we can't
-                generically write build_fun.
-              *)
-               (* Pattern representing the function's argument:
-                  array of variables bound by the original pattern, in order.
-                *)
-             let body = texp_array (List.map (fun {c_guard;c_rhs;_} -> 
-                 texp_tuple [texp_option @@ 
-                              map_option (trx_bracket n) c_guard;
-                             trx_bracket n c_rhs]) 
-                 cl) in
-             { exp with
-                exp_desc = 
-                        Texp_function ("",[texp_case binding_pat body],Total);
-                exp_type = {exp.exp_type with desc =
-                            Tarrow ("",binding_pat.pat_type, body.exp_type, 
-                                    Cok)}
-             }
+             trx_case_list_body n binding_pat exp cl
            ]
       end
 
@@ -1979,42 +1997,31 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (l,e) ->
            texp_tuple [texp_string l;trx_bracket n e]) lel)]
-(*
+
   (* Pretty much like a function *)
-  | Texp_match (e,pel,_) ->
+  (* rcl: regular cases; ecl: exceptional cases *)
+  | Texp_match (e,rcl,ecl,_) ->
+      let cl = rcl @ ecl in     (* handle all cases uniformly *)
       let (pl,names,binding_pat) = 
-        trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) in
+        trx_cl cl (wrap_ty_in_code n (Btype.newgenvar ())) in
       texp_apply (texp_ident "Trx.build_match") 
         [texp_loc exp.exp_loc;
          texp_pats_names pl names;
-         trx_bracket trx_exp n e;
-         (* See the comment at Texp_function above *)
-         let body = texp_array (List.map (fun (_,e) -> 
-                                     trx_bracket trx_exp n e) pel) in
-         { exp with
-           exp_desc = Texp_function ("",[(binding_pat, body)],Total);
-           exp_type = {exp.exp_type with desc =
-                       Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
-         }
+         trx_bracket n e;
+         texp_int @@ List.length rcl;
+         trx_case_list_body n binding_pat exp cl
        ]
 
-  | Texp_try (e,pel) ->                 (* same as Texp_match *)
+  | Texp_try (e,cl) ->                 (* same as Texp_match *)
       let (pl,names,binding_pat) = 
-        trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) in
+        trx_cl cl (wrap_ty_in_code n (Btype.newgenvar ())) in
       texp_apply (texp_ident "Trx.build_try") 
         [texp_loc exp.exp_loc;
          texp_pats_names pl names;
-         trx_bracket trx_exp n e;
-         (* See the comment at Texp_function above *)
-         let body = texp_array (List.map (fun (_,e) -> 
-                                     trx_bracket trx_exp n e) pel) in
-         { exp with
-           exp_desc = Texp_function ("",[(binding_pat, body)],Total);
-           exp_type = {exp.exp_type with desc =
-                       Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
-         }
+         trx_bracket n e;
+         trx_case_list_body n binding_pat exp cl
        ]
-*)
+
   | Texp_tuple el ->
       texp_apply (texp_ident "Trx.build_tuple")
         [texp_loc exp.exp_loc; 
