@@ -501,16 +501,14 @@ let 1 = !. (f x);;
 (* Local open *)
 .<Complex.(norm {re=3.0; im = 4.0})>.;;
 (*
-- : float code = .<
-let open Complex in Complex.norm { Complex.re = 3.0; Complex.im = 4.0 }>. 
+- : float code = .<Complex.norm { Complex.re = 3.0; Complex.im = 4.0 }>. 
 *)
 
 let 5.0 = !. .<Complex.(norm {re=3.0; im = 4.0})>.;;
 
 .<let open Complex in norm {re=4.0; im = 3.0}>.;;
 (*
-- : float code = .<
-let open Complex in Complex.norm { Complex.re = 4.0; Complex.im = 3.0 }>. 
+- : float code = .<Complex.norm { Complex.re = 4.0; Complex.im = 3.0 }>. 
 *)
 
 let 5.0 = !. .<let open Complex in norm {re=4.0; im = 3.0}>.;;

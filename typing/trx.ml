@@ -2163,15 +2163,18 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
     | Texp_coerce (cto,ct) ->
         not_supported loc "Texp_coerce"
     | Texp_open (ovf, path, lid, _) -> 
-       (* TODO: do I even need local open since all the constructors
-          and identifiers are qualified anyway?
+       (* I don't need local open since all the constructors
+          and identifiers are qualified anyway.
         *)
+        exp.exp_desc
+          (*
        check_path_quotable "Texp_open" path;
        texp_apply (texp_ident "Trx.build_open")
         [texp_loc exp.exp_loc;
          texp_lid (mkloc (path_to_lid path) lid.loc);
          texp_csp (Obj.repr ovf);
          exp]      (* exp is the result of trx_bracket *)
+           *)
     | Texp_poly cto  -> not_supported loc "Texp_poly"
     | Texp_newtype s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
