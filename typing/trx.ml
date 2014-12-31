@@ -1155,19 +1155,6 @@ let build_let_simple_nonrec :
            [Ast_helper.Vb.mk ~loc pat e] ebody)
 
 (*
-(*
- Recursive let is subject to additional well-formedness constraints, 
- see bytecomp/translcore.ml:transl_let.
- The first is that binding pattern should contain either Tpat_var
- or Tpat_alias. For build_let_simple_rec, this constraint is
- satisfied automatically. 
- The second check is performed by check_recursive_lambda in 
- bytecomp/translcore.ml. We use a simpler version of the test:
- we allow only letrec experssions of the form
-   let rec f = fun x -> ....
- that is, 
-   let rec f x y ... =
-*)
 let build_letrec : 
   Location.t -> string loc array -> 
     (code_repr array -> code_repr array) -> code_repr = 
@@ -1178,15 +1165,6 @@ let build_letrec :
     match ebodies with body::es -> (body,es) | _ -> assert false in
   let pel = List.map2 (fun name e ->
      ({ppat_loc  = name.loc; ppat_desc = Ppat_var name},e)) names es in
-  let check_rhs e =
-    match e.pexp_desc with
-    | Pexp_function (_,_,_) -> ()
-    | _ ->     
-        Format.fprintf Format.str_formatter
-          "Recursive let binding %a must be to a function %a"
-          Location.print l Location.print e.pexp_loc;
-        failwith (Format.flush_str_formatter ()) in
-  List.iter check_rhs es;
   Code (vars,
   {pexp_loc = l; 
    pexp_desc = Pexp_let (Recursive, pel, ebody)})
@@ -1587,6 +1565,24 @@ let pattern_subst_list :
 
 (* Build the fresh variable name for cases and build the Parsetree
    case list
+   We implicitly assume that all variables bound by patterns in any clause
+   scopes over all clauses. That seems like a wild assumption: for example,
+   in
+     function | x -> e1 | y -> e2
+   the variable x should scope only over e1 rather than also over e2.
+   However, this wild scoping is no problem: recall that we process
+   the Typedtree, and the type checker already determined the scoping.
+   In the type-checked example
+     let x = 1 in
+     function | x -> e1 | y -> x + 2
+   the variables are represented not just by their names but by their Path,
+   which contains the unique timestamp. Therefore, we are actually dealing with
+     let x/1 = 1 in
+     function | x/2 -> e1 | y/3 -> x/1 + 2
+   Therefore, if we make x/2 also scope over the second clause, that is
+   harmless.
+   Because of such scoping rules, prepare_cases is also useful
+   for processing letrec.
 *)
 let prepare_cases : Location.t -> 
   string loc heap ->     (* extra free variables used in kontinuation *)
@@ -1628,27 +1624,25 @@ let build_fun :
         Ast_helper.Exp.function_ ~loc cases
     | _ -> assert false
 
-(*
+
 (* Build the general let-Parsetree (like the fun-Parsetree) *)
 let build_let : 
   Location.t -> bool -> 
-  (Parsetree.pattern list * string loc list) -> code_repr array ->
-  (code_repr array -> code_repr array) -> code_repr =
-  fun l recf (pats,old_names) ecs fbodies ->
-    let (names,bvars,ebodies) = with_binding_region_gen l old_names fbodies in
-    let ebody = match ebodies with [x] -> x | _ -> assert false in
-    let pats = 
-      if names = [] then pats else
-      let (pats,acc) = pattern_subst_list names pats in
-      assert (acc = []); pats
-    in
-    let (es,evars) = validate_vars_list l (Array.to_list ecs) in
-    Code (merge evars bvars,
-          {pexp_loc = l; 
-           pexp_desc = 
-             Pexp_let ((if recf then Default else Nonrecursive), 
-                       List.map2 (fun p e -> (p,e)) pats es,ebody)})
-*)
+  (Parsetree.pattern list * string loc list) ->
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
+  fun loc recf pon fgbodies ->
+  prepare_cases loc Nil pon fgbodies @@ function
+    | [] | [_] -> assert false
+      (* The first case is the pseudo-case for the let body *)
+    | {pc_guard=None; pc_rhs=ebody} :: cases ->
+        Ast_helper.Exp.let_ ~loc (if recf then Recursive else Nonrecursive)
+          (List.map (function 
+            | {pc_lhs;pc_guard=None;pc_rhs} ->
+                Ast_helper.Vb.mk ~loc:pc_lhs.ppat_loc pc_lhs pc_rhs
+            | _ -> assert false)
+           cases) 
+         ebody
+    | _ -> assert false
 
 (* build match and try: both are very similar and similar to build_fun *)
 let build_match : 
@@ -1845,7 +1839,37 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
   | Texp_constant cst -> 
       texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
 
-(*
+     (* The most common case of let-expressions: non-recursive
+        let x = e in body *)
+  | Texp_let (Nonrecursive,[{vb_pat = {pat_desc = Tpat_var (_,name)} as pat;
+                     vb_expr = e}],ebody) ->
+      let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
+      texp_apply (texp_ident "Trx.build_let_simple_nonrec") 
+        [texp_loc exp.exp_loc;
+         texp_string_loc name;
+         trx_bracket n e;
+         { exp with
+           exp_desc = 
+             Texp_function ("",[texp_case pat (trx_bracket n ebody)],Total);
+           exp_type = 
+            {exp.exp_type with desc =
+               Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
+         }
+       ]
+
+     (* General case of let. There are two subcases: parallel and recursive:
+          let     x = e1 and y = e2 ... in body
+          let rec x = e1 and y = e2 ... in body
+          
+        The difference between them is profound: in the first case,
+        x and y do not scope over e1 and e2, but in the recursive case,
+        they do.
+        And yet we translate the two cases uniformly. Recall that we are 
+        processing the Typedtree: the type checker already determined
+        the scoping rules. The variables are represented with their paths,
+        which bear unique timestamps. See the comment in prepare_cases
+        above.
+     *)
      (* Recursive let: 
          let rec f = e1 [and g = e2 ...] in body
         According to transl_let in bytecomp/translcore.ml,
@@ -1857,20 +1881,67 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
        We do this test here. For simplicity, we are not going to support
           let rec _ as var = ...
        pattern.
-      *)
-  | Texp_let (Recursive,pel,ebody) ->
+
+       There is another constraint: see check_recursive_lambda in 
+       bytecomp/translcore.ml. We use a simpler version of the test:
+       we allow only letrec experssions of the form
+           let rec f = fun x -> ....
+       that is, 
+           let rec f x y ... =
+    *)
+  | Texp_let (recf,vbl,ebody) ->
+      let check_letrec ({vb_pat=p;vb_expr=e} as vb) =
+        begin
+        match p.pat_desc with
+        | Tpat_var (_,_) -> ()
+        | _ -> 
+            trx_error @@ Location.errorf ~loc:p.pat_loc
+            "Only variables are allowed as left-hand side of `let rec'"
+        end;
+        match e.exp_desc with
+        | Texp_function (_,_,_) -> ()
+        | _ -> 
+            trx_error @@ Location.errorf ~loc:vb.vb_loc
+            "Recursive let binding must be to a function"
+            (* Location.print e.exp_loc *)
+      in if recf = Recursive then
+        List.iter check_letrec vbl;
+      (* Artificially convert vbl to case list, making the body
+         the first case with the Pat_any pattern.
+         Of course the scoping rules are different for vbl and case list.
+         Again, scoping has been already determined and resolved,
+         and our case list processing assumes very wild scoping that
+         accommodates let, letrec, functions, etc.
+       *)
+      let cl = 
+        {c_lhs =                        (* preudo-pattern for ebody *)
+          {pat_desc = Tpat_any; pat_loc=ebody.exp_loc;
+           pat_attributes=[]; pat_extra=[]; 
+           pat_type=ebody.exp_type;
+           pat_env=ebody.exp_env};
+         c_guard=None; 
+         c_rhs=ebody} ::
+        List.map (fun {vb_pat;vb_expr} -> texp_case vb_pat vb_expr) vbl in
+      let (pl,names,binding_pat) = 
+        trx_cl cl (wrap_ty_in_code n (Btype.newgenvar ())) in
+      texp_apply (texp_ident "Trx.build_let") 
+        [texp_loc exp.exp_loc;
+         texp_bool (recf = Recursive);
+         texp_pats_names pl names;
+         trx_case_list_body n binding_pat exp cl
+       ]
+(*
+
       let names =                       (* in the order of appearance *)
-        let rec loop = function
-          | [] -> []
-          | ({pat_desc = Tpat_var (_,name)},_) :: rest -> name :: loop rest
+        List.map (function {vb_pat={pat_desc = Tpat_var (_,name)}} -> name
           | _ -> trx_error @@ Location.errorf ~loc:exp.exp_loc
-                "Only variables are allowed as left-hand side of `let rec'"
-        in loop pel
+                "Only variables are allowed as left-hand side of `let rec'")
+          vbl
       in
       (* code for body followed by the code for e's *)
       let es_body = texp_array (
-        trx_bracket trx_exp n ebody ::
-          (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel)) in
+        trx_bracket n ebody ::
+          (List.map (fun (_,e) -> trx_bracket n e) vbl)) in
       texp_apply (texp_ident "Trx.build_letrec") 
         [texp_loc exp.exp_loc;
          texp_array (List.map texp_string_loc names);
@@ -1893,27 +1964,10 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
                            Tarrow ("",pat.pat_type, es_body.exp_type, Cok)}
          }
        ]
-*)
-     (* The most common case of let-expressions: non-recursive
-        let x = e in body *)
-  | Texp_let (recf,[{vb_pat = {pat_desc = Tpat_var (_,name)} as pat;
-                     vb_expr = e}],ebody) ->
-      let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
-      texp_apply (texp_ident "Trx.build_let_simple_nonrec") 
-        [texp_loc exp.exp_loc;
-         texp_string_loc name;
-         trx_bracket n e;
-         { exp with
-           exp_desc = 
-             Texp_function ("",[texp_case pat (trx_bracket n ebody)],Total);
-           exp_type = 
-            {exp.exp_type with desc =
-               Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
-         }
-       ]
-(*
+
+
     (* General-case, non-recursive let General case. Like Texp_function *)
-  | Texp_let (recf,pel,body) ->
+  | Texp_let (Nonrecursive,pel,body) ->
       let (pl,names,binding_pat) = 
         trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) in
       texp_apply (texp_ident "Trx.build_let") 
@@ -2143,7 +2197,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
 
   | Texp_object (cl,fl) -> not_supported exp.exp_loc "Objects"
   | Texp_pack _         -> not_supported exp.exp_loc "First-class modules"
-  | _ -> not_supported exp.exp_loc "not yet supported"
+  (* | _ -> not_supported exp.exp_loc "not yet supported" *)
   in                               
   (* See untype_extra in tools/untypeast.ml *)
   let trx_extra (extra, loc, attr) exp =  (* TODO: take care of attr *)

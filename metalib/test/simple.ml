@@ -81,8 +81,11 @@ let 10 = !. tr7 .<10>.;;
  (* Bizzare CSP *)
 let tr8 = .<fun x -> .~(let y = .<x>. in .<y>.)>.;;
 (*
-val tr8 : ('a -> 'a code) code = .<
-  fun x_65  -> (* cross-stage persistent value (id: y) *)>. 
+Characters 43-44:
+  let tr8 = .<fun x -> .~(let y = .<x>. in .<y>.)>.;;
+                                             ^
+Warning 22: The CSP value is a closure or too deep to serialize
+val tr8 : ('a -> 'a code) code = .<fun x_121  -> (* CSP y *)>. 
 *)
 (* But it cannot be run! *)
 let tr8r = !. tr8;;
@@ -111,7 +114,7 @@ val tm1 : ('a -> 'a code) code = .<fun x_66  -> .< x_66  >.>.
 *)
 !. tm1 10;;
 (*
-- : int code = .<(* cross-stage persistent value (id: x_66) *)>. 
+- : int code = .<(* CSP x_122 *) Obj.magic 10>. 
 *)
 let 10 = !. (!. tm1 10);;
 

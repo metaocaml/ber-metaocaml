@@ -150,24 +150,17 @@ val build_fun_simple :
 val build_for : 
   Location.t -> string Location.loc -> code_repr -> code_repr -> 
   bool -> (code_repr -> code_repr) -> code_repr
-(*
 val build_let_simple_nonrec : 
-  Location.t -> string Location.loc -> bool -> code_repr -> 
+  Location.t -> string Location.loc -> code_repr -> 
     (code_repr -> code_repr) -> code_repr
-val build_letrec : 
-  Location.t -> string Location.loc array -> 
-    (code_repr array -> code_repr array) -> code_repr
-*)
 val build_fun : 
   Location.t -> string -> 
   (Parsetree.pattern list * string Location.loc list) -> 
   (code_repr array -> (code_repr option * code_repr) array) -> code_repr
-(*
 val build_let : 
   Location.t -> bool -> 
-  (Parsetree.pattern list * string Location.loc list) -> code_repr array ->
-  (code_repr array -> code_repr array) -> code_repr
-*)
+  (Parsetree.pattern list * string Location.loc list) ->
+  (code_repr array -> (code_repr option * code_repr) array) -> code_repr
 val build_match : 
   Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
   code_repr -> int ->

@@ -1017,20 +1017,57 @@ let f_22 n_21 = if n_21 = 0 then 1 else n_21 * (f_20 (n_21 - 1)) in f_22 5>.
 let 20 = !. .<let f = fun x -> x in 
               let f = fun n -> if n = 0 then 1 else n * f (n-1) in f 5>.;;
 
+.<let g = fun x -> x+10 in
+  let f = fun x -> g x + 20
+  and g = fun n -> if n = 0 then 1 else n * g (n-1) in (f 5,g 5)>.;;
+
+(*
+- : (int * int) code = .<
+let g_28 x_27 = x_27 + 10 in
+let f_29 x_32 = (g_28 x_32) + 20
+and g_30 n_31 = if n_31 = 0 then 1 else n_31 * (g_28 (n_31 - 1)) in
+((f_29 5), (g_30 5))>. 
+*)
+let (35,70) = !. .<let g = fun x -> x+10 in
+  let f = fun x -> g x + 20
+  and g = fun n -> if n = 0 then 1 else n * g (n-1) in (f 5,g 5)>.;;
+
+.<let g = fun x -> x+10 in
+  let rec f = fun x -> g x + 20
+  and g = fun n -> if n = 0 then 1 else n * g (n-1) in (f 5,g 5)>.;;
+
+(*
+Characters 6-7:
+  .<let g = fun x -> x+10 in
+        ^
+Warning 26: unused variable g.
+- : (int * int) code = .<
+let g_40 x_39 = x_39 + 10 in
+let rec f_41 x_44 = (g_42 x_44) + 20
+and g_42 n_43 = if n_43 = 0 then 1 else n_43 * (g_42 (n_43 - 1)) in
+((f_41 5), (g_42 5))>. 
+*)
+
+let (140,120) =
+ !. .<let g = fun x -> x+10 in
+  let rec f = fun x -> g x + 20
+  and g = fun n -> if n = 0 then 1 else n * g (n-1) in (f 5,g 5)>.;;
+
 .<let rec [] = [] in []>.
 (*
-Characters 2-23:
+Characters 10-12:
   .<let rec [] = [] in []>.;;
-    ^^^^^^^^^^^^^^^^^^^^^
-Error: Only variables are allowed as left-hand side of `let rec'
+            ^^
+Only variables are allowed as left-hand side of `let rec'
 *)
 print_endline "Error was expected";;
 
 .<let rec f = f in f>.
 (*
-Exception:
-Failure
- "Recursive let binding Characters 2-20:\n  .<let rec f = f in f>.;;\n    ^^^^^^^^^^^^^^^^^^\n must be to a function Characters 10-11:\n  .<let rec f = f in f>.;;\n            ^\n".
+Characters 10-15:
+  .<let rec f = f in f>.;;
+            ^^^^^
+Recursive let binding must be to a function
 *)
 print_endline "Error was expected";;
 
@@ -1117,11 +1154,11 @@ print_endline "Error was expected";;
 
 (* Error message is reported on splice *)
 let r = ref .<fun y->y>. in 
-let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;
+ let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;
 (*
 Exception:
 Failure
- "Scope extrusion detected at Characters 95-103:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                                                                    ^^^^^^^^\n for code built at Characters 58-68:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                               ^^^^^^^^^^\n for the identifier x_36 bound at Characters 43-44:\n  let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                ^\n".
+ "Scope extrusion detected at Characters 96-104:\n   let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                                                                     ^^^^^^^^\n for code built at Characters 59-69:\n   let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                                ^^^^^^^^^^\n for the identifier x_95 bound at Characters 44-45:\n   let _ = .<fun x -> .~(r := .<fun y -> x>.; .<0>.)>. in .<fun x -> .~(!r) 1>. ;;\n                 ^\n".
 *)
 print_endline "Error was expected";;
 
