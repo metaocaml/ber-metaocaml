@@ -11,7 +11,9 @@ December 2014
 	any serialization problems.
 	Overall better printing, of CSP, code and error messages
 	Overall, more uniform, better factored code.
-
+	metaocamlc is now a simple .c file; it adds compiler-libs only
+	in the case when the executable is built. Otherwise, we may end up
+	with the duplicate libraries.
 April 24, 2014
 	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.
 	If the first Runcode.run is used after a type declaration,
