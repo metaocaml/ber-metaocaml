@@ -12,6 +12,7 @@ type 'a closed_code = Trx.closed_code_repr
 let add_search_path : string -> unit = fun dir ->
   let dir = Misc.expand_directory Config.standard_library dir in
   Config.load_path := dir :: !Config.load_path;
+  Dll.add_path [dir];
   Env.reset_cache ()
 
 

@@ -111,7 +111,7 @@ test-compile:
 # Testing setting of the .cmo path
 	$(BINDIR)/metaocamlc test/test_path_a.ml
 	mv test/test_path_a.cm[io] /tmp
-	$(BINDIR)/metaocamlc -o tp test/test_path.ml
+	$(BINDIR)/metaocamlc -I /tmp -o tp test/test_path.ml
 	./tp
 
 clean::
