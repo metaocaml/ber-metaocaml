@@ -10,6 +10,7 @@ December 2014
 	Better handling of CSP. For simple cases, there are no longer
 	any serialization problems.
 	Overall better printing, of CSP, code and error messages
+	Overall, more uniform, better factored code.
 
 April 24, 2014
 	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.

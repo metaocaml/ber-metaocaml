@@ -83,15 +83,15 @@ clean::
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
 test:
-	TERM=dumb $(BINDIR)/metaocaml < test/trivial.ml > trivial.out && \
+	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/trivial.ml > trivial.out && \
 	diff -u trivial.out trivial.ref
-	TERM=dumb $(BINDIR)/metaocaml < test/simple.ml > simple.out && \
+	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/simple.ml > simple.out && \
 	diff -u simple.out simple.ref
-	$(BINDIR)/metaocaml test/simple_true.ml
-	$(BINDIR)/metaocaml test/quick_test.ml
-	$(BINDIR)/metaocaml test/test21.ml
-	$(BINDIR)/metaocaml test/pythagorian_triples.ml
-	$(BINDIR)/metaocaml test/test_levels.ml
+	$(BINDIR)/metaocaml -w -8 test/simple_true.ml
+	$(BINDIR)/metaocaml -w -8 test/quick_test.ml
+	$(BINDIR)/metaocaml -w -8 test/test21.ml
+	$(BINDIR)/metaocaml -w -8 test/pythagorian_triples.ml
+	$(BINDIR)/metaocaml -w -8 test/test_levels.ml
 #	$(BINDIR)/metaocaml test/t4.ml
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) MOCAMLTOP="../metaocaml -I .." testv_top
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top

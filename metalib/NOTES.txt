@@ -71,6 +71,13 @@ l [];;                                  (* serializable code in N102 *)
 In any case, CSPs that are used by the MetaOCaml itself (for the
 Parsetree fragments) are already in the new format. Therefore,
 metaocaml (the compiler itself) can be natively compiled.
+Observation: most of the serialized values are of the size 50. It
+seems the minimal size is about 42, the size of the header for the
+serialized value. When dealing with functions, case matching, some
+serialized values (patterns, pattern lists) could be about 70 or even
+150. It seems I should write my own serializer, that avoids the
+overhead of Marshall. I should use it when the value is not too deep,
+or internally for MetaOCaml CSP.
 
 
 We now avoid the extra translation pass. The type-checker
@@ -275,6 +282,10 @@ liftable. We can lift many more types. For arrays, check their length.
 If the array is short, it should be lifted. For long arrays, building
 a CSP is better (although it make take a bit longer since we will have
 to invoke dyn_quote at run-time).
+
+It seems I should write my own serializer, that avoids the
+overhead of Marshall. I should use it when the value is not too deep,
+or internally for MetaOCaml CSP.
 
 ** Minimize changes to OCaml
 
