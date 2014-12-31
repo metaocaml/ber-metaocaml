@@ -256,7 +256,7 @@ let get_level : Parsetree.attributes -> stage = fun attrs ->
    compiler invoked by run can get the definition for the identifier from
    a .cmi file. The value of an external identifier can be obtained from
    a .cmo file.
-   If a path containst several components like
+   If a path contains several components like
    M1.M2.M3.ident, we should check if the top-most component, that is, M1,
    is external.
 *)
@@ -330,10 +330,10 @@ let check_path_quotable msg path =
    Tconstr(ty_path,_,_). The function constructors_of_type is used
    within Env.store_type, which is used when opening a module.
 
-   Alternatively we could've used Env.lookup_constuctor, which also
+   Alternatively we could've used Env.lookup_constructor, which also
    returns the qualified path? Searching the environment is costly
    though.
-   Actually, using Env.lookup_constuctor is a bad idea. Now labels and
+   Actually, using Env.lookup_constructor is a bad idea. Now labels and
    constructors don;t have to be unique. The type checker goes to
    a great length to disambiguate a constructor or a label. It records
    the eventually determined type of the label/constructor in
@@ -816,7 +816,7 @@ let scope_extrusion_error :
    stable; therefore, if the maximal mark is valid then all
    smaller marks are valid as well.
    Delimited control spoils all that. 
-   When we capture some of the inner-bidings
+   When we capture some of the inner-bindings
    in a continuation and then reinstall that continuation at the
    top level, the `latest' free variable is valid but earlier are
    no longer valid:
@@ -865,7 +865,7 @@ let validate_vars_list : Location.t -> code_repr list ->
    This function embodies the translation of simple functions, for-loops,
    simple let-expressions, etc.
 *)
-      (* Counter for assiging priorities to vars heap nodes. *)
+      (* Counter for assigning priorities to vars heap nodes. *)
       (* Keep in mind the invariant that variables of the same priority
          comes from the same binding location. So, we must keep the
          priorities unique to binders. Giving binders monotonically
@@ -1168,8 +1168,6 @@ let build_letrec :
   Code (vars,
   {pexp_loc = l; 
    pexp_desc = Pexp_let (Recursive, pel, ebody)})
-
- XXXXX 
 *)
 
 (*{{{ CSP *)
@@ -1366,7 +1364,7 @@ let rec trx_pattern :
      Parsetree.pattern * (Ident.t * string loc) list = fun acc pat ->
   let (pd,acc) = match pat with
   |  { pat_extra=[Tpat_unpack, _, _attrs]; pat_desc = Tpat_var (_,name); _ } ->
-        (Ppat_unpack name,acc)          (* name must have been upperase *)
+        (Ppat_unpack name,acc)          (* name must have been uppercase *)
   | { pat_extra=[Tpat_type (_path, lid), _, _attrs]; _ } -> (Ppat_type lid,acc)
   | { pat_extra= (Tpat_constraint ct, _, _attrs) :: rem; _ } ->
       not_supported pat.pat_loc
@@ -1884,7 +1882,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
 
        There is another constraint: see check_recursive_lambda in 
        bytecomp/translcore.ml. We use a simpler version of the test:
-       we allow only letrec experssions of the form
+       we allow only letrec expressions of the form
            let rec f = fun x -> ....
        that is, 
            let rec f x y ... =
@@ -1914,7 +1912,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
          accommodates let, letrec, functions, etc.
        *)
       let cl = 
-        {c_lhs =                        (* preudo-pattern for ebody *)
+        {c_lhs =                        (* pseudo-pattern for ebody *)
           {pat_desc = Tpat_any; pat_loc=ebody.exp_loc;
            pat_attributes=[]; pat_extra=[]; 
            pat_type=ebody.exp_type;
@@ -1930,60 +1928,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
          texp_pats_names pl names;
          trx_case_list_body n binding_pat exp cl
        ]
-(*
 
-      let names =                       (* in the order of appearance *)
-        List.map (function {vb_pat={pat_desc = Tpat_var (_,name)}} -> name
-          | _ -> trx_error @@ Location.errorf ~loc:exp.exp_loc
-                "Only variables are allowed as left-hand side of `let rec'")
-          vbl
-      in
-      (* code for body followed by the code for e's *)
-      let es_body = texp_array (
-        trx_bracket n ebody ::
-          (List.map (fun (_,e) -> trx_bracket n e) vbl)) in
-      texp_apply (texp_ident "Trx.build_letrec") 
-        [texp_loc exp.exp_loc;
-         texp_array (List.map texp_string_loc names);
-             (* Translate the future-stage function as the present-stage 
-                function whose argument is an array of variables 
-                (should be a tuple, really) and the type
-                   some_targ code array -> tres code array
-                See the comment at Texp_function below for details.
-              *)
-         let pats = List.map (fun (p,_) -> 
-                      {p with pat_type = wrap_ty_in_code n p.pat_type}) pel in
-         let p1 = (match pats with h::_ -> h | _ -> assert false) in
-         let pat = {p1 with
-                    pat_desc = Tpat_array pats;
-                    pat_type = 
-                        Ctype.instance_def (Predef.type_array p1.pat_type)} in
-         { exp with
-           exp_desc = Texp_function ("",[(pat, es_body)],Total);
-           exp_type = {exp.exp_type with desc =
-                           Tarrow ("",pat.pat_type, es_body.exp_type, Cok)}
-         }
-       ]
-
-
-    (* General-case, non-recursive let General case. Like Texp_function *)
-  | Texp_let (Nonrecursive,pel,body) ->
-      let (pl,names,binding_pat) = 
-        trx_pel pel (wrap_ty_in_code n (Btype.newgenvar ())) in
-      texp_apply (texp_ident "Trx.build_let") 
-        [texp_loc exp.exp_loc;
-         texp_bool (recf = Default);
-         texp_pats_names pl names;
-         texp_array (List.map (fun (_,e) -> trx_bracket trx_exp n e) pel);
-         (* See the comment at Texp_function below *)
-         let body = texp_array [trx_bracket trx_exp n body] in
-         { exp with
-           exp_desc = Texp_function ("",[(binding_pat, body)],Total);
-           exp_type = {exp.exp_type with desc =
-                       Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
-         }
-       ]
-*)
      (* The most common case of functions: fun x -> body *)
   | Texp_function (l,[{c_guard=None; 
                        c_lhs={pat_extra=[]; 
@@ -2434,7 +2379,7 @@ and trx_expression = function
 | Texp_lazy e -> Texp_lazy (trx_exp e)
 | Texp_object (cs,sl) -> Texp_object (trx_cl_struct cs,sl)
 | Texp_pack me -> Texp_pack (trx_me me)
-(* XXXXX
+(*
 | Texp_bracket e -> 
    let trx_exp e = try trx_exp e with Not_modified -> e in
   (trx_bracket trx_exp 1 e).exp_desc
