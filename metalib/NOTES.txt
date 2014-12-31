@@ -1,106 +1,19 @@
 			BER MetaOCaml
 
-Make metaocamlc a simple ocaml file that invokes ocamlc
-after setting up arguments. Assume that the path to metaocaml
-coincides with ocamlc. If there is a flag -a, don't link OCaml
-libraries! Actually, link OCaml libraries only if there are no
-flags -c and -a.
-Or, perhaps make a file metaocamlink?
-
-Add letrec code: Jun suggestion.
 
 * Main differences from the original MetaOCaml
 
 
-Use attributes for bracket and escape.
-Why not extension nodes: the type checker ignores extension nodes
- (or reports them as errors) at many places (for example, when
- traversing the AST to find free variables; when checking for
- non-expansiveness, etc). But nodes with attributes are treated
- normally, which is exactly waht we want.
+** Substantial changes, user-visible
+ -- New function Runcode.typecheck_code for the benefit of offshoring
 
-So, .< exp >. is represented as
-   exp [@metaocaml.bracket]
-or
-   begin[@metaocaml.bracket] exp end
-Likewise, .~exp is represented as
-   exp [@metaocaml.escape]
+ -- New function Runcode.add_search_path to add a directory to
+ the search path for .cmi/.cmo files -- report by Nicolas Ojeda Bar
 
-Keep in mind that an expreession can have several bracket and escape
-attributes, for example: .<.<1>.>.
-The order matters: .<.< .~ x >.>. vs .< .~.<x>. >.
+ -- better printing of CSP; CSP become serializable in simpler cases
+ (see a special section on CSP below)
 
-We may need an extension node for CSP. Actually, CSPs are just
-constants. So, we keep CSP as constants, but annotate them.
-Feature request: new constant type, structure constant (like block
-constant in IR lambda). It must be used with a type coercion.
-The type checker checks for the presence of the coercion and the
-code generator makes a cursory check that the structure agrees
-with the defined type. To be precise, we want
-   Const_structural Obj.t (* or structural const from Lambda *)
-                    * core_type
-There is no longer any specific node for CSP. We do not need them:
-old CSP nodes are represented as an application (Obj.obj <csp-val>).
-Since the CSP nodes are assumed type-checked, we get around typing --
-as we did before with the PExp_csp node. Obj.obj serves exactly the
-same purpose.
-A better design: if CSP is represented as an integer, we compile
-CSP v as if it were .<Obj.obj .~(Obj.repr v)>..
-If Obj.repr is block (a heap value), presently we compile it as
-the same. However, in the future we should do
-.<Marshall.from_string .~(Marshall.to_string v)>.
-(perhaps with the flags to preserve sharing and permit marshalling of
-functional values). We attach the attribute carrying the name of the
-CSP variable, for the sake of pretty-printing functions
-(They may want to print that name in the comments). Finally we get the
-output format that is compilable even in the presence of CSP.
-To estimate when to switch to the new format, the dyn_quoter now
-checks the CSP to and prints a warning if the CSP is a closure or
-if it is ``too deep''.
-
-Better printing of CSP; now in simple cases CSP are serializable
-and hence present no problems.
-let l x = .<x>.;;                       (* polymorphic *)
-l 1;;
-  - : int code = .<(* CSP x *) Obj.magic 1>. 
-l 1.0;;                  (* better printing in N100 *)
-  - : float code = .<1.>.
-l [];;                                  (* serializable code in N102 *)
- - : 'a list code = .<(* CSP x *) Obj.magic 0>. 
-
-In any case, CSPs that are used by the MetaOCaml itself (for the
-Parsetree fragments) are already in the new format. Therefore,
-metaocaml (the compiler itself) can be natively compiled.
-Observation: most of the serialized values are of the size 50. It
-seems the minimal size is about 42, the size of the header for the
-serialized value. When dealing with functions, case matching, some
-serialized values (patterns, pattern lists) could be about 70 or even
-150. It seems I should write my own serializer, that avoids the
-overhead of Marshall. I should use it when the value is not too deep,
-or internally for MetaOCaml CSP.
-
-
-We now avoid the extra translation pass. The type-checker
-should invoke the trx_bracket after type-checking the bracket at level
-0. Therefore, if there are no staging constructs, the typedtree is
-not traversed at all after type checking. Typemod.ml no longer has to
-be modified.
-However, we pay the price: the check on non-epxansiveness is done
-on the type-checked expression. So, we have to arrange so that we
-check if an expression is non-expansive before the translation.
-We carry this information in the dedicated attribute.
-
-
-Instead of the Level environment, carry the level as the attribute
-to the value, in value attributes.
-
-Taking advantage of the extensible error-reporting mechanism
-provided by Location.register_error_of_exn.
-
-Use -dtypedtree option on the top level to see the generated tree.
-
-** Substantial changes
-
+ [N101]
  -- Constructor restriction: all data constructors and record labels 
  used within brackets must come from the types that are declared in 
  separately compiled modules.
@@ -123,6 +36,52 @@ Use -dtypedtree option on the top level to see the generated tree.
  (!.) (alias run) defined in the module Runcode. Runcode.run is an
  ordinary function, and is not part of the MetaOCaml kernel.
 
+
+** Substantial changes, internal
+
+-- Use attributes for bracket and escape.
+ Why not extension nodes: the type checker ignores extension nodes
+ (or reports them as errors) at many places (for example, when
+ traversing the AST to find free variables; when checking for
+ non-expansiveness, etc). But nodes with attributes are treated
+ normally, which is exactly what we want.
+
+So, .< exp >. is represented as
+   exp [@metaocaml.bracket]
+or
+   begin[@metaocaml.bracket] exp end
+Likewise, .~exp is represented as
+   exp [@metaocaml.escape]
+
+Keep in mind that an expression can have several bracket and escape
+attributes, for example: .<.<1>.>.
+The order matters: .<.< .~ x >.>. vs .< .~.<x>. >.
+
+-- Now metaocamlc a simple .c file that invokes ocamlc
+after setting adding up compiler libraries and berstart.cmo -- 
+but only if we link the executable. If metaocamlc is invoked to
+compile only or to build a library, don't add compiler libraries and
+berstart. Otherwise, when we get to make the final executable, we end
+up with duplicate compiler libraries, and this is the disaster
+(segfault).
+
+-- We now avoid the extra translation pass. The type-checker
+should invoke the trx_bracket after type-checking the bracket at level
+0. Therefore, if there are no staging constructs, the typedtree is
+not traversed at all after type checking. Typemod.ml no longer has to
+be modified.
+However, we pay the price: the check on non-epxansiveness is done
+on the type-checked expression. So, we have to arrange so that we
+check if an expression is non-expansive before the translation.
+We carry this information in the dedicated attribute.
+
+-- Instead of the Level environment, carry the level as the attribute
+to the value, in value attributes.
+
+-- Taking advantage of the extensible error-reporting mechanism
+provided by Location.register_error_of_exn.
+
+[N101]
  -- In OCaml 4.00.1 , the Core type checker was changed to use
  type_expect. This generates better error messages. Therefore, the type
  checking of brackets, escape and CSP was re-written accordingly,
@@ -190,6 +149,47 @@ OCaml will not generally affect the `user-level' code.
  -- Offshoring is temporarily removed; it should be re-introduced as
  a module in metalib, a user-level code.
 
+** Better handling of CSP in N102
+
+There is no longer any specific node for CSP. We do not need them:
+old CSP nodes are represented as an application (Obj.obj <csp-val>).
+Since the CSP nodes are assumed type-checked, we get around typing --
+as we did before with the PExp_csp node. Obj.obj serves exactly the
+same purpose.
+A better design: if CSP is represented as an integer, we compile
+CSP v as if it were .<Obj.obj .~(Obj.repr v)>..
+If Obj.repr is block (a heap value), presently we compile it as
+the same. However, in the future we should do
+.<Marshall.from_string .~(Marshall.to_string v)>.
+(perhaps with the flags to preserve sharing and permit marshaling of
+functional values). We attach the attribute carrying the name of the
+CSP variable, for the sake of pretty-printing functions
+(They may want to print that name in the comments). Finally we get the
+output format that is compilable even in the presence of CSP.
+To estimate when to switch to the new format, the dyn_quoter now
+checks the CSP to and prints a warning if the CSP is a closure or
+if it is ``too deep''.
+
+Better printing of CSP; now in simple cases CSP are serializable
+and hence present no problems.
+let l x = .<x>.;;                       (* polymorphic *)
+l 1;;
+  - : int code = .<(* CSP x *) Obj.magic 1>. 
+l 1.0;;                  (* better printing in N100 *)
+  - : float code = .<1.>.
+l [];;                                  (* serializable code in N102 *)
+ - : 'a list code = .<(* CSP x *) Obj.magic 0>. 
+
+In any case, CSPs that are used by the MetaOCaml itself (for the
+Parsetree fragments) are already in the new format. Therefore,
+metaocaml (the compiler itself) can be natively compiled.
+Observation: most of the serialized values are of the size 50. It
+seems the minimal size is about 42, the size of the header for the
+serialized value. When dealing with functions, case matching, some
+serialized values (patterns, pattern lists) could be about 70 or even
+150. It seems I should write my own serializer, that avoids the
+overhead of Marshall. I should use it when the value is not too deep,
+or internally for MetaOCaml CSP.
 
 ** Engineering changes
 
@@ -245,6 +245,12 @@ Suggestions for the OCaml HQ
  array in ancient. Representing such constant in a Parsetree as a
  string is ungainly. Syntactic extensions in particular could use
  Const_csp_value.
+ Feature request: new constant type, structure constant (like block
+ constant in IR lambda). It must be used with a type coercion.
+ The code generator makes a cursory check that the structure agrees
+ with the defined type. To be precise, we want
+   Const_structural Obj.t (* or structural const from Lambda *)
+                    * core_type
 
 
 * Further plans
@@ -344,6 +350,8 @@ OLD (before N102)
 N102
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-debugger 
   -no-ocamlbuild -no-graph
+
+Use -dtypedtree option on the top level to see the generated tree.
 
 
 * Old Future work

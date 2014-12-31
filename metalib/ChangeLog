@@ -1,19 +1,24 @@
 December 2014
-	There is no longer a separate Typedtree traversal pass, after
+	Release N102
+	- There is no longer a separate Typedtree traversal pass, after
 	the type checking, to translate brackets and escapes. The
-	translation is done right after the type-cheking of the 0-level
+	translation is done right after the type-checking of the 0-level
 	bracket. That means that for staging-annotation-free code,
-	MetaOCaml has no substatial overhead.
-	New function Runcode.typecheck_code for the benefit of offshoring
-	New function Runcode.add_search_path to add a directory to
+	MetaOCaml has no substantial overhead.
+	- Use attributes for brackets, escapes and CSP (and internally
+	for levels and inexpansiveness). Much fewer OCaml files are
+	modified.
+	- New function Runcode.typecheck_code for the benefit of offshoring
+	- New function Runcode.add_search_path to add a directory to
 	the search path for .cmi/.cmo files -- report by Nicolas Ojeda Bar
-	Better handling of CSP. For simple cases, there are no longer
+	- Better handling of CSP. For simple cases, there are no longer
 	any serialization problems.
-	Overall better printing, of CSP, code and error messages
-	Overall, more uniform, better factored code.
-	metaocamlc is now a simple .c file; it adds compiler-libs only
+	- Overall better printing, of CSP, code and error messages.
+	- Overall, more uniform, better-factored code.
+	- metaocamlc is now a simple .c file; it adds compiler-libs only
 	in the case when the executable is built. Otherwise, we may end up
 	with the duplicate libraries.
+
 April 24, 2014
 	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.
 	If the first Runcode.run is used after a type declaration,
