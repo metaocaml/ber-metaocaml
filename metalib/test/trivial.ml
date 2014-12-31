@@ -32,15 +32,15 @@ List.rev;;
 Characters 22-23:
   .<fun x -> .~(let y = x in y)>.;;
                         ^
-Error: Wrong level: variable bound at level 1 and used at level 0
+Wrong level: variable bound at level 1 and used at level 0
 *)
 print_endline "Error was expected";;
 
 .<fun x -> 1 + .~(.<true>.)>.;;
 (*
-Characters 20-24:
+Characters 17-27:
   .<fun x -> 1 + .~(.<true>.)>.;;
-                      ^^^^
+                   ^^^^^^^^^^
 Error: This expression has type bool but an expression was expected of type
          int
 *)
@@ -75,7 +75,7 @@ let x = ['a'] in .<x>.;;
 *)
 
 let l x = .<x>.;;                       (* polymorphic *)
-(* val l : 'a -> ('cl, 'a) code = <fun> *)
+(* val l : 'a -> 'a code = <fun> *)
 l 1;;
 (*
 - : int code = .<(* CSP x *) Obj.magic 1>. 
@@ -125,7 +125,7 @@ let x = true in .<assert x>.;;
 (* Applications and labels *)
 .<succ 1>.;;
 (*
-- : int code = .<succ 1>.
+- : int code = .<Pervasives.succ 1>. 
 *)
 
 let 2 = !. .<succ 1>.;;
@@ -143,12 +143,12 @@ let 3 = !. .<(1 + 2)>.;;
 let 3 = 
   !. .<String.length "abc">.;;
 
-.<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
+.<StringLabels.sub ~pos:1 ~len:2 "abc">.;;
 (*
 - : string code = .<(StringLabels.sub "abc" ~pos:1 ~len:2>.
 *)
 let "bc" =
-  !. .<StringLabels.sub ?pos:1 ?len:2 "abc">.;;
+  !. .<StringLabels.sub ~pos:1 ~len:2 "abc">.;;
 
 .<StringLabels.sub ~len:2 ~pos:1 "abc">.;;
 (*
@@ -181,9 +181,8 @@ let 12 = !. (let x = .< 2 + 4 >. in .< .~ x + .~ x >. );;
 
 .<1 + .~(let x = 2 in .<.<x>.>.)>.;;
 (*
-Characters 24-29:
   .<1 + .~(let x = 2 in .<.<x>.>.)>.;;
-                          ^^^^^
+                            ^
 Error: This expression has type 'a code
        but an expression was expected of type int
 *)
@@ -221,63 +220,63 @@ let 1 = !. !. .<.<.~(.<1>.)>.>.;;
 let 1 = !. !. .<.<.~.~(.<.<1>.>.)>.>.;;
 
 (* Nested brackets and escapes on the same identifier *)
-let x = .<1>. in .<.~x>.
+let x = .<1>. in .<.~x>.;;
 (*
 - : int code = .<1>. 
 *)
-let 1 = !. (let x = .<1>. in .<.~x>.)
+let 1 = !. (let x = .<1>. in .<.~x>.);;
 
-let x = .<1>. in .<.~.<x>.>.
+let x = .<1>. in .<.~.<x>.>.;;
 (*
 - : int code code = .<(* CSP x *)>. 
 *)
-!. (let x = .<1>. in .<.~.<x>.>.)
+!. (let x = .<1>. in .<.~.<x>.>.);;
 (*
 - : int code = .<1>. 
 *)
-let 1 = !. !. (let x = .<1>. in .<.~.<x>.>.)
+let 1 = !. !. (let x = .<1>. in .<.~.<x>.>.);;
 
-let x = .<1>. in .<.<.~x>.>.
+let x = .<1>. in .<.<.~x>.>.;;
 (*
 - : int code code = .<.< .~((* CSP x *))  >.>. 
 *)
-let 1 = !. !. (let x = .<1>. in .<.<.~x>.>.)
+let 1 = !. !. (let x = .<1>. in .<.<.~x>.>.);;
 
-.<.<.~.<List.rev>.>.>.
+.<.<.~.<List.rev>.>.>.;;
 (*
 - : ('a list -> 'a list) code code = .<.< .~(.< List.rev  >.)  >.>. 
 *)
-!. .<.<.~.<List.rev>.>.>.
+!. .<.<.~.<List.rev>.>.>.;;
 (*
 - : ('_a list -> '_a list) code = .<List.rev>. 
 *)
-let [3;2;1] = !. !. .<.<.~.<List.rev>.>.>. [1;2;3]
+let [3;2;1] = !. !. .<.<.~.<List.rev>.>.>. [1;2;3];;
 
 (* we use a sequence internally to represent brackets and escapes
    in a Typedtree
 *)
-.<.<begin assert true; 1 end>.>.
+.<.<begin assert true; 1 end>.>.;;
 (*
 - : int code code = .<.< assert true; 1  >.>. 
 *)
-let 1 = !. !. .<.<begin assert true; 1 end>.>.
+let 1 = !. !. .<.<begin assert true; 1 end>.>.;;
 
-.<.~(.<begin assert true; 1 end>.)>.
+.<.~(.<begin assert true; 1 end>.)>.;;
 (*
 - : int code = .<assert true; 1>. 
 *)
-let x = .<begin assert true; 1 end>. in .<.~x>.
+let x = .<begin assert true; 1 end>. in .<.~x>.;;
 (*
 - : int code = .<assert true; 1>. 
 *)
-let x = .<begin assert true; 1 end>. in .<.~(assert true; x)>.
+let x = .<begin assert true; 1 end>. in .<.~(assert true; x)>.;;
 (*
 - : int code = .<assert true; 1>. 
 *)
 let 1 =
-  let x = .<begin assert true; 1 end>. in !. .<.~(assert true; x)>.
+  let x = .<begin assert true; 1 end>. in !. .<.~(assert true; x)>.;;
 
-let x = .<begin assert true; 1 end>. in .<.~(ignore(!. x); x)>.
+let x = .<begin assert true; 1 end>. in .<.~(ignore(!. x); x)>.;;
 (*
 - : int code = .<assert true; 1>. 
 *)
@@ -405,7 +404,7 @@ print_endline "Error was expected";;
 
 .<{Complex.re = 1.0; im = 2.0}>.;;
 (*
-- : ('cl, Complex.t) code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
+- : Complex.t code = .<{ Complex.re = 1.0; Complex.im = 2.0 }>. 
 *)
 let {Complex.re = 1.; Complex.im = -2.} =
   Complex.conj (!. .<{Complex.re = 1.0; im = 2.0}>.);;
@@ -580,11 +579,11 @@ ok 3 2
 *)
 
 (* Anonymous loop variable (new in 4.02?) *)
-.<for _ = 1 to 3 do print_string "ok" done>.
+.<for _ = 1 to 3 do print_string "ok" done>.;;
 (*
 - : unit code = .<for _for_11 = 1 to 3 do Pervasives.print_string "ok" done>. 
 *)
-!. .<for _ = 1 to 3 do print_string "ok" done>.
+!. .<for _ = 1 to 3 do print_string "ok" done>.;;
 (*
 okokok- : unit = ()
 *)
@@ -915,7 +914,7 @@ let 1.0 =
     {im=2.0; re=1.0};;
 
 (* exceptional cases *)
-.<match List.mem 1 [] with x -> x | exception Not_found -> false>.
+.<match List.mem 1 [] with x -> x | exception Not_found -> false>.;;
 (*
 - : bool code = .<
 match List.mem 1 [] with | x_95 -> x_95 | exception Not_found  -> false>. 
@@ -937,7 +936,7 @@ val f : ((int * string) list -> string) code = .<
 *)
 let "" = !. f []
 let "1" = !. f [(1,"1")]
-let "0" = !. f [(1,"0")]
+let "0" = !. f [(1,"0")];;
 
 (* try *)
 .<fun x -> try Some (List.assoc x [(1,true); (2,false)]) with Not_found -> None>.;;
@@ -1112,12 +1111,6 @@ fun x_83  -> let Some x_84 = x_83 in x_84 + 1>.
 let 3 = (!. .<fun x -> let (Some x) = x in x + 1>.) (Some 2);;
 (!. .<fun x -> let (Some x) = x in x + 1>.) None;;
 (*
-Characters 19-27:
-  (!. .<fun x -> let (Some x) = x in x + 1>.) None;;
-                     ^^^^^^^^
-Warning 8: this pattern-matching is not exhaustive.
-Here is an example of a value that is not matched:
-None
 Exception: Match_failure ("//toplevel//", 1, 19).
 *)
 print_endline "Error was expected";;

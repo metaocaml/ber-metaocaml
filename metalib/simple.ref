@@ -1,8 +1,8 @@
-BER MetaOCaml toplevel, version N 101
-        OCaml version 4.01.1+dev2-2013-12-18+CLOSED
+BER MetaOCaml toplevel, version N 102
+        OCaml version 4.02.1
 
 #   #       val tr1 : ('a -> int) code = .<fun x_1  -> 1>. 
-# * *   val tr1' : ('a -> 'b -> 'b) code = .<fun x_2  x_3_4  -> x_3_4>. 
+# * *   val tr1' : ('a -> 'b -> 'b) code = .<fun x_2  -> fun x_3_4  -> x_3_4>. 
 # * *   val tr2 : ('a -> int) code = .<fun x_5  -> 1>. 
 # * *     Exception:
 Failure
@@ -17,22 +17,21 @@ Failure
 #   Characters 36-37:
   let tr4 = .<fun x -> .~(let x = !. x in .<x>.)>.;;
                                      ^
-Error: Wrong level: variable bound at level 1 and used at level 0
+Wrong level: variable bound at level 1 and used at level 0
 # * * * * *   Error was expected
 - : unit = ()
-#   val tr5 : ('a -> int) code = .<fun x_8  -> Runcode.( !. )  (.< 1  >.)>. 
-# * *   #   val tr6 : ('a -> 'a) code = .<fun x_9  -> Runcode.( !. )  (.< x_9  >.)>. 
-# * *   #   val tr7 : ('a code -> 'a) code = .<fun x_10  -> Runcode.( !. )  x_10>. 
-# * * * * * * * * *   #     val tr8 : ('a -> 'a code) code = .<
-  fun x_11  -> (* cross-stage persistent value (id: y) *)>. 
-# * * *     val tr8r : '_a -> '_a code = <fun>
+#   val tr5 : ('a -> int) code = .<fun x_8  -> Runcode.(!.) .< 1  >.>. 
+# * *   #   val tr6 : ('a -> 'a) code = .<fun x_9  -> Runcode.(!.) .< x_9  >.>. 
+# * *   #   val tr7 : ('a code -> 'a) code = .<fun x_10  -> Runcode.(!.) x_10>. 
+# * * * * * * * * *   #     val tr8 : ('a -> 'a code) code = .<fun x_11  -> (* CSP y *)>. 
+# * * * * * *     val tr8r : '_a -> '_a code = <fun>
 # * * * * * * * * *     - : int code = .<x_11>.
 
 Failure("The code built at Characters 36-37:\n  val tr8r : '_a -> '_a code = <fun>\n                                   ^\n is not closed: identifier x_11 bound at Characters 36-37:\n  val tr8r : '_a -> '_a code = <fun>\n                                   ^\n is free")
 # * * * *   Error was expected
 - : unit = ()
 #   val tm1 : ('a -> 'a code) code = .<fun x_12  -> .< x_12  >.>. 
-# * *   - : int code = .<(* cross-stage persistent value (id: x_12) *)>. 
+# * *   - : int code = .<(* CSP x_12 *) Obj.magic 10>. 
 # * *   #       val tg1 : '_a list ref = {contents = []}
 # * * *   val tg2 : '_a list ref = {contents = []}
 # * * *     * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *     

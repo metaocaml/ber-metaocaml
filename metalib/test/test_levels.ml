@@ -38,6 +38,6 @@ let glist_eq x =
 let _ = Runcode.run .<()>.;;
 
 (* This has to use glist_eq.  Using get_cde instead won't cut it.  *)
-let sumF env = glist_eq env
+let sumF env = glist_eq env;;
 
 Printf.printf "\nAll Done\n";;
