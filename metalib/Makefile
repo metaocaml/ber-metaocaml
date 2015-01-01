@@ -115,7 +115,7 @@ test-compile:
 	./tp
 
 clean::
-	rm -f simple_true quick_test t4 pt trivial.out simple.out tp
+	rm -f simple_true quick_test t4 pt trivial.out simple.out a.out tp
 
 # Patch the OCaml distribution
 patch:

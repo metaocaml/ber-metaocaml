@@ -2,7 +2,6 @@ OCaml files affected by the BER MetaOCaml.
 Search for NNN in each files for concrete changes
 
 ./Makefile
-./ocamldoc/Makefile
 
 done    ./parsing/lexer.mll
 done    ./parsing/parser.mly
@@ -19,6 +18,8 @@ done    ./typing/typecore.ml
 
 
 No longer changed in N102
+
+./ocamldoc/Makefile
 
 ./parsing/parsetree.mli
 ./parsing/printast.ml       trivial

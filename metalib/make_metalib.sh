@@ -1,6 +1,6 @@
 # Make the distribution directory
 
-DEST=/tmp/ber-metaocaml-101
+DEST=/tmp/ber-metaocaml-102
 
 mkdir $DEST
 
@@ -18,7 +18,7 @@ berstart.ml \
 bertop.ml \
 build_patch.sh \
 metaocamlmktop.tpl \
-metaocamlc.tpl \
+metaocamlc.c \
 print_code.ml \
 print_code.mli \
 runcode.ml \

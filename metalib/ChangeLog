@@ -1,4 +1,4 @@
-December 2014
+December 31, 2014
 	Release N102
 	- There is no longer a separate Typedtree traversal pass, after
 	the type checking, to translate brackets and escapes. The

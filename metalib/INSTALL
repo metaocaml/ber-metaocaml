@@ -1,6 +1,6 @@
 INSTALLATION
 
-You need the source OCaml 4.01 distribution, which you can download from
+You need the source OCaml 4.02.1 distribution, which you can download from
     http://caml.inria.fr/download.en.html
 See also
     http://ocaml.org/install.html
