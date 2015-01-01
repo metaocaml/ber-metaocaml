@@ -12,8 +12,7 @@ end
     (* (('cl,'a->'b) code -> ('cl,'w) code) -> ('cl,'w) code *)
 
 (* Example of using the interface
-   It is the variation of the even-odd example; the mutually
-   recursive functions are (artificially) made to have distinct types
+   First, the standard even-odd example
  *)
 
 module Ex1(S:LETRECS) = struct
@@ -29,6 +28,24 @@ module Ex1(S:LETRECS) = struct
   ))
 end
 
+(*
+ Next example:
+   It is the variation of the even-odd example; the mutually
+   recursive functions are (artificially) made to have distinct types
+
+ let rec even = fun n -> n=0 || odd even (n-1)
+ and odd even = not (n=0) && even (n-1)
+ in fun n -> [even n, odd n]
+
+The next two examples are to generalize the above to compute residuals of k
+for example
+
+let rec three0 n = n=0 || three2 (n-1)
+and     three1 n = not (n=0) && three0 (n-1)
+and     three2 n = not (n=0) && three1 (n-1)
+
+
+*)
 module Ex2(S:LETRECS) = struct
   open S
 
