@@ -214,6 +214,8 @@ Suggestions for the OCaml HQ
  -- make all path_idents in predef.ml to be persistent. Currently,
  to check if type int is in Pervasives, I have to search the initial
  environment. 
+[reported on Mantis, Jan 13, 2015: 
+ http://caml.inria.fr/mantis/view.php?id=6750]
 
  -- There are two restrictions on let rec: patterns must be simple
  variable patterns (either just 'var' or '_ as var') and the variable
@@ -230,7 +232,8 @@ Suggestions for the OCaml HQ
  Type checking will become more orthogonal since in type checking Pexp_letrec
  we don't need to care about GADTs, the exhaustiveness check and
  the type propagation from expression to patterns. 
-[reported on Mantis, Dec 29, 2014]
+[reported on Mantis, Dec 29, 2014: 
+ http://caml.inria.fr/mantis/view.php?id=6738]
 
  -- Unify printing functions for various trees and make them
  prettier. The very same fmt_longident_aux occurs three times in 
@@ -251,6 +254,8 @@ Suggestions for the OCaml HQ
  with the defined type. To be precise, we want
    Const_structural Obj.t (* or structural const from Lambda *)
                     * core_type
+[reported on Mantis, Jan 13, 2015: 
+ http://caml.inria.fr/mantis/view.php?id=6751]
 
 
 * Further plans
