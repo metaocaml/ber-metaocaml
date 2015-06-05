@@ -1,5 +1,89 @@
 			BER MetaOCaml
 
+* New notes, things to try
+
+** CSP and modular implicits
+See Jeremy Yallop's message, Caml-list Wed, 6 May 2015 16:58:03 +0100
+
+> It's easy to imagine having the csp function built in to MetaOCaml, so
+> that we could write .< x >.  (or some similarly convenient syntax) to
+> mean .< .~(csp x) >...
+
+Now that I do the code-combinator translation at the time of
+type-checking, I detect CSP early. I can then check the env for the
+name of the function "csp" and check if it has the right type, and
+generate the call to that function. Actually I can scan for any
+function names csp highter and hihger in scope. So, we can define
+  let csp : int -> int code
+  let csp : float -> float code
+etc. I will try to unify with each of them. Perhaps though I will
+handle integers (and floats and strings?) specially.
+
+** first-class patters
+Here is the explanation of Jeremy's idea
+
+Pattern code
+ The idea is to generate patterns and put constructors into patterns
+
+  <fun x -> match x with
+     | "str1" -> ....
+   >
+
+Now we want to abstract str1:
+ fun s -> 
+  <fun x -> match x with
+     | ~s -> ....
+   >
+
+
+  ('a, 'env, 'k) pat
+
+  var : ('a, 'a-'k, 'k) pat
+  pair ....
+
+  Then we need constructors for string pattern
+  str : string -> (string, string->'k, 'k)
+  Better off, generate these constructor functions, using the syntax like
+   <! "str" >
+   <! Some x >
+etc.
+
+This generalizes to GADTs, but we need add one type argument, the
+equality constraint.
+
+If we have a syntax for pattern expressions, it might help in solving
+the letrec problem (generating many letrecs).
+
+Also look into first-class patterns (Rhiger's) paper for ideas on
+syntax.
+
+** pickling combinators
+
+Anil:
+ An immediate useful application of MetaOCaml: parsing, especially
+binary parsing. Can we stage Kennedy's pickling combinators?
+Mirage uses binary parsing in many places (parsing of network packets,
+ etc). Since it is used so often, the performance is critical.
+One idea is to generate the fast path (e.g., IP packets with no
+ options) and the slow general path, with fast switching (or
+ optimistic recovery) from the fast path to the slow path.
+
+Another application for MetaOCaml: parsing combinators. Specify the
+grammar in the parser combinator style and obtain, say, Early parser
+(using the technique from the ESSLLI 2013 course). Show the lecturer!
+
+
+** Tagless-final and MetaOCaml
+
+In MetaOCaml, I can just make code type truly polymorphic. Instead
+of Parsetree.expression I can define module type Exp of untyped
+exp or typed 'a exp, and rely on first-class modules. In other words,
+'a code is not abstract but is defined in module Code. One may open
+Code at top level, or use local module Code. The problem: CSP (both
+global and local). In Scala-Virtualized, when dealing with <x + y>,
+we have to define (+) on type t code. For local constants, we have to
+define lifting. Scala-Virtualized uses DSL scope as essentially local
+open.
 
 * Main differences from the original MetaOCaml
 
