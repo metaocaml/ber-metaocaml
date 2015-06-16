@@ -96,6 +96,10 @@ test:
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top
 
 test-compile:
+	cd test && \
+	$(BINDIR)/metaocamlc -w -8 -o csp1 \
+	test_csp1.mli test_csp1.ml test_csp1r.ml && \
+	./csp1
 	$(BINDIR)/metaocamlc -w -8 -o simple_true test/simple_true.ml
 	./simple_true
 # 	$(BINDIR)/metaocamlc -o quick_test test/quick_test.ml
@@ -116,6 +120,9 @@ test-compile:
 
 clean::
 	rm -f simple_true quick_test t4 pt trivial.out simple.out a.out tp
+
+clean::
+	rm -f test/csp1 test/*.cmi test/*.cmo
 
 # Patch the OCaml distribution
 patch:
