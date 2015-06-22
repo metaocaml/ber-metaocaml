@@ -1203,10 +1203,17 @@ let lift_as_literal :
         texp_apply (texp_ident "Trx.lift_constant_char") [exp]
     | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_bool ->
         texp_apply (texp_ident "Trx.lift_constant_bool") [exp]
-          (* double and string are handled by dyn_quote *)
-          (* which hence handles polymorphic functions instantiated
-             to double and string.
+          (* We cannot leave those to dyn_quote *)
+          (* since the latter deals only with run-time value. The same
+             value, with the same run-time representation, may have
+             different incompatible types, thanks to abstract types.
            *)
+    | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_unit ->
+        texp_apply (texp_ident "Trx.lift_constant_unit") [exp]
+    | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_float ->
+        texp_apply (texp_ident "Trx.lift_constant_float") [exp]
+    | {desc = Tconstr(p, _, _)} when Path.same p Predef.path_string ->
+        texp_apply (texp_ident "Trx.lift_constant_string") [exp]
           (* Deal with code type *)
     | _ -> raise CannotLift
 
@@ -1222,6 +1229,17 @@ let lift_constant_bool : bool -> code_repr = fun x ->
   open_code @@ Ast_helper.Exp.construct 
                  (Location.mknoloc (Longident.Lident b)) None
 
+let lift_constant_unit : unit -> code_repr = fun x -> 
+  open_code @@ Ast_helper.Exp.construct 
+                 (Location.mknoloc (Longident.Lident "()")) None
+
+let lift_constant_float : float -> code_repr = fun x -> 
+  open_code @@ 
+        Ast_helper.Exp.constant (Const_float (string_of_float x))
+
+let lift_constant_string : string -> code_repr = fun x -> 
+  open_code @@ 
+        Ast_helper.Exp.constant (Const_string (x,None))
 
 (* Lift the run-time value v into a Parsetree for the code that, when
    run, will produce v.

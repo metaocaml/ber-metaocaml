@@ -108,9 +108,12 @@ val sample_pats_names : Parsetree.pattern list * string Location.loc list
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
 
-val lift_constant_int  : int  -> code_repr
-val lift_constant_char : char -> code_repr
-val lift_constant_bool : bool -> code_repr
+val lift_constant_int    : int    -> code_repr
+val lift_constant_char   : char   -> code_repr
+val lift_constant_bool   : bool   -> code_repr
+val lift_constant_unit   : unit   -> code_repr
+val lift_constant_float  : float  -> code_repr
+val lift_constant_string : string -> code_repr
 
 (* Builders of the Parsetree *)
 val build_assert   : Location.t -> code_repr -> code_repr

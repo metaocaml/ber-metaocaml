@@ -73,6 +73,10 @@ let x = ['a'] in .<x>.;;
 (*
 - : char list code = .<(* CSP x *)>. 
 *)
+let x = () in .<x>.;;
+(*
+- : unit code = .<()>. 
+*)
 
 let l x = .<x>.;;                       (* polymorphic *)
 (* val l : 'a -> 'a code = <fun> *)
@@ -81,9 +85,9 @@ l 1;;
 - : int code = .<(* CSP x *) Obj.magic 1>. 
 *)
 let 1 = !. (l 1);;
-l 1.0;;                  (* better printing in N100 *)
+l 1.0;;
 (*
-- : float code = .<1.>.
+- : float code = .<(* CSP x *)>. 
 *)
 let 1.0 = !. (l 1.0);;
 l [];;                                  (* serializable code in N102 *)

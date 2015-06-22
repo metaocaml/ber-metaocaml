@@ -27,9 +27,10 @@ Error: This expression has type bool but an expression was expected of type
 # * *   - : string code = .<"aaa">. 
 # * *   - : char code = .<'a'>. 
 # * *   - : char list code = .<(* CSP x *)>. 
+# * *   - : unit code = .<()>. 
 # * *     val l : 'a -> 'a code = <fun>
 #   - : int code = .<(* CSP x *) Obj.magic 1>. 
-# * *   # - : float code = .<1.>. 
+# * *   # - : float code = .<(* CSP x *)>. 
 # * *   # - : 'a list code = .<(* CSP x *) Obj.magic 0>. 
 # * *   #   - : (int -> int) code = .<(* CSP x *)>. 
 # * * * * * *     - : ('a list -> 'a list) code = .<List.rev>. 
@@ -288,7 +289,7 @@ Failure
 #   - : unit -> int = <fun>
 #   #   - : (bool -> int) code = .<function | true  -> 1 | false  -> 0>. 
 # * *   #   - : (bool * 'a list -> int) code = .<fun (true ,[])  -> 1>. 
-# * *   Exception: Match_failure ("//toplevel//", 526, 6).
+# * *   Exception: Match_failure ("//toplevel//", 529, 6).
 # * *   Error was expected
 - : unit = ()
 # #   - : (bool array -> int) code = .<fun [|true ;false ;false |]  -> 1>. 
@@ -312,7 +313,7 @@ function
 | x_55::y_56::[] -> x_55 - y_56>. 
 # * * * * *   #     - : (int list -> int) code = .<
 fun (x_62::y_63::[]|x_62::y_63::_::[])  -> x_62 - y_63>. 
-# * * *   # # Exception: Match_failure ("//toplevel//", 590, -90).
+# * * *   # # Exception: Match_failure ("//toplevel//", 593, -90).
 #   Error was expected
 - : unit = ()
 #   - : (int list -> int) code = .<
@@ -426,7 +427,7 @@ let x_222 = 1 in let x_223 = x_222 + 1
 
 # * * *   # - : (int option -> int) code = .<
 fun x_228  -> let Some x_229 = x_228 in x_229 + 1>. 
-# * * * * * * * * *   # Exception: Match_failure ("//toplevel//", 831, -265).
+# * * * * * * * * *   # Exception: Match_failure ("//toplevel//", 834, -265).
 # * *   Error was expected
 - : unit = ()
 #         - : int code = .<1>. 

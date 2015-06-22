@@ -1,3 +1,11 @@
+June 22, 2015
+	Applying a patch by Jeremy Yallop, to correct for the problem
+	when a CSP value has the abstract type (that is represented as
+	string, for example). In OCaml, the same value may indeed have
+	multiple incompatible types. Therefore, we no longer can leave
+	strings and doubles to the dyn_quote. If we know the type, we have
+	to compile in the appropriate quoter.
+
 December 31, 2014
 	Release N102
 	- There is no longer a separate Typedtree traversal pass, after
