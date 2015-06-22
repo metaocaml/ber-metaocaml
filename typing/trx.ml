@@ -1232,6 +1232,11 @@ let lift_constant_bool : bool -> code_repr = fun x ->
    printing (also to simplify translation when CSP occurs within nested
    brackets).
 
+   We always have to put Obj.magic conversion, even if the value looks
+   like a string or a double. It may be represented as a double but the type
+   which it is used can be different: abstract. 
+   See test/test_csp1 for an example. Reported and patched by Jeremy Yallop.
+
   TODO: also check for double_array_tag
    and create a (structured) constant for a double array
 *)
@@ -1262,23 +1267,23 @@ let easy_to_serialize : Obj.t -> bool =
 let dyn_quote : Obj.t -> Longident.t loc -> code_repr =
   fun v li ->
    let csp_attr = attr_csp li in
-   open_code @@   
-   match Obj.is_int v with
-    | true ->   (* Looks like an integer: coerce from it using Obj.magic *)
-        Ast_helper.Exp.apply ~attrs:[csp_attr] ~loc:li.loc
-          obj_magic_exp [("",Ast_helper.Exp.constant (Const_int (Obj.obj v)))]
+   let exp = match Obj.is_int v with
+    | true ->
+        Ast_helper.Exp.constant (Const_int (Obj.obj v))
     | false when Obj.tag v = Obj.double_tag ->
-      Ast_helper.Exp.constant (Const_float (string_of_float (Obj.obj v)))
+        Ast_helper.Exp.constant (Const_float (string_of_float (Obj.obj v)))
     | false when Obj.tag v = Obj.string_tag ->
-      Ast_helper.Exp.constant (Const_string (Obj.obj v,None))
+        Ast_helper.Exp.constant (Const_string (Obj.obj v,None))
     | _   ->           (* general case *)
         let () =
           if not @@ easy_to_serialize v then
             debug_print ~loc:li.loc 
              "The CSP value is a closure or too deep to serialize" in
-        Ast_helper.Exp.apply ~attrs:[csp_attr] ~loc:li.loc
-          obj_magic_exp [("",Ast_helper.Exp.constant 
-                               (Const_string (Obj.obj v,None)))]
+        Ast_helper.Exp.constant  (Const_string (Obj.obj v,None))
+   in
+   open_code @@
+   Ast_helper.Exp.apply ~attrs:[csp_attr] ~loc:li.loc
+     obj_magic_exp [("",exp)]
 
        
 (* Build the Typedtree that lifts the variable with the given path and type.
