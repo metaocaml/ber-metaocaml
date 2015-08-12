@@ -1,3 +1,7 @@
+August 13, 2015
+	Removed the let! feature. Monadic programming is better done
+	with syntactic extensions such as those used by Lwt.
+
 June 22, 2015
 	Applying a patch by Jeremy Yallop, to correct for the problem
 	when a CSP value has the abstract type (that is represented as

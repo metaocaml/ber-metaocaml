@@ -490,8 +490,6 @@ rule token = parse
   | '%'     { PERCENT }
   | ['*' '/' '%'] symbolchar *
             { INFIXOP3(Lexing.lexeme lexbuf) }
-  | "let" symbolchar*                            (* NNN *)
-            { LETOP(Lexing.lexeme lexbuf) }      (* NNN *)
   | eof { EOF }
   | _
       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),

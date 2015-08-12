@@ -89,7 +89,6 @@ test:
 	$(BINDIR)/metaocaml -w -8 test/simple_true.ml
 	$(BINDIR)/metaocaml -w -8 test/quick_test.ml
 	$(BINDIR)/metaocaml -w -8 test/test21.ml
-	$(BINDIR)/metaocaml -w -8 test/pythagorian_triples.ml
 	$(BINDIR)/metaocaml -w -8 test/test_levels.ml
 #	$(BINDIR)/metaocaml test/t4.ml
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) MOCAMLTOP="../metaocaml -I .." testv_top
@@ -109,8 +108,6 @@ test-compile:
 	cp test/t4types.cmi . # .cmi file should be where the executable is
 	$(BINDIR)/metaocamlc -w -8 -o t4 -I test/ test/t4.ml
 	./t4
-	$(BINDIR)/metaocamlc -o pt test/pythagorian_triples.ml
-	./pt
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
 # Testing setting of the .cmo path
 	$(BINDIR)/metaocamlc test/test_path_a.ml

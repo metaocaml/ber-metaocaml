@@ -273,21 +273,6 @@ let wrap_type_annotation newtypes core_type body =
   in
   (exp, ghtyp(Ptyp_poly(newtypes,varify_constructors newtypes core_type)))
 
-    (* NNN: the whole definition *)
-let let_operator op bindings cont =
-  let pat, expr =
-    match bindings with
-    | []   -> assert false
-    | [x]  -> (x.pvb_pat,x.pvb_expr)
-    | l    -> 
-        let pats, exprs = 
-          List.fold_right
-            (fun {pvb_pat=p;pvb_expr=e} (ps,es) -> (p::ps,e::es)) l ([],[]) in
-        ghpat (Ppat_tuple pats), ghexp (Pexp_tuple exprs)
-    in
-      mkexp(Pexp_apply(op, [("", expr); 
-                            ("", ghexp(Pexp_fun("", None, pat, cont)))]))
-
 let wrap_exp_attrs body (ext, attrs) =
   (* todo: keep exact location for the entire attribute *)
   let body = {body with pexp_attributes = attrs @ body.pexp_attributes} in
@@ -376,7 +361,6 @@ let mkctf_attrs d attrs =
 %token LESS
 %token LESSMINUS
 %token LET
-%token <string> LETOP /* NNN */
 %token <string> LIDENT
 %token LPAREN
 %token LBRACKETAT
@@ -460,7 +444,6 @@ The precedences must be listed from low to high.
 %nonassoc below_SEMI
 %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
 %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
-%nonassoc LETOP           /* NNN */
 %nonassoc below_WITH
 %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
 %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
@@ -1105,8 +1088,6 @@ expr:
       { mkexp(Pexp_apply($1, List.rev $2)) }
   | LET ext_attributes rec_flag let_bindings_no_attrs IN seq_expr
       { mkexp_attrs (Pexp_let($3, List.rev $4, $6)) $2 }
-  | let_operator ext_attributes let_bindings IN seq_expr     /* NNN */
-      { wrap_exp_attrs (let_operator $1 $3 $5) $2 }          /* NNN */
   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
       { mkexp_attrs (Pexp_letmodule(mkrhs $4 4, $5, $7)) $3 }
   | LET OPEN override_flag ext_attributes mod_longident IN seq_expr
@@ -1990,7 +1971,6 @@ operator:
   | INFIXOP2                                    { $1 }
   | INFIXOP3                                    { $1 }
   | INFIXOP4                                    { $1 }
-  | LETOP                                       { $1 } /* NNN */
   | BANG                                        { "!" }
   | PLUS                                        { "+" }
   | PLUSDOT                                     { "+." }
@@ -2007,15 +1987,6 @@ operator:
   | COLONEQUAL                                  { ":=" }
   | PLUSEQ                                      { "+=" }
   | PERCENT                                     { "%" }
-;
-    /* NNN: the whole definition */
-let_operator:
-    LETOP                                   { mkexp (Pexp_ident(
-                                                     mkloc (Lident $1)
-                                                           (symbol_rloc ()))) }
-  | mod_longident DOT LETOP                 { mkexp (Pexp_ident(
-                                                     mkloc (Ldot($1,$3))
-                                                           (symbol_rloc ()))) }
 ;
 
 constr_ident:
