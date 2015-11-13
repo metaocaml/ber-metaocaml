@@ -2,6 +2,16 @@
 
 * New notes, things to try
 
+** automatic let-insertion
+Have a way to make sure that the piece of code is really a value.
+New type like 'a vcode with injection to 'a code? Some functions
+could take 'a vcode making sure that their argument code is simple and
+can be duplicated. To convert from 'a code to 'a vcode, one use
+genlet (Since genlet is primitive, it can actually check if its
+argument code is a simple value; and if so, don't do any
+let-insertion). Perhaps that coercion to 'a code to 'a vcode could
+be automated (implicit).
+
 ** CSP and modular implicits
 See Jeremy Yallop's message, Caml-list Wed, 6 May 2015 16:58:03 +0100
 
