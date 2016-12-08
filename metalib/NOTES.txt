@@ -2,6 +2,20 @@
 
 * New notes, things to try
 
+** The unsoundness problem with GADTs. Prohibit GADT pattern-matching
+within brackets? (Problem reported by Jeremy Yallop)
+
+** Better error messages for MetaOCaml: rather than level 1 vs. level 0,
+write something more helpful. After all, most of the time, there are
+only two levels. So, we can make good error messages.
+(Jeremy Yallop's suggestion)
+
+** import-for-syntax: essentially prohibiting all CSP and instead
+introducing a form to copy the entire world (so it is available on the
+next stage). Of course the pure, stateless bindings can be shared,
+but stateful functions has to be copied.
+
+
 ** automatic let-insertion
 Have a way to make sure that the piece of code is really a value.
 New type like 'a vcode with injection to 'a code? Some functions
@@ -391,6 +405,17 @@ to invoke dyn_quote at run-time).
 It seems I should write my own serializer, that avoids the
 overhead of Marshall. I should use it when the value is not too deep,
 or internally for MetaOCaml CSP.
+
+Why global CSPs are safe (safe to lift at any
+time)? We rely on the fact that ML prohibit generalization in
+  let m = ref []
+So, we need some information about ML, and we have to make it
+explicit. How to formalize this?
+Actually, Flatt's paper (ICFP 2002) showed that global CSP are
+problematic if they are references to stateful functions. In that
+case, macros and the generated code (the future and the present stage)
+share the state -- which is the problem (the code run at the top level
+gives different results compared to the compiled code).
 
 ** Minimize changes to OCaml
 
