@@ -47,6 +47,8 @@ let fixity_of_string  = function
 
 let view_fixity_of_exp = function
   | {pexp_desc = Pexp_ident {txt=Lident l;_};_} -> fixity_of_string l
+  | {pexp_desc = Pexp_ident {txt=Ldot (Lident "Pervasives",l);_};_} ->  (*NNN*)
+      fixity_of_string l                                                (*NNN*)
   | _ -> `Normal  ;;
 
 let is_infix  = function  | `Infix _ -> true | _  -> false
@@ -486,10 +488,45 @@ and sugar_expr ctxt f e =
   | _ -> false
 
 and expression ctxt f x =
-  if x.pexp_attributes <> [] then
-    pp f "((%a)@,%a)" (expression ctxt) {x with pexp_attributes=[]}
-      (attributes ctxt) x.pexp_attributes
-  else match x.pexp_desc with
+    (* NNN begin *)
+    (* Keep in mind that there may be several metaocaml
+       attributes, and the order matters *)
+    (* Here we assume that all metaocaml attributes are at the front,
+       which is how they are generated.
+    *)
+    match x.pexp_attributes with
+    | ({txt="metaocaml.bracket"},_) :: t ->
+        pp f "@[<hov2>.<@ %a @ >.@]" 
+          (expression ctxt) {x with pexp_attributes=t}
+    | ({txt="metaocaml.escape"},_) :: t ->
+        begin
+        match x.pexp_desc with
+        | Pexp_ident li when t = [] -> pp f ".~%a" longident_loc li
+        | _ -> pp f ".~%a" (paren true (expression ctxt))
+                              {x with pexp_attributes=t}
+        end
+    | [({txt = "metaocaml.csp"},PStr [{pstr_desc = 
+            Pstr_eval ({pexp_desc=Pexp_ident li},_)}])] -> 
+              begin
+                (* This CSP is easy to print, so we print it *)
+                match x.pexp_desc with
+                | Pexp_apply (_,
+                    [(Nolabel, {pexp_desc=Pexp_constant (Pconst_integer _)})])
+                    -> 
+                      pp f "(* CSP %a *) %a"
+                        longident_loc li
+                        (expression ctxt) {x with pexp_attributes=[]}
+                | _ -> 
+                      pp f "(* CSP %a *)"
+                        longident_loc li
+              end
+    (* if x.pexp_attributes <> [] then *)
+    | _::_ ->
+      pp f "((%a)@,%a)" (expression ctxt) {x with pexp_attributes=[]}
+        (attributes ctxt) x.pexp_attributes
+    | _ -> begin match x.pexp_desc with
+    (* else match x.pexp_desc with *)
+    (* NNN end *)
     | Pexp_function _ | Pexp_fun _ | Pexp_match _ | Pexp_try _ | Pexp_sequence _
       when ctxt.pipe || ctxt.semi ->
         paren true (expression reset_ctxt) f x
@@ -623,6 +660,7 @@ and expression ctxt f x =
     | Pexp_extension e -> extension ctxt f e
     | Pexp_unreachable -> pp f "."
     | _ -> expression1 ctxt f x
+   end (* NNN *)
 
 and expression1 ctxt f x =
   if x.pexp_attributes <> [] then expression ctxt f x

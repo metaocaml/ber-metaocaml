@@ -475,6 +475,10 @@ N102
 ./configure -prefix /home/oleg/Cache/ncaml4/ -no-debugger 
   -no-ocamlbuild -no-graph
 
+N104
+./configure -prefix /home/oleg/Cache/ncaml4/ -no-debugger 
+  -no-ocamldoc -no-graph # -no-native-compiler
+
 Use -dtypedtree option on the top level to see the generated tree.
 
 

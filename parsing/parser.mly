@@ -464,6 +464,9 @@ let package_type_of_module_type pmty =
 
 /* Tokens */
 
+%token DOTLESS     /* NNN */
+%token GREATERDOT  /* NNN */
+%token DOTTILDE    /* NNN */
 %token AMPERAMPER
 %token AMPERSAND
 %token AND
@@ -649,7 +652,7 @@ The precedences must be listed from low to high.
           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
           NEW PREFIXOP STRING TRUE UIDENT
           LBRACKETPERCENT LBRACKETPERCENTPERCENT
-
+          DOTLESS DOTTILDE             /* NNN */
 
 /* Entry points */
 
@@ -1480,6 +1483,12 @@ simple_expr:
       { reloc_exp $2 }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
+  | DOTLESS expr GREATERDOT                 /* NNN */
+      { wrap_exp_attrs $2 
+           (None,[ghloc "metaocaml.bracket",PStr []]) }            /* NNN */
+  | DOTTILDE simple_expr  /* NNN */
+      { wrap_exp_attrs $2 
+           (None,[ghloc "metaocaml.escape",PStr []]) }             /* NNN */
   | BEGIN ext_attributes seq_expr END
       { wrap_exp_attrs (reloc_exp $3) $2 (* check location *) }
   | BEGIN ext_attributes END
