@@ -116,12 +116,12 @@ open Parsetree
 open Asttypes
 open Typedtree
 open Types
-
+module Const = Ast_helper.Const
 
 (*{{{ Preliminaries, common functions *)
 
 (* BER MetaOCaml version string *)
-let meta_version  = "N 102"
+let meta_version  = "N 104"
 
 (* Co-opt the Preprocessor class of warnings *)
 let debug_print ?(loc = Location.none) : string -> unit = fun msg ->
@@ -211,13 +211,14 @@ type stage = int                        (* staging level *)
 
 let attr_level n = 
   (Location.mknoloc "metaocaml.level",PStr [
-   Ast_helper.Str.eval (Ast_helper.Exp.constant (Const_int n))])
+   Ast_helper.Str.eval (Ast_helper.Exp.constant (Const.int n))])
 
 let get_level : Parsetree.attributes -> stage = fun attrs ->
   match get_attr "metaocaml.level" attrs with
   | None -> 0
   | Some [{pstr_desc = 
-            Pstr_eval ({pexp_desc=Pexp_constant (Const_int n)},_)}] -> 
+        Pstr_eval ({pexp_desc=Pexp_constant (Pconst_integer (ns,None))},_)}] ->
+     let n = int_of_string ns in
      assert (n>=0); n
   | _ -> assert false  (* Invalid level attribute *)
 
@@ -424,6 +425,8 @@ let ident_can_be_quoted = is_external
 *)
 let loc_none = Location.none
 
+let label_none = Asttypes.Nolabel
+
 let dummy_lid : string -> Longident.t loc = fun name ->
   Location.mknoloc (Longident.Lident name)
 
@@ -506,7 +509,7 @@ let texp_ident : string -> expression = fun name ->
 (* Building an application *)
 let texp_apply : Typedtree.expression -> Typedtree.expression list -> 
  Typedtree.expression_desc = fun f args ->
-   Texp_apply(f, List.map (fun arg -> ("",Some arg, Required)) args)
+   Texp_apply(f, List.map (fun arg -> (Nolabel,Some arg)) args)
 
 (* Compiling a string constant *)
 (* The second argument of Const_string is the delimiter,
@@ -515,6 +518,7 @@ let texp_apply : Typedtree.expression -> Typedtree.expression list ->
 let texp_string : string -> Typedtree.expression = fun str ->
   mk_texp (Texp_constant (Const_string (str,None)))
           (Ctype.instance_def Predef.type_string)
+
 
 (* Compiling a boolean *)
 (* For prototype, see Typecore.option_none *)
@@ -551,6 +555,12 @@ let texp_loc : Location.t -> Typedtree.expression = fun loc ->
   let loc_exp = texp_ident "Trx.loc_none" in (* this fills in the type, etc.*)
   if loc == Location.none then loc_exp else
   {loc_exp with exp_desc = (texp_csp (Obj.repr loc)).exp_desc}
+
+(* Compiling an arg_label value *)
+let texp_label : arg_label -> Typedtree.expression = fun lab ->
+  let lab_exp = texp_ident "Trx.label_none" in (* this fills in the type, etc.*)
+  if lab == Nolabel then lab_exp else
+  {lab_exp with exp_desc = (texp_csp (Obj.repr lab)).exp_desc}
 
 (* Compiling longident with location data *)
 let texp_lid : Longident.t loc -> Typedtree.expression = fun lid ->
@@ -935,6 +945,10 @@ let build_assert : Location.t -> code_repr -> code_repr =
   code_wrapper
   (fun loc e -> Ast_helper.Exp.assert_ ~loc e)
 
+let build_unreachable : Location.t -> code_repr = fun loc ->
+  open_code
+  (Ast_helper.Exp.unreachable ~loc ())
+
 (* When we translate the typed-tree, we have to manually compile
    the above code 
 First, to see the AST for the phrase, invoke the top-level with the flag
@@ -993,14 +1007,14 @@ let build_while : Location.t -> code_repr -> code_repr -> code_repr =
 
 (* Build the application. The first element in the array is the
    function. The others are arguments. *)
-let build_apply : Location.t -> (label * code_repr) array -> code_repr = 
+let build_apply : Location.t -> (arg_label * code_repr) array -> code_repr = 
   fun loc ea -> 
     assert (Array.length ea > 1);
     match map_accum (fun vars (lbl,e) -> 
                    let Code (var,e) = validate_vars loc e in
                    ((lbl,e),merge var vars))
           Nil (Array.to_list ea) with
-    | (("",eh)::elt,vars) ->
+    | ((Nolabel,eh)::elt,vars) ->
        Code (vars, 
              Ast_helper.Exp.apply ~loc eh elt)
     | _ -> assert false
@@ -1086,7 +1100,7 @@ let build_open :
 
 (* Build a function with a non-binding pattern, such as fun () -> ... *)
 let build_fun_nonbinding : 
-  Location.t -> string -> Parsetree.pattern list -> 
+  Location.t -> arg_label -> Parsetree.pattern list -> 
   (code_repr option * code_repr) array -> code_repr =
   fun loc label pats gbodies -> 
   let (egbodies,vars) = 
@@ -1100,7 +1114,7 @@ let build_fun_nonbinding :
         match (egbodies,pats) with
         | ([(None,e)],[p]) ->
             Ast_helper.Exp.fun_ ~loc label None p e
-        | _ when label="" ->
+        | _ when label=Nolabel ->
           Ast_helper.Exp.function_ ~loc 
             (List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
               pats egbodies)
@@ -1124,7 +1138,8 @@ let build_ident : Location.t -> string loc -> code_repr =
    Use name.loc to identify the binder in the source code.
 *)
 let build_fun_simple : 
-  Location.t -> string -> string loc -> (code_repr -> code_repr) -> code_repr =
+  Location.t -> arg_label -> string loc -> 
+    (code_repr -> code_repr) -> code_repr =
   fun loc label old_name fbody -> 
   let (name, vars, ebody) = with_binding_region loc old_name fbody in
   let pat = Ast_helper.Pat.var ~loc:name.loc name in
@@ -1219,10 +1234,10 @@ let lift_as_literal :
 
 (* TODO: similarly handle Const_nativeint, Const_int32, Const_int64 *)
 let lift_constant_int : int -> code_repr = fun x -> 
-  open_code @@ Ast_helper.Exp.constant (Const_int x)
+  open_code @@ Ast_helper.Exp.constant (Const.int x)
 
 let lift_constant_char : char -> code_repr = fun x -> 
-  open_code @@ Ast_helper.Exp.constant (Const_char x)
+  open_code @@ Ast_helper.Exp.constant (Const.char x)
 
 let lift_constant_bool : bool -> code_repr = fun x -> 
   let b = if x then "true" else "false" in 
@@ -1235,11 +1250,11 @@ let lift_constant_unit : unit -> code_repr = fun x ->
 
 let lift_constant_float : float -> code_repr = fun x -> 
   open_code @@ 
-        Ast_helper.Exp.constant (Const_float (string_of_float x))
+        Ast_helper.Exp.constant (Const.float (string_of_float x))
 
 let lift_constant_string : string -> code_repr = fun x -> 
   open_code @@ 
-        Ast_helper.Exp.constant (Const_string (x,None))
+        Ast_helper.Exp.constant (Const.string x)
 
 (* Lift the run-time value v into a Parsetree for the code that, when
    run, will produce v.
@@ -1287,21 +1302,21 @@ let dyn_quote : Obj.t -> Longident.t loc -> code_repr =
    let csp_attr = attr_csp li in
    let exp = match Obj.is_int v with
     | true ->
-        Ast_helper.Exp.constant (Const_int (Obj.obj v))
+        Ast_helper.Exp.constant (Const.int (Obj.obj v))
     | false when Obj.tag v = Obj.double_tag ->
-        Ast_helper.Exp.constant (Const_float (string_of_float (Obj.obj v)))
+        Ast_helper.Exp.constant (Const.float (string_of_float (Obj.obj v)))
     | false when Obj.tag v = Obj.string_tag ->
-        Ast_helper.Exp.constant (Const_string (Obj.obj v,None))
+        Ast_helper.Exp.constant (Const.string (Obj.obj v))
     | _   ->           (* general case *)
         let () =
           if not @@ easy_to_serialize v then
             debug_print ~loc:li.loc 
              "The CSP value is a closure or too deep to serialize" in
-        Ast_helper.Exp.constant  (Const_string (Obj.obj v,None))
+        Ast_helper.Exp.constant  (Const.string (Obj.obj v))
    in
    open_code @@
    Ast_helper.Exp.apply ~attrs:[csp_attr] ~loc:li.loc
-     obj_magic_exp [("",exp)]
+     obj_magic_exp [(Nolabel,exp)]
 
        
 (* Build the Typedtree that lifts the variable with the given path and type.
@@ -1377,11 +1392,20 @@ old code
   bind exactly the same identifiers. Don't count them twice!
 *)
 
+let trx_const : Asttypes.constant -> Parsetree.constant = function
+  | Const_int n          -> Const.int n
+  | Const_char c         -> Const.char c
+  | Const_string (s,del) -> Const.string ?quotation_delimiter:del s
+  | Const_float s        -> Const.float s
+  | Const_int32 n        -> Const.int32 n
+  | Const_int64 n        -> Const.int64 n
+  | Const_nativeint n    -> Const.nativeint n
 
 (* The first argument is a list of identifiers. Found identifiers are
    prepended to that list. The order of identifiers is important!
    If you change the traversal order, be sure to modify pattern_subst below!
 *)
+
 let rec trx_pattern : 
     (Ident.t * string loc) list -> Typedtree.pattern -> 
      Parsetree.pattern * (Ident.t * string loc) list = fun acc pat ->
@@ -1406,7 +1430,7 @@ let rec trx_pattern :
   | Tpat_alias (p, id, name) ->
       let (p,acc) = trx_pattern acc p in
       (Ppat_alias (p, name),(id,name)::acc)
-  | Tpat_constant cst -> (Ppat_constant cst, acc)
+  | Tpat_constant cst -> (Ppat_constant (trx_const cst), acc)
   | Tpat_tuple lst ->
     let (pl,acc) = map_accum trx_pattern acc lst
     in (Ppat_tuple pl, acc)
@@ -1634,14 +1658,14 @@ let prepare_cases : Location.t ->
               pats egbodies)
 
 let build_fun : 
-  Location.t -> string -> 
+  Location.t -> arg_label -> 
   (Parsetree.pattern list * string loc list) -> 
   (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
   fun loc label pon fgbodies -> 
   prepare_cases loc Nil pon fgbodies @@ function
     | [{pc_lhs=p; pc_guard=None; pc_rhs=e}] ->
         Ast_helper.Exp.fun_ ~loc label None p e
-    | cases when label="" -> 
+    | cases when label=Nolabel -> 
         Ast_helper.Exp.function_ ~loc cases
     | _ -> assert false
 
@@ -1827,9 +1851,9 @@ and trx_case_list_body : int -> Typedtree.pattern ->
                   trx_bracket n c_rhs])
       cl) in
   { exp with
-    exp_desc = Texp_function ("",[texp_case binding_pat body],Total);
+    exp_desc = Texp_function (Nolabel,[texp_case binding_pat body],Total);
     exp_type = {exp.exp_type with desc =
-                   Tarrow ("",binding_pat.pat_type, body.exp_type, Cok)}
+                   Tarrow (Nolabel,binding_pat.pat_type, body.exp_type, Cok)}
   }
 
 
@@ -1858,7 +1882,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       Texp_ident (p,li,{vd with val_type = wrap_ty_in_code n vd.val_type})
 
   | Texp_constant cst -> 
-      texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant cst)
+      texp_code ~node_id:"*cst*" exp.exp_loc (Pexp_constant (trx_const cst))
 
      (* The most common case of let-expressions: non-recursive
         let x = e in body *)
@@ -1871,10 +1895,11 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
          trx_bracket n e;
          { exp with
            exp_desc = 
-             Texp_function ("",[texp_case pat (trx_bracket n ebody)],Total);
+            Texp_function (Nolabel,[texp_case pat (trx_bracket n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
-               Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
+               Tarrow (Nolabel,pat.pat_type, 
+                       wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
@@ -1960,7 +1985,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       let pat = {pat with pat_type = wrap_ty_in_code n pat.pat_type} in
       texp_apply (texp_ident "Trx.build_fun_simple") 
         [texp_loc exp.exp_loc;
-         texp_string l;
+         texp_label l;
          texp_string_loc name;
          (* Translate the future-stage function as present-stage function;
             with the same variables, but with a different type,
@@ -1969,10 +1994,11 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
          { exp with
            exp_desc = 
              Texp_function
-               ("",[texp_case pat (trx_bracket n ebody)],Total);
+               (Nolabel,[texp_case pat (trx_bracket n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
-               Tarrow ("",pat.pat_type, wrap_ty_in_code n ebody.exp_type, Cok)}
+               Tarrow (Nolabel,pat.pat_type, 
+                       wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
@@ -1982,7 +2008,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       | (pl, [], _) ->                    (* non-binding pattern *)
           texp_apply (texp_ident "Trx.build_fun_nonbinding")
             [texp_loc exp.exp_loc; 
-             texp_string l;
+             texp_label l;
              begin 
                let pl_exp = texp_ident "Trx.sample_pat_list" in
                {pl_exp with
@@ -1997,7 +2023,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       | (pl, names, binding_pat) ->
           texp_apply (texp_ident "Trx.build_fun") 
             [texp_loc exp.exp_loc;
-             texp_string l;
+             texp_label l;
              texp_pats_names pl names;
              trx_case_list_body n binding_pat exp cl
            ]
@@ -2006,13 +2032,13 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
   | Texp_apply (e, el) ->
      (* first, we remove from el the information added by the type-checker *)
      let lel = List.fold_right (function                 (* keep the order! *)
-                | (_,None,_)   -> fun acc -> acc
-                | (l,Some e,_) -> fun acc -> (l,e)::acc) el [] in
-     let lel = ("",e) :: lel in          (* Add the operator *)
+                | (_,None)   -> fun acc -> acc
+                | (l,Some e) -> fun acc -> (l,e)::acc) el [] in
+     let lel = (Nolabel,e) :: lel in          (* Add the operator *)
       texp_apply (texp_ident "Trx.build_apply")
         [texp_loc exp.exp_loc; 
          texp_array (List.map (fun (l,e) ->
-           texp_tuple [texp_string l;trx_bracket n e]) lel)]
+           texp_tuple [texp_label l;trx_bracket n e]) lel)]
 
   (* Pretty much like a function *)
   (* rcl: regular cases; ecl: exceptional cases *)
@@ -2055,7 +2081,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
         [texp_loc exp.exp_loc; 
          texp_string l;
 	 texp_option (map_option (trx_bracket n) eo)]
-
+(* XXX changed significantly
   | Texp_record (lel,eo) ->
       texp_apply (texp_ident "Trx.build_record")
         [texp_loc exp.exp_loc; 
@@ -2063,7 +2089,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
            texp_tuple [texp_lid (qualify_label li ldesc);
                        trx_bracket n e]) lel);
          texp_option (map_option (trx_bracket n) eo)]
-
+*)
   | Texp_field (e,li,ldesc) ->
       texp_apply (texp_ident "Trx.build_field")
         [texp_loc exp.exp_loc; 
@@ -2120,10 +2146,11 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
                     pat_desc = Tpat_var (id,name)} in
          { exp with
            exp_desc = 
-             Texp_function ("",[texp_case pat (trx_bracket n ebody)],Total);
+             Texp_function (Nolabel,
+                            [texp_case pat (trx_bracket n ebody)],Total);
            exp_type = 
             {exp.exp_type with desc =
-               Tarrow ("",var_typ, wrap_ty_in_code n ebody.exp_type, Cok)}
+               Tarrow (Nolabel,var_typ, wrap_ty_in_code n ebody.exp_type, Cok)}
          }
        ]
 
@@ -2165,7 +2192,13 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
 
   | Texp_object (cl,fl) -> not_supported exp.exp_loc "Objects"
   | Texp_pack _         -> not_supported exp.exp_loc "First-class modules"
-  (* | _ -> not_supported exp.exp_loc "not yet supported" *)
+  | Texp_letexception _ -> not_supported exp.exp_loc "Local exceptions"
+  | Texp_extension_constructor (_,_) -> 
+                           not_supported exp.exp_loc "Type extensions"
+  | Texp_unreachable    -> 
+      texp_apply (texp_ident "Trx.build_unreachable")
+        [texp_loc exp.exp_loc]
+  | _ -> not_supported exp.exp_loc "not yet supported" (* XXX *)
   in                               
   (* See untype_extra in tools/untypeast.ml *)
   let trx_extra (extra, loc, attr) exp =  (* TODO: take care of attr *)
@@ -2218,6 +2251,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
    We do not traverse attributes.
 *)
 
+(*
 exception Not_modified
 
 let replace_list : ('a -> 'a) -> 'a list -> 'a list = fun f l ->
@@ -2415,6 +2449,7 @@ and trx_expression = function
 (* public interface *)
 let trx_structure str = 
   try trx_struct str with Not_modified -> str
+*)
 
 (*}}}*)
 

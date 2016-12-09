@@ -362,7 +362,7 @@ typing/typecore.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/ident.cmi typing/env.cmi typing/ctype.cmi typing/cmt_format.cmi \
     utils/clflags.cmi parsing/builtin_attributes.cmi typing/btype.cmi \
     parsing/asttypes.cmi parsing/ast_helper.cmi typing/annot.cmi \
-    typing/typecore.cmi
+    typing/typecore.cmi typing/trx.cmi
 typing/typecore.cmx : utils/warnings.cmx typing/typetexp.cmx \
     typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx \
     typing/subst.cmx typing/stypes.cmx typing/printtyp.cmx \
@@ -2202,3 +2202,4 @@ driver/compdynlink.cmo : bytecomp/symtable.cmi bytecomp/opcodes.cmo \
     utils/misc.cmi bytecomp/meta.cmi bytecomp/dll.cmi utils/consistbl.cmi \
     utils/config.cmi bytecomp/cmo_format.cmi typing/cmi_format.cmi \
     driver/compdynlink.cmi
+typing/trx.cmo: typing/trx.cmi

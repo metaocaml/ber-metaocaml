@@ -100,6 +100,7 @@ val set_with_stack_mark : stackmark_region_fn -> unit
 *)
 
 val loc_none : Location.t
+val label_none : Asttypes.arg_label
 val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
 val sample_name : string Location.loc
 val sample_pat_list : Parsetree.pattern list
@@ -116,10 +117,11 @@ val lift_constant_float  : float  -> code_repr
 val lift_constant_string : string -> code_repr
 
 (* Builders of the Parsetree *)
-val build_assert   : Location.t -> code_repr -> code_repr
-val build_lazy     : Location.t -> code_repr -> code_repr
-val build_bracket  : Location.t -> code_repr -> code_repr
-val build_escape   : Location.t -> code_repr -> code_repr
+val build_unreachable : Location.t -> code_repr
+val build_assert      : Location.t -> code_repr -> code_repr
+val build_lazy        : Location.t -> code_repr -> code_repr
+val build_bracket     : Location.t -> code_repr -> code_repr
+val build_escape      : Location.t -> code_repr -> code_repr
 
 val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
 val build_while    : Location.t -> code_repr -> code_repr -> code_repr

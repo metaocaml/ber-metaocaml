@@ -9,11 +9,11 @@ done    ./parsing/lexer.mll
 done    ./parsing/parser.mly
 done    ./parsing/pprintast.ml      new in 4.01
 
-    ./typing/predef.ml
-    ./typing/predef.mli
+done    ./typing/predef.ml
+done    ./typing/predef.mli
 
 
-    ./typing/typecore.ml
+done    ./typing/typecore.ml
 
 	./typing/trx.mli
 	./typing/trx.ml 
