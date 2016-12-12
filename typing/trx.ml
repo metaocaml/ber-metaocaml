@@ -291,12 +291,13 @@ let path_to_lid_but_last : Path.t -> string -> Longident.t =
 (* Replace the last component of p1 with p2, which should be a Pident
    path 
 *)
+(*
 let path_replace_last : Path.t -> Path.t -> Path.t = fun p1 p2 ->
  match (p1,p2) with
   | (Path.Pident _,x) -> x
   | (Path.Pdot(p1,_,s),Path.Pident id) -> Path.Pdot(p1,Ident.name id,s)
   | _ -> assert false
-
+*)
 
 (* Check to make sure a constructor, label, exception, etc.
    have the name that we can put into AST (Parsetree).
@@ -778,7 +779,7 @@ let close_code_repr : code_repr -> closed_code_repr = fun cde ->
   check (); ast
 
 let open_code : closed_code_repr -> code_repr = fun ast ->
-  Code (Nil,ast)
+  Code (empty,ast)
 
 (* Compiling a closed code value: a structural constant of
    type code_repr
@@ -790,7 +791,7 @@ let texp_code : ?node_id:string ->
   fun ?(node_id="") loc desc ->
   let ast = Ast_helper.Exp.mk ~loc desc in
   (texp_csp (Obj.repr (open_code ast))).exp_desc
-
+  [@@warning "-27"]
 
 (* ------------------------------------------------------------------------ *)
 (* Bindings in the future stage *)
@@ -804,7 +805,9 @@ let gensym : string -> string = fun s ->
   incr gensym_count;
   s ^ "_" ^ string_of_int !gensym_count
 
+(*
 let reset_gensym_counter () = gensym_count := 0
+*)
 
 (* Make a simple identifier unique *)
 let genident : string loc -> string loc = fun name ->
@@ -861,7 +864,7 @@ let validate_vars_map : Location.t ->
   map_accum (fun acc x -> 
       let (y,vars) = f loc x in
       (y, merge vars acc))
-    Nil xs
+    empty xs
 
 let validate_vars_list : Location.t -> code_repr list -> 
   Parsetree.expression list * string loc heap = fun l cs ->
@@ -923,7 +926,7 @@ let with_binding_region_gen :
      let cs = Array.to_list (f vars_code) in
      let (es,vars) = map_accum (fun vars c -> 
                       let (e,var) = tr l c in
-                      (e,merge var vars)) Nil cs in
+                      (e,merge var vars)) empty cs in
      (remove prio vars, es)) in
   (new_names, vars, es)
 
@@ -1013,7 +1016,7 @@ let build_apply : Location.t -> (arg_label * code_repr) array -> code_repr =
     match map_accum (fun vars (lbl,e) -> 
                    let Code (var,e) = validate_vars loc e in
                    ((lbl,e),merge var vars))
-          Nil (Array.to_list ea) with
+          empty (Array.to_list ea) with
     | ((Nolabel,eh)::elt,vars) ->
        Code (vars, 
              Ast_helper.Exp.apply ~loc eh elt)
@@ -1054,16 +1057,18 @@ let build_construct :
             | xl  -> Some (Ast_helper.Exp.tuple ~loc xl)
      end)
 
+(*
 let build_record : Location.t -> (Longident.t loc * code_repr) array ->
  code_repr option -> code_repr =
  fun loc lel eo ->
    let (lel,vars) = map_accum (fun vars (lbl,e) -> 
                        let Code (var,e) = validate_vars loc e in
                        ((lbl,e),merge var vars))
-        Nil (Array.to_list lel) in
+        empty (Array.to_list lel) in
    let (eo,varo) = validate_vars_option loc eo in
    Code (merge vars varo,
          Ast_helper.Exp.record ~loc lel eo)
+*)
 
 let build_field : Location.t -> code_repr -> Longident.t loc -> code_repr =
  fun loc e lid ->
@@ -1208,7 +1213,7 @@ exception CannotLift
 *)
 let lift_as_literal : 
   Typedtree.expression -> Longident.t loc -> Typedtree.expression_desc = 
-  fun exp li ->
+  fun exp _li ->
   let exp_ty =
         Ctype.expand_head exp.exp_env (Ctype.correct_levels exp.exp_type) in
   match Ctype.repr exp_ty with
@@ -1244,7 +1249,7 @@ let lift_constant_bool : bool -> code_repr = fun x ->
   open_code @@ Ast_helper.Exp.construct 
                  (Location.mknoloc (Longident.Lident b)) None
 
-let lift_constant_unit : unit -> code_repr = fun x -> 
+let lift_constant_unit : unit -> code_repr = fun () -> 
   open_code @@ Ast_helper.Exp.construct 
                  (Location.mknoloc (Longident.Lident "()")) None
 
@@ -1413,7 +1418,7 @@ let rec trx_pattern :
   |  { pat_extra=[Tpat_unpack, _, _attrs]; pat_desc = Tpat_var (_,name); _ } ->
         (Ppat_unpack name,acc)          (* name must have been uppercase *)
   | { pat_extra=[Tpat_type (_path, lid), _, _attrs]; _ } -> (Ppat_type lid,acc)
-  | { pat_extra= (Tpat_constraint ct, _, _attrs) :: rem; _ } ->
+  | { pat_extra= (Tpat_constraint _ct, _, _attrs) :: _rem; _ } ->
       not_supported pat.pat_loc
         "patterns with constraints, and other pat_extra";
       (*
@@ -1662,7 +1667,7 @@ let build_fun :
   (Parsetree.pattern list * string loc list) -> 
   (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
   fun loc label pon fgbodies -> 
-  prepare_cases loc Nil pon fgbodies @@ function
+  prepare_cases loc empty pon fgbodies @@ function
     | [{pc_lhs=p; pc_guard=None; pc_rhs=e}] ->
         Ast_helper.Exp.fun_ ~loc label None p e
     | cases when label=Nolabel -> 
@@ -1676,7 +1681,7 @@ let build_let :
   (Parsetree.pattern list * string loc list) ->
   (code_repr array -> (code_repr option * code_repr) array) -> code_repr =
   fun loc recf pon fgbodies ->
-  prepare_cases loc Nil pon fgbodies @@ function
+  prepare_cases loc empty pon fgbodies @@ function
     | [] | [_] -> assert false
       (* The first case is the pseudo-case for the let body *)
     | {pc_guard=None; pc_rhs=ebody} :: cases ->
@@ -2171,7 +2176,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       texp_code ~node_id:"*new*" exp.exp_loc 
         (Pexp_new (Location.mkloc (path_to_lid p) li.loc))
 
-  | Texp_instvar (p1,p2,s) ->
+  | Texp_instvar (_p1,_p2,_s) ->
       not_supported exp.exp_loc "Objects (Texp_instvar)"
         (* Alternatively: since instance variables are always bound 
            at level 0 (for now)
@@ -2180,7 +2185,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
         *)
   | Texp_setinstvar _ -> not_supported exp.exp_loc "Objects (Texp_setinstvar)"
   | Texp_override  _  -> not_supported exp.exp_loc "Objects (Texp_override)"
-  | Texp_letmodule (id,s,me,e) -> not_supported exp.exp_loc "let module"
+  | Texp_letmodule (_id,_s,_me,_e) -> not_supported exp.exp_loc "let module"
 
   | Texp_assert e ->
       texp_apply (texp_ident "Trx.build_assert")
@@ -2190,7 +2195,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
       texp_apply (texp_ident "Trx.build_lazy")
         [texp_loc exp.exp_loc; trx_bracket n e]
 
-  | Texp_object (cl,fl) -> not_supported exp.exp_loc "Objects"
+  | Texp_object (_,_)   -> not_supported exp.exp_loc "Objects"
   | Texp_pack _         -> not_supported exp.exp_loc "First-class modules"
   | Texp_letexception _ -> not_supported exp.exp_loc "Local exceptions"
   | Texp_extension_constructor (_,_) -> 
@@ -2201,17 +2206,17 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
   | _ -> not_supported exp.exp_loc "not yet supported" (* XXX *)
   in                               
   (* See untype_extra in tools/untypeast.ml *)
-  let trx_extra (extra, loc, attr) exp =  (* TODO: take care of attr *)
+  let trx_extra (extra, loc, _attr) exp =  (* TODO: take care of attr *)
    let desc =
     match extra with
       (* Should check that cty1 and cty2 contain only globally declared
          type components
        *)
-    | Texp_constraint cty -> 
+    | Texp_constraint _cty -> 
         not_supported loc "Texp_constraint"
-    | Texp_coerce (cto,ct) ->
+    | Texp_coerce (_cto,_ct) ->
         not_supported loc "Texp_coerce"
-    | Texp_open (ovf, path, lid, _) -> 
+    | Texp_open (_ovf, _path, _lid, _) -> 
        (* I don't need local open since all the constructors
           and identifiers are qualified anyway.
         *)
@@ -2224,8 +2229,8 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
          texp_csp (Obj.repr ovf);
          exp]      (* exp is the result of trx_bracket *)
            *)
-    | Texp_poly cto  -> not_supported loc "Texp_poly"
-    | Texp_newtype s -> not_supported loc "Texp_newtype"
+    | Texp_poly _cto  -> not_supported loc "Texp_poly"
+    | Texp_newtype _s -> not_supported loc "Texp_newtype"
     in {exp with exp_loc = loc; exp_desc = desc} (* type is the same: code *)
   in
   List.fold_right trx_extra exp.exp_extra

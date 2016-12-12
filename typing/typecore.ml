@@ -176,7 +176,7 @@ let with_stage_up body =
    with e ->
    global_stage := old_stage; raise e
 
-let with_stage_down loc env body =
+let with_stage_down loc _env body =
    let old_stage = !global_stage in
    if !global_stage = 0 then
      raise @@ Error_forward(Location.errorf ~loc 
@@ -2048,7 +2048,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
      and their order matters. 
   *)
   match what_stage_attr sexp.pexp_attributes with
-  | Stage0 -> type_expect_orig ?in_function ?recarg env sexp ty_expected
+  | Stage0 -> type_expect_orig ?in_function ~recarg env sexp ty_expected
   | Bracket(battr,attrs) ->
        (* Typechecking bracket *)
        (* follow Pexp_array or Pexp_lazy as a template *)
@@ -2090,10 +2090,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
        (* There is nothing special in type-checking CSPs.
           After lifting, a CSP value becomes an ordinary expression.
         *)
-  | _ -> type_expect_orig ?in_function ?recarg env sexp ty_expected
+  | _ -> type_expect_orig ?in_function ~recarg env sexp ty_expected
   (* NNN end *)
 
-and type_expect_orig ?in_function ?recarg env sexp ty_expected =  (* NNN *)
+and type_expect_orig ?in_function ~recarg env sexp ty_expected =  (* NNN *)
   let loc = sexp.pexp_loc in
   (* Record the expression type before unifying it with the expected type *)
   let rue exp =
