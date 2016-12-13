@@ -332,6 +332,21 @@ typing/tast_mapper.cmx : typing/typedtree.cmx typing/env.cmx \
     parsing/asttypes.cmi typing/tast_mapper.cmi
 typing/tast_mapper.cmi : typing/typedtree.cmi typing/env.cmi \
     parsing/asttypes.cmi
+typing/trx.cmo : utils/warnings.cmi typing/types.cmi typing/typedtree.cmi \
+    typing/printtyp.cmi typing/predef.cmi typing/path.cmi \
+    parsing/parsetree.cmi utils/misc.cmi parsing/longident.cmi \
+    parsing/location.cmi typing/ident.cmi typing/env.cmi typing/ctype.cmi \
+    typing/btype.cmi parsing/asttypes.cmi parsing/ast_helper.cmi \
+    typing/trx.cmi
+typing/trx.cmx : utils/warnings.cmx typing/types.cmx typing/typedtree.cmx \
+    typing/printtyp.cmx typing/predef.cmx typing/path.cmx \
+    parsing/parsetree.cmi utils/misc.cmx parsing/longident.cmx \
+    parsing/location.cmx typing/ident.cmx typing/env.cmx typing/ctype.cmx \
+    typing/btype.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
+    typing/trx.cmi
+typing/trx.cmi : typing/types.cmi typing/typedtree.cmi parsing/parsetree.cmi \
+    parsing/longident.cmi parsing/location.cmi typing/env.cmi \
+    parsing/asttypes.cmi
 typing/typeclass.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
     typing/typecore.cmi typing/subst.cmi typing/stypes.cmi \
@@ -354,7 +369,7 @@ typing/typeclass.cmi : typing/types.cmi typing/typedtree.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
     typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi
 typing/typecore.cmo : utils/warnings.cmi typing/typetexp.cmi \
-    typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
+    typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi typing/trx.cmi \
     typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi \
     typing/primitive.cmi typing/predef.cmi typing/path.cmi \
     parsing/parsetree.cmi typing/parmatch.cmi typing/oprint.cmi \
@@ -362,9 +377,9 @@ typing/typecore.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/ident.cmi typing/env.cmi typing/ctype.cmi typing/cmt_format.cmi \
     utils/clflags.cmi parsing/builtin_attributes.cmi typing/btype.cmi \
     parsing/asttypes.cmi parsing/ast_helper.cmi typing/annot.cmi \
-    typing/typecore.cmi typing/trx.cmi
+    typing/typecore.cmi
 typing/typecore.cmx : utils/warnings.cmx typing/typetexp.cmx \
-    typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx \
+    typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx typing/trx.cmx \
     typing/subst.cmx typing/stypes.cmx typing/printtyp.cmx \
     typing/primitive.cmx typing/predef.cmx typing/path.cmx \
     parsing/parsetree.cmi typing/parmatch.cmx typing/oprint.cmx \
@@ -2202,4 +2217,3 @@ driver/compdynlink.cmo : bytecomp/symtable.cmi bytecomp/opcodes.cmo \
     utils/misc.cmi bytecomp/meta.cmi bytecomp/dll.cmi utils/consistbl.cmi \
     utils/config.cmi bytecomp/cmo_format.cmi typing/cmi_format.cmi \
     driver/compdynlink.cmi
-typing/trx.cmo: typing/trx.cmi

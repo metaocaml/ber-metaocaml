@@ -70,14 +70,17 @@ let initial_env = ref Env.empty
 (* Load and execute bytecode: copied from toploop/toploop.ml *)
 let load_lambda ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda lam in
+  let slam = Simplif.simplify_lambda "//toplevel//" lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
   if !Clflags.dump_instr then
     fprintf ppf "%a%a@."
     Printinstr.instrlist init_code
     Printinstr.instrlist fun_code;
-  let (code, code_size, reloc) = Emitcode.to_memory init_code fun_code in
+  let (code, code_size, reloc, events) =
+    Emitcode.to_memory init_code fun_code
+  in
+  Meta.add_debug_info code code_size [| events |];
   let can_free = (fun_code = []) in
   let initial_symtable = Symtable.current_state() in
   Symtable.patch_object code reloc;
@@ -89,6 +92,7 @@ let load_lambda ppf lam =
     let retval = (Meta.reify_bytecode code code_size) () in
     Toploop.may_trace := false;
     if can_free then begin
+      Meta.remove_debug_info code;
       Meta.static_release_bytecode code code_size;
       Meta.static_free code;
     end;
@@ -96,6 +100,7 @@ let load_lambda ppf lam =
   with x ->
     Toploop.may_trace := false;
     if can_free then begin
+      Meta.remove_debug_info code;
       Meta.static_release_bytecode code code_size;
       Meta.static_free code;
     end;
