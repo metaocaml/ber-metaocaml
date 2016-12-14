@@ -441,6 +441,9 @@ let sample_name : string loc = mknoloc "*sample*"
 let sample_pat_list : Parsetree.pattern list = []
 let sample_pats_names : Parsetree.pattern list * string loc list = ([],[])
 
+(* Exported. Used as a template for constructing records *)
+let sample_record_repr : Types.record_representation = Record_regular
+
 (*}}}*)
 
 
@@ -567,6 +570,15 @@ let texp_label : arg_label -> Typedtree.expression = fun lab ->
 let texp_lid : Longident.t loc -> Typedtree.expression = fun lid ->
   let lid_exp = texp_ident "Trx.sample_lid" in (* this fills in the type, etc.*)
   {lid_exp with exp_desc = (texp_csp (Obj.repr lid)).exp_desc}
+
+(* Compiling record-representation *)
+(*
+let texp_record_repr : Types.record_representation -> Typedtree.expression = 
+ fun recr ->
+  let recr_exp = texp_ident "Trx.sample_record_repr" in 
+                (* this fills in the type, etc.*)
+  {recr_exp with exp_desc = (texp_csp (Obj.repr recr)).exp_desc}
+*)
 
 (* Compiling a string with a location *)
 let texp_string_loc : string loc -> Typedtree.expression = fun name ->
@@ -1057,7 +1069,7 @@ let build_construct :
             | xl  -> Some (Ast_helper.Exp.tuple ~loc xl)
      end)
 
-(*
+
 let build_record : Location.t -> (Longident.t loc * code_repr) array ->
  code_repr option -> code_repr =
  fun loc lel eo ->
@@ -1068,7 +1080,7 @@ let build_record : Location.t -> (Longident.t loc * code_repr) array ->
    let (eo,varo) = validate_vars_option loc eo in
    Code (merge vars varo,
          Ast_helper.Exp.record ~loc lel eo)
-*)
+
 
 let build_field : Location.t -> code_repr -> Longident.t loc -> code_repr =
  fun loc e lid ->
@@ -2086,15 +2098,18 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
         [texp_loc exp.exp_loc; 
          texp_string l;
 	 texp_option (map_option (trx_bracket n) eo)]
-(* XXX changed significantly
-  | Texp_record (lel,eo) ->
+
+  | Texp_record {fields;representation=_r;extended_expression} ->
       texp_apply (texp_ident "Trx.build_record")
         [texp_loc exp.exp_loc; 
-         texp_array (List.map (fun (li,ldesc,e) ->
+         texp_array (Array.fold_left (fun acc (ldesc,recd) ->
+           match recd with 
+           | Kept _ -> acc
+           | Overridden (li,e) ->
            texp_tuple [texp_lid (qualify_label li ldesc);
-                       trx_bracket n e]) lel);
-         texp_option (map_option (trx_bracket n) eo)]
-*)
+                       trx_bracket n e] :: acc) [] fields);
+         texp_option (map_option (trx_bracket n) extended_expression)]
+
   | Texp_field (e,li,ldesc) ->
       texp_apply (texp_ident "Trx.build_field")
         [texp_loc exp.exp_loc; 
@@ -2203,7 +2218,7 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
   | Texp_unreachable    -> 
       texp_apply (texp_ident "Trx.build_unreachable")
         [texp_loc exp.exp_loc]
-  | _ -> not_supported exp.exp_loc "not yet supported" (* XXX *)
+  (* | _ -> not_supported exp.exp_loc "not yet supported" *)
   in                               
   (* See untype_extra in tools/untypeast.ml *)
   let trx_extra (extra, loc, _attr) exp =  (* TODO: take care of attr *)

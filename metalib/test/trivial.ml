@@ -408,7 +408,7 @@ print_endline "Error was expected";;
 
 .<{Complex.re = 1.0; im = 2.0}>.;;
 (*
-- : Complex.t code = .<{ Complex.re = 1.0; Complex.im = 2.0 }>. 
+- : Complex.t code = .<{ Complex.im = 2.0; Complex.re = 1.0 }>. 
 *)
 let {Complex.re = 1.; Complex.im = -2.} =
   Complex.conj (!. .<{Complex.re = 1.0; im = 2.0}>.);;
@@ -425,8 +425,7 @@ be selected if the type becomes unknown.
 
 let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.;;
 (*
-- : float code =
-.<((* cross-stage persistent value (as id: x) *)).Complex.re>.
+- : float code = .<(* CSP x *).Complex.re>. 
 *)
 let 1.0 = !.(let x = {Complex.re = 1.0; im = 2.0} in .<x.Complex.re>.);;
 let x = ref 1 in .<x.contents>.;;       (* Pervasive record *)
@@ -436,8 +435,7 @@ let x = ref 1 in .<x.contents>.;;       (* Pervasive record *)
 let 1 = !.(let x = ref 1 in .<x.contents>.);;
 let x = ref 1 in .<x.contents <- 2>.;;
 (*
-- : unit code =
-.<((* cross-stage persistent value (as id: x) *)).contents <- 2>.
+- : unit code = .<(* CSP x *).Pervasives.contents <- 2>. 
 *)
 let x = ref 1 in (!. .<x.contents <- 2>.); x;;
 (* - : int ref = {contents = 2} *)
@@ -445,15 +443,32 @@ let x = ref 1 in (!. .<x.contents <- 2>.); x;;
 open Complex;;
 .<{re = 1.0; im = 2.0}>.;;
 (*
-- : Complex.t code = .<{Complex.re = 1.0; Complex.im = 2.0}>.
+- : Complex.t code = .<{ Complex.im = 2.0; Complex.re = 1.0 }>. 
 *)
 let 5.0 = norm (!. .<{re = 3.0; im = 4.0}>.);;
 let x = {re = 1.0; im = 2.0} in .<x.re>.;;
 (*
-- : float code =
-.<((* cross-stage persistent value (as id: x) *)).Complex.re>.
+- : float code = .<(* CSP x *).Complex.re>. 
 *)
 let 1.0 = !.(let x = {re = 1.0; im = 2.0} in .<x.re>.);;
+
+let x = {re = 1.0; im = 2.0} in .<{x with re = 2.0}>.;;
+(*
+- : Complex.t code = .<{ (* CSP x *) with Complex.re = 2.0 }>. 
+*)
+let 5.0 = norm !.(let x = {re = 4.0; im = 2.0} in .<{x with im = 3.0}>.);;
+
+let 5.0 = norm !.(let x = {re = 2.0; im = 4.0} in .<{x with re = 3.0}>.);;
+
+let 5.0 = norm !.(let x = {re = 1.0; im = 1.0} in 
+   .<{x with re = 3.0; im = 4.0 }>.);;
+(*
+Characters 56-84:
+     .<{x with re = 3.0; im = 4.0 }>.);;
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 23: all the fields are explicitly listed in this record:
+the 'with' clause is useless.
+*)
 
 type foo = {fool : int};;
 .<{fool = 1}>.;;
@@ -504,7 +519,7 @@ let 1 = !. (f x);;
 (* Local open *)
 .<Complex.(norm {re=3.0; im = 4.0})>.;;
 (*
-- : float code = .<Complex.norm { Complex.re = 3.0; Complex.im = 4.0 }>. 
+- : float code = .<Complex.norm { Complex.im = 4.0; Complex.re = 3.0 }>. 
 *)
 
 let 5.0 = !. .<Complex.(norm {re=3.0; im = 4.0})>.;;
@@ -968,7 +983,7 @@ fun x_43  ->
 
 let "1" = 
   (!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "1";;
-let "fail scanf: bad input at char number 0: \"character 'x' is not a decimal digit\"" =
+let "fail scanf: bad input at char number 0: character 'x' is not a decimal digit" =
  (!. .<fun x -> let open Scanf in try sscanf x "%d" (fun x -> string_of_int x) with Scan_failure x -> "fail " ^ x>.) "xxx";;
 
 (* Simple let *)

@@ -102,9 +102,10 @@ val set_with_stack_mark : stackmark_region_fn -> unit
 val loc_none    : Location.t
 val label_none  : Asttypes.arg_label
 val sample_lid  : Longident.t Location.loc  (* A template for lid expressions *)
-val sample_name       : string Location.loc
-val sample_pat_list   : Parsetree.pattern list
-val sample_pats_names : Parsetree.pattern list * string Location.loc list
+val sample_name        : string Location.loc
+val sample_pat_list    : Parsetree.pattern list
+val sample_pats_names  : Parsetree.pattern list * string Location.loc list
+val sample_record_repr : Types.record_representation
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
@@ -135,11 +136,9 @@ val build_ifthenelse :
   Location.t -> code_repr -> code_repr -> code_repr option -> code_repr
 val build_construct  :
   Location.t -> Longident.t Location.loc -> code_repr array -> code_repr
-(*
 val build_record :
   Location.t -> (Longident.t Location.loc * code_repr) array ->
   code_repr option -> code_repr
-*)
 val build_field :
   Location.t -> code_repr -> Longident.t Location.loc -> code_repr
 val build_setfield :
