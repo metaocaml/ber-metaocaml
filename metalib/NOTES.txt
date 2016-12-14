@@ -5,16 +5,10 @@
 ** The unsoundness problem with GADTs. Prohibit GADT pattern-matching
 within brackets? (Problem reported by Jeremy Yallop)
 
-** Better error messages for MetaOCaml: rather than level 1 vs. level 0,
-write something more helpful. After all, most of the time, there are
-only two levels. So, we can make good error messages.
-(Jeremy Yallop's suggestion)
-
 ** import-for-syntax: essentially prohibiting all CSP and instead
 introducing a form to copy the entire world (so it is available on the
 next stage). Of course the pure, stateless bindings can be shared,
 but stateful functions has to be copied.
-
 
 ** automatic let-insertion
 Have a way to make sure that the piece of code is really a value.
@@ -804,6 +798,12 @@ let id y = y in .<let f = fun x -> id y in (f 1, f true)>.;;
 let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
 
 
+* Done in N104 (Dec 2016)
+
+** Better error messages for MetaOCaml: rather than level 1 vs. level 0,
+write something more helpful. After all, most of the time, there are
+only two levels. So, we can make good error messages.
+(Jeremy Yallop's suggestion)
 
 * Done in N102 (Dec 2014)
 

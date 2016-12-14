@@ -29,12 +29,26 @@ List.rev;;
 
 .<fun x -> .~(let y = x in y)>.;;
 (*
-Characters 22-23:
   .<fun x -> .~(let y = x in y)>.;;
                         ^
-Wrong level: variable bound at level 1 and used at level 0
+Error: A variable that was bound within brackets is used outside brackets
+for example: .<fun x -> .~(foo x)>.
+Hint: enclose the variable in brackets,
+as in: .<fun x -> .~(foo .<x>.)>.;;
 *)
 print_endline "Error was expected";;
+
+.<fun x -> .~(succ x)>.;;   (* From the error message *)
+print_endline "Error was expected";;
+
+.~(.<1>.);;
+(*
+  .~(.<1>.);;
+    ^^^^^^^
+Error: An escape may appear only within brackets
+*)
+print_endline "Error was expected";;
+
 
 .<fun x -> 1 + .~(.<true>.)>.;;
 (*

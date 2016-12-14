@@ -158,8 +158,12 @@ let unify_stage env tl1 tl2 =
  The particular error message we emit here does not use paths.
 *)
 let raise_wrong_stage_error loc n m =
-  raise @@
-  Error_forward(Location.errorf ~loc 
+  raise @@ Error_forward(match (n,m) with
+  | (1,0) -> Location.errorf ~loc 
+    "A variable that was bound within brackets is used outside brackets\n\
+for example: .<fun x -> .~(foo x)>.\n\
+Hint: enclose the variable in brackets,\nas in: .<fun x -> .~(foo .<x>.)>.;;"
+  | _ -> Location.errorf ~loc 
    "Wrong level: variable bound at level %d and used at level %d" n m)
 
 let raise_unsupported loc txt =
@@ -180,7 +184,7 @@ let with_stage_down loc _env body =
    let old_stage = !global_stage in
    if !global_stage = 0 then
      raise @@ Error_forward(Location.errorf ~loc 
-       "Wrong level: escape at level 0");
+       "An escape may appear only within brackets");
    decr global_stage;
    try 
     let r = body () in

@@ -1,3 +1,8 @@
+December 14, 2016
+	Completed port to OCaml 4.04
+	Improved error messages (at least the ones that metaocaml-specific
+	code emits)
+	
 August 13, 2015
 	Removed the let! feature. Monadic programming is better done
 	with syntactic extensions such as those used by Lwt.
