@@ -81,7 +81,9 @@ clean::
 	rm -f *~
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
-test:
+test: test-simple test-gadt
+
+test-simple:
 	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/trivial.ml > trivial.out && \
 	diff -u trivial.out trivial.ref
 	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/simple.ml > simple.out && \
@@ -93,6 +95,12 @@ test:
 #	$(BINDIR)/metaocaml test/t4.ml
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) MOCAMLTOP="../metaocaml -I .." testv_top
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint_top
+
+test-gadt:
+	cd test && \
+	$(BINDIR)/ocamlc -c tgadt_decl.mli && \
+	if $(BINDIR)/metaocamlc -c tgadt.ml; then \
+          ( echo "Should have failed" && false ); else true; fi
 
 test-compile:
 	cd test && \

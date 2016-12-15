@@ -1,8 +1,14 @@
+December 15, 2016
+	Pattern-matching on GADTs within brackets is generally unsound
+	(analogous to a lazy pattern-match on GADT).
+	(Problem reported by Jeremy Yallop)
+	Pattern-matching on GADTs is now prohibited within brackets.
+
 December 14, 2016
 	Completed port to OCaml 4.04
 	Improved error messages (at least the ones that metaocaml-specific
 	code emits)
-	
+
 August 13, 2015
 	Removed the let! feature. Monadic programming is better done
 	with syntactic extensions such as those used by Lwt.

@@ -2,9 +2,6 @@
 
 * New notes, things to try
 
-** The unsoundness problem with GADTs. Prohibit GADT pattern-matching
-within brackets? (Problem reported by Jeremy Yallop)
-
 ** import-for-syntax: essentially prohibiting all CSP and instead
 introducing a form to copy the entire world (so it is available on the
 next stage). Of course the pure, stateless bindings can be shared,

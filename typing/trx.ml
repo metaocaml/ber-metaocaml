@@ -1452,6 +1452,12 @@ let rec trx_pattern :
     let (pl,acc) = map_accum trx_pattern acc lst
     in (Ppat_tuple pl, acc)
   | Tpat_construct (li, cdesc, args) ->
+      if cdesc.cstr_generalized then
+        trx_error @@ Location.errorf ~loc:pat.pat_loc
+          "Patterns with implicit equality constraints \
+           (aka, GADTs) `%s' \
+           within brackets are generally unsound. They are not \
+           supported" cdesc.cstr_name;
       let lid = qualify_ctor li cdesc in
       let (args,acc) = map_accum trx_pattern acc args in
       (Ppat_construct (lid,
