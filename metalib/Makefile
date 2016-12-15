@@ -20,7 +20,7 @@ OPTCOMPFLAGS=-strict-sequence -w +33..39 -warn-error A -nostdlib
 CAMLDEP=$(CAMLROOT)/boot/ocamlrun $(CAMLROOT)/tools/ocamldep
 
 METALIB=metalib.cma
-METALIBOBJS=runcode.cmo print_code.cmo
+METALIBOBJS=print_code.cmo runcode.cmo
 METAOBJS=$(METALIB) bertop.cmo berstart.cmo
 
 all: $(METAOBJS) metaocaml metaocamlc

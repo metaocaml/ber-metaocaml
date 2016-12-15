@@ -1,9 +1,7 @@
 (* Run the closed code: byte-code and native code *)
 
 open Format
-
-type 'a closed_code = Trx.closed_code_repr
-
+open Print_code
 
 (* Add a directory to search for .cmo/.cmi files, needed
    for the sake of running the generated code .
@@ -14,21 +12,6 @@ let add_search_path : string -> unit = fun dir ->
   Config.load_path := dir :: !Config.load_path;
   Dll.add_path [dir];
   Env.reset_cache ()
-
-
-(* Check that the code is closed and return the closed code *)
-let close_code : 'a code -> 'a closed_code = fun cde ->
-  Trx.close_code_repr (Obj.magic cde)
-
-(* The same as close_code but return the closedness check as a thunk
-   rather than performing it.
-   This is useful for debugging and for showing the code.
-*)
-let close_code_delay_check : 'a code -> 'a closed_code * (unit -> unit) =
-  fun cde -> Trx.close_code_delay_check (Obj.magic cde)
-
-let open_code : 'a closed_code -> 'a code = fun ccde ->
-  Obj.magic (Trx.open_code ccde)
 
 
 (* Execute a thunk (which does compilation) while disabling certain

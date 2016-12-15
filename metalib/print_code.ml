@@ -1,4 +1,26 @@
-(* Printing code expressions *)
+(* Printing code expressions and auxiliary functions. Work in both
+  native and bytecode.
+*)
+
+open Format
+
+(* Common interface for running the code *)
+
+type 'a closed_code = Trx.closed_code_repr
+
+(* Check that the code is closed and return the closed code *)
+let close_code : 'a code -> 'a closed_code = fun cde ->
+  Trx.close_code_repr (Obj.magic cde)
+
+(* The same as close_code but return the closedness check as a thunk
+   rather than performing it.
+   This is useful for debugging and for showing the code.
+*)
+let close_code_delay_check : 'a code -> 'a closed_code * (unit -> unit) =
+  fun cde -> Trx.close_code_delay_check (Obj.magic cde)
+
+let open_code : 'a closed_code -> 'a code = fun ccde ->
+  Obj.magic (Trx.open_code ccde)
 
 (* The original code was authored by  Ed Pizzi
    and simplified by Jacques Carette.
@@ -10,9 +32,6 @@
 
    We now rely on the OCaml's code.
 *)
-
-open Format
-open Runcode
 
 
 (* print code as a parse tree. Useful for debugging *)
