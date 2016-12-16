@@ -35,8 +35,8 @@ all:
 	$(MAKE) runtime
 	$(MAKE) coreall
 	$(MAKE) ocaml
-	$(MAKE) otherlibraries $(WITH_DEBUGGER) \
-	  $(WITH_OCAMLDOC)
+#	$(MAKE) otherlibraries $(WITH_DEBUGGER) \
+#	  $(WITH_OCAMLDOC)
 
 # NNN make all && (cd metalib && make clean all) && (make install; cd metalib && make install)
 

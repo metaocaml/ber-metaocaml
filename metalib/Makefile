@@ -15,15 +15,16 @@ COMPILER=$(CAMLROOT)/ocamlc
 CAMLC=$(RUNTIME) $(COMPILER) $(INCLUDES)
 COMPFLAGS=-strict-sequence -w +33..39 -warn-error A -nostdlib
 OPTCOMPILER=$(CAMLROOT)/ocamlopt
-CAMLOPT=$(RUNTIME) $(OPTCOMPILER)
-OPTCOMPFLAGS=-strict-sequence -w +33..39 -warn-error A -nostdlib
+CAMLOPT=$(RUNTIME) $(OPTCOMPILER) -nostdlib -I ../stdlib \
+	-I ../otherlibs/dynlink -I ../typing -I ../parsing -I ../utils
+OPTCOMPFLAGS=-strict-sequence -w +33..39-58 -warn-error A -nostdlib
 CAMLDEP=$(CAMLROOT)/boot/ocamlrun $(CAMLROOT)/tools/ocamldep
 
 METALIB=metalib.cma
 METALIBOBJS=print_code.cmo runcode.cmo
 METAOBJS=$(METALIB) bertop.cmo berstart.cmo
 
-all: $(METAOBJS) metaocaml metaocamlc
+all: $(METAOBJS) metaocaml metaocamlc opt
 
 .SUFFIXES: .mli .ml .cmi .cmo .cmx
 
@@ -46,6 +47,11 @@ install: metaocaml metaocamlmktop metaocamlc
 	cp metaocaml $(BINDIR)/metaocaml$(EXE)
 	cp metaocamlmktop $(BINDIR)/metaocamlmktop$(EXE)
 	cp metaocamlc $(BINDIR)/metaocamlc$(EXE)
+
+install.opt: opt
+	cp runnative.cmi runnative.cmx runnative.o print_code.cmx print_code.o \
+	  $(LIBDIR)
+	cp metaocamlopt $(BINDIR)/metaocamlopt$(EXE)
 
 metaocaml: $(METAOBJS) $(CAMLROOT)/compilerlibs/ocamlcommon.cma
 # $(CAMLROOT)/tools/ocamlmktop \
@@ -74,6 +80,14 @@ metaocamlc: metaocamlc.c
 
 clean::
 	rm -f metaocamlc
+
+opt: metaocamlopt print_code.cmx runnative.cmx
+
+metaocamlopt: metaocamlopt.c 
+	$(CC) -Wall -DBINDIR=\"$(BINDIR)\" -o metaocamlopt metaocamlopt.c
+
+clean::
+	rm -f metaocamlopt
 
 clean::
 	rm -f *.cm* *.o *.a
@@ -123,8 +137,13 @@ test-compile:
 	$(BINDIR)/metaocamlc -I /tmp -o tp test/test_path.ml
 	./tp
 
+test-native:
+	cd test && \
+	$(BINDIR)/metaocamlopt -verbose -o qtn square.ml quick_test_native.ml && \
+	./qtn
+
 clean::
-	rm -f simple_true quick_test t4 pt trivial.out simple.out a.out tp
+	rm -f simple_true quick_test t4 pt trivial.out simple.out a.out tp qtn
 
 clean::
 	rm -f test/csp1 test/*.cmi test/*.cmo

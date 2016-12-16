@@ -1,3 +1,6 @@
+December 16, 2016
+	Native MetaOCaml
+
 December 15, 2016
 	Pattern-matching on GADTs within brackets is generally unsound
 	(analogous to a lazy pattern-match on GADT).
@@ -6,7 +9,7 @@ December 15, 2016
 
 December 14, 2016
 	Completed port to OCaml 4.04
-	Improved error messages (at least the ones that metaocaml-specific
+	Improved error messages (at least the ones that the metaocaml-specific
 	code emits)
 
 August 13, 2015

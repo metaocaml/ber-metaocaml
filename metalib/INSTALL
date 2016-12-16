@@ -34,6 +34,8 @@ See also
     make world
     make -i install
 
+    make opt.opt
+    make installopt
 
 4. Build the BER MetaOCaml library, the top-level, and the
    compilation script
@@ -42,11 +44,14 @@ See also
 
     make all
     make install
+    make install.opt
 
   The BER MetaOCaml top-level can be started afterwards as
     $prefix/bin/metaocaml 
 
-  The batch compiler can be run using the command file metaocamlc. 
+  The batch compiler can be run using metaocamlc (byte-code) or
+  metaocamlopt (native)
+
 
 5. Optionally run sample tests
    
@@ -54,6 +59,7 @@ See also
 
    make test
    make test-compile
+   make test-native
 
 
 Installation of BER MetaOCaml on Windows has not been tested. Original

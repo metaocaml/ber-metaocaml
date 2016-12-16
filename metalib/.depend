@@ -14,6 +14,9 @@ run_native.cmx :
 runcode.cmo : print_code.cmi runcode.cmi
 runcode.cmx : print_code.cmx runcode.cmi
 runcode.cmi : print_code.cmi
+runnative.cmo : print_code.cmi runnative.cmi
+runnative.cmx : print_code.cmx runnative.cmi
+runnative.cmi : print_code.cmi
 trxtime.cmo : trxtime.cmi
 trxtime.cmx : trxtime.cmi
 trxtime.cmi :
