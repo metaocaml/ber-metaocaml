@@ -191,6 +191,9 @@ let with_stage_down loc _env body =
     global_stage := old_stage; r
    with e ->
    global_stage := old_stage; raise e
+
+let pat_code_path =
+  Path.(Pdot (Pident (Ident.create_persistent "Trx"), "pat_code", 0))
 (* NNN end *)
 
 (*
@@ -2053,6 +2056,53 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   *)
   match what_stage_attr sexp.pexp_attributes with
   | Stage0 -> type_expect_orig ?in_function ~recarg env sexp ty_expected
+
+        (* the programmer asserts that the bracketed expression is
+           a functional literal. Check it, and if so, give it a more
+           refined type: pat_code
+         *)
+  | Bracket(battr,attrs) when funlit_attribute sexp.pexp_attributes ->
+     let literal_fn = 
+       (* If there are other staging attributes _underneath_, 
+          the quoted expression
+          has brackets and escapes and hence cannot be a function literal
+        *)
+       if what_stage_attr attrs <> Stage0 then false
+       else match sexp.pexp_desc with
+       | Pexp_fun (Nolabel, None, _, _) 
+       | Pexp_function _ -> true
+       | _               -> false
+     in
+     let () = if not literal_fn then 
+       raise @@ Error_forward(Location.errorf ~loc 
+       "The expression does not appear to be a functional literal as \
+        requested") in
+     (* check to make sure pat_code is really the type 'a pat_code
+        that we declared in Trx.mli
+      *)
+     let () = 
+       match Env.find_type pat_code_path Env.initial_safe_string with
+       | {type_params = [_]} -> ()
+       | _                   -> assert false 
+     in
+     let ty = newgenvar() in     (* expected type for the bracketed sexp *)
+     let type_pat_code = 
+       newgenty (Tconstr(pat_code_path, [ty], ref Mnil)) in
+     unify_exp_types loc env type_pat_code ty_expected;
+     let exp =
+        with_stage_up (fun () ->
+                (* drop bracket attr *)
+          let sexp = {sexp with pexp_attributes = attrs} in
+          type_expect env sexp ty) in
+     re @@
+      if !global_stage = 0 then
+        (* Function literal is certainly a value *)
+        let exp = trx_bracket 1 exp in
+        {exp with exp_type = instance env ty_expected;
+                  exp_attributes = attr_nonexpansive :: exp.exp_attributes}
+      else
+        texp_braesc battr exp env (instance env ty_expected)
+
   | Bracket(battr,attrs) ->
        (* Typechecking bracket *)
        (* follow Pexp_array or Pexp_lazy as a template *)

@@ -59,6 +59,20 @@ val get_level  : Parsetree.attributes -> stage
 *)
 val attr_nonexpansive : Parsetree.attribute
 
+(*
+ If set, this is an assertion that a code expression is actually a literal
+ function, like .<function ... -> ...>. or .<fun ... -> ...>.
+ Such function literals act as first-class patterns.
+ *)
+val funlit_attribute      : Parsetree.attributes -> bool
+
+(* The type of the code expression that represents a literal function. Such
+   code expression is essentially a pattern clause *)
+(* This name, as a string, is referenced in typecore.ml. 
+   Beware when renaming! 
+ *)
+type 'a pat_code = private Parsetree.expression
+
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
    it is not available in the bootstrap compiler.
@@ -91,6 +105,7 @@ type stackmark = unit -> bool           (* true if valid *)
 type stackmark_region_fn = 
     {stackmark_region_fn : 'w. (stackmark -> 'w) -> 'w}
 val set_with_stack_mark : stackmark_region_fn -> unit
+
 
 
 (* The following names are used by Trx itself to construct a Parsetree

@@ -179,6 +179,21 @@ let attr_csp : Longident.t loc -> attribute = fun lid ->
 let attr_nonexpansive : attribute = 
   (Location.mknoloc "metaocaml.nonexpansive",PStr [])
 
+(*
+ If set, this is an assertion that a code expression is actually a literal
+ function, like .<function ... -> ...>. or .<fun ... -> ...>.
+ Such function literals act as first-class patterns.
+ *)
+let attr_funlit_name = "metaocaml.functionliteral"
+let rec funlit_attribute : Parsetree.attributes -> bool = function
+  | [] -> false
+  | ({txt = n},_) :: _ when n = attr_funlit_name -> true
+  | _ :: t -> funlit_attribute t
+
+(* The type of the code expression that represents a literal function. Such
+   code expression is essentially a pattern clause *)
+type 'a pat_code = Parsetree.expression
+
   
 (* The result of what_stage_attr *)
 type stage_attr_elim = 

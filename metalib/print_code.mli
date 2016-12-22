@@ -34,3 +34,6 @@ val format_code : Format.formatter -> 'a closed_code -> unit
 
 (* print code as a parse tree. Useful for debugging *)
 val print_code_as_ast : 'a closed_code -> unit
+
+(* make a match statement *)
+val make_match : 'a code -> ('a -> 'w) Trx.pat_code list -> 'w code
