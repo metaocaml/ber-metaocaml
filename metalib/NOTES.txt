@@ -34,86 +34,6 @@ function names csp highter and hihger in scope. So, we can define
 etc. I will try to unify with each of them. Perhaps though I will
 handle integers (and floats and strings?) specially.
 
-** first-class patters
-Here is the explanation of Jeremy's idea
-
-Pattern code
- The idea is to generate patterns and put constructors into patterns
-
-  <fun x -> match x with
-     | "str1" -> ....
-   >
-
-Now we want to abstract str1:
- fun s -> 
-  <fun x -> match x with
-     | ~s -> ....
-   >
-
-
-  ('a, 'env, 'k) pat
-
-  var : ('a, 'a-'k, 'k) pat
-  pair ....
-
-  Then we need constructors for string pattern
-  str : string -> (string, string->'k, 'k)
-  Better off, generate these constructor functions, using the syntax like
-   <! "str" >
-   <! Some x >
-etc.
-
-This generalizes to GADTs, but we need add one type argument, the
-equality constraint.
-
-If we have a syntax for pattern expressions, it might help in solving
-the letrec problem (generating many letrecs).
-
-Also look into first-class patterns (Rhiger's) paper for ideas on
-syntax.
-
-Here is the elaboration of the idea:
-
-module type Pat = sig 
-  type ('a,'x,'y) pat
-
-  val const : 'a code -> ('a,'x,'x) pat 
-     (* dynamic check that 'a code is a value (constructed) *)
-
-  val any   : ('a,'x,'x) pat
-  val var   : ('a,'x,('a,'x)) pat
-  val alias : ('a,'x,'y) pat -> ('a,'x,('a,'y)) pat
-
-  val pair : ('a,'xl,'yl) pat -> ('b,'yl,'yr) pat ->
-         (('a,'b),'xl,'yr) pat
-
-  type ('a,'w) case =
-    Case : ('a,unit,'y) * ('y code -> 'w code) -> ('a,'w) case
-
-  val match : 'a code -> ('a,'w) case list -> 'w code
-
-end
-
-The problem is how to define pattern constructors for option, list,
-etc. -- and especially user-defined types.
-The easy version is
-
-        val constructor : ('a code -> 'b code) -> 
-          ('a,'x,'y) pat -> ('b,'x,'y) pat
-
-(with some elaboration to allow multiple bindings). We rely on the
-fact that pattern and simple expressions are almost the same. The
-first argument of constructor (for example, fun x -> .<Some .~x>.)
-should take (what in reality will be a code denoting some variable)
-and produce a _constructed_ expression (that is, the one that can be
-converted to a pattern). We have to have a dynamic check that the
-result of that `data constructor' function is really a constructor
-expression.
-
-Jeremy mentioned, that one possibility (suggested by Leo, if I
-remember correctly) is to use constructor disambiguation (i.e.
-http://gallium.inria.fr/blog/resolving-field-names/) to determine
-whether to treat a quotation as a pattern or an expression.
 
 ** pickling combinators
 
@@ -844,6 +764,97 @@ let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
 write something more helpful. After all, most of the time, there are
 only two levels. So, we can make good error messages.
 (Jeremy Yallop's suggestion)
+
+** first-class patters
+The implemented approach uses literal ('a->'w) expressions, that is,
+    function p -> e | ... | p -> e 
+    fun p -> e
+as pattern-matching clauses. We use a special annotation and special
+code type (pat_code) for such expressions.
+
+Below is an alternative, which was also considered:
+
+
+Here is the explanation of Jeremy's idea
+
+Pattern code
+ The idea is to generate patterns and put constructors into patterns
+
+  <fun x -> match x with
+     | "str1" -> ....
+   >
+
+Now we want to abstract str1:
+ fun s -> 
+  <fun x -> match x with
+     | ~s -> ....
+   >
+
+
+  ('a, 'env, 'k) pat
+
+  var : ('a, 'a-'k, 'k) pat
+  pair ....
+
+  Then we need constructors for string pattern
+  str : string -> (string, string->'k, 'k)
+  Better off, generate these constructor functions, using the syntax like
+   <! "str" >
+   <! Some x >
+etc.
+
+This generalizes to GADTs, but we need add one type argument, the
+equality constraint.
+
+If we have a syntax for pattern expressions, it might help in solving
+the letrec problem (generating many letrecs).
+
+Also look into first-class patterns (Rhiger's) paper for ideas on
+syntax.
+
+Here is the elaboration of the idea:
+
+module type Pat = sig 
+  type ('a,'x,'y) pat
+
+  val const : 'a code -> ('a,'x,'x) pat 
+     (* dynamic check that 'a code is a value (constructed) *)
+
+  val any   : ('a,'x,'x) pat
+  val var   : ('a,'x,('a,'x)) pat
+  val alias : ('a,'x,'y) pat -> ('a,'x,('a,'y)) pat
+
+  val pair : ('a,'xl,'yl) pat -> ('b,'yl,'yr) pat ->
+         (('a,'b),'xl,'yr) pat
+
+  type ('a,'w) case =
+    Case : ('a,unit,'y) * ('y code -> 'w code) -> ('a,'w) case
+
+  val match : 'a code -> ('a,'w) case list -> 'w code
+
+end
+
+The problem is how to define pattern constructors for option, list,
+etc. -- and especially user-defined types.
+The easy version is
+
+        val constructor : ('a code -> 'b code) -> 
+          ('a,'x,'y) pat -> ('b,'x,'y) pat
+
+(with some elaboration to allow multiple bindings). We rely on the
+fact that pattern and simple expressions are almost the same. The
+first argument of constructor (for example, fun x -> .<Some .~x>.)
+should take (what in reality will be a code denoting some variable)
+and produce a _constructed_ expression (that is, the one that can be
+converted to a pattern). We have to have a dynamic check that the
+result of that `data constructor' function is really a constructor
+expression.
+
+Jeremy mentioned, that one possibility (suggested by Leo, if I
+remember correctly) is to use constructor disambiguation (i.e.
+http://gallium.inria.fr/blog/resolving-field-names/) to determine
+whether to treat a quotation as a pattern or an expression.
+
 
 * Done in N102 (Dec 2014)
 

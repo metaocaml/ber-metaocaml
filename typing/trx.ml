@@ -169,6 +169,11 @@ let rec get_attr : string -> attributes -> Parsetree.structure option =
     | ({txt = n}, PStr str) :: _ when n = name -> Some str
     | _ :: t -> get_attr name t
 
+let rec is_pattr : string -> Parsetree.attributes -> bool = 
+ fun name -> function
+  | [] -> false
+  | ({txt = n},_) :: t -> n = name || is_pattr name t
+
 let attr_csp : Longident.t loc -> attribute = fun lid ->
   (Location.mknoloc "metaocaml.csp",PStr [
      Ast_helper.Str.eval (Ast_helper.Exp.ident lid)])
@@ -185,14 +190,7 @@ let attr_nonexpansive : attribute =
  Such function literals act as first-class patterns.
  *)
 let attr_funlit_name = "metaocaml.functionliteral"
-let rec funlit_attribute : Parsetree.attributes -> bool = function
-  | [] -> false
-  | ({txt = n},_) :: _ when n = attr_funlit_name -> true
-  | _ :: t -> funlit_attribute t
-
-(* The type of the code expression that represents a literal function. Such
-   code expression is essentially a pattern clause *)
-type 'a pat_code = Parsetree.expression
+let funlit_attribute : Parsetree.attributes -> bool = is_pattr attr_funlit_name
 
   
 (* The result of what_stage_attr *)
@@ -807,6 +805,11 @@ let close_code_repr : code_repr -> closed_code_repr = fun cde ->
 
 let open_code : closed_code_repr -> code_repr = fun ast ->
   Code (empty,ast)
+
+(* The type of the code expression that represents a literal function. Such
+   code expression is essentially a pattern clause *)
+type 'a pat_code = private code_repr
+
 
 (* Compiling a closed code value: a structural constant of
    type code_repr
@@ -2274,6 +2277,30 @@ and trx_bracket_ : int -> expression -> expression = fun n exp ->
             exp_desc = new_desc}
 
 
+(* First-class patterns: build a match statement from the list
+   of clauses. A clause is a literal of the ('a->'w) type, that is,
+   (function p -> e | ... | p -> e) or (fun p -> e)
+   The user-visible function (in print_code.ml) has the type
+     let make_match : 'a code -> ('a -> 'w) Trx.pat_code list -> 'w code
+  The function below cannot use 'a code (because it is not defined in the 
+  bootstrap compiler) and uses the code repr instead.
+*)
+
+let make_match : code_repr -> code_repr list -> code_repr =
+  fun[@warning "-8"] scrutinee fns ->
+  let (scrutinee::fns,vars) =
+    (* Althernatively, use the location from scrutinee *)
+    validate_vars_list Location.none (scrutinee::fns)  in
+  let case_fn fn acc = 
+   let open Parsetree in match fn.pexp_desc with
+    | Pexp_function caselist      -> caselist @ acc
+    | Pexp_fun (Nolabel,None,p,e) -> {pc_lhs=p;pc_guard=None;pc_rhs=e}::acc
+    (* The type of pat_code assured that the match above is exhaustive *)
+    | _ -> assert false
+  in
+  let caselist = List.fold_right case_fn fns [] in
+  Code(vars,
+   Ast_helper.Exp.match_ ~loc:(scrutinee.pexp_loc) scrutinee caselist)
 
 (*{{{ Typedtree traversal to eliminate bracket/escapes *)
 

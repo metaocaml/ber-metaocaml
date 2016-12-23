@@ -95,7 +95,7 @@ clean::
 	rm -f *~
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
-test: test-simple test-gadt
+test: test-simple test-gadt test-pattern
 
 test-simple:
 	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/trivial.ml > trivial.out && \
@@ -115,6 +115,10 @@ test-gadt:
 	$(BINDIR)/ocamlc -c tgadt_decl.mli && \
 	if $(BINDIR)/metaocamlc -c tgadt.ml; then \
           ( echo "Should have failed" && false ); else true; fi
+
+test-pattern:
+	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/pattern.ml > pattern.out && \
+	diff -u pattern.out pattern.ref
 
 test-compile:
 	cd test && \

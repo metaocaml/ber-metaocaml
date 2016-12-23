@@ -66,12 +66,6 @@ val attr_nonexpansive : Parsetree.attribute
  *)
 val funlit_attribute      : Parsetree.attributes -> bool
 
-(* The type of the code expression that represents a literal function. Such
-   code expression is essentially a pattern clause *)
-(* This name, as a string, is referenced in typecore.ml. 
-   Beware when renaming! 
- *)
-type 'a pat_code = private Parsetree.expression
 
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
@@ -98,6 +92,16 @@ val close_code_delay_check : code_repr -> closed_code_repr * (unit -> unit)
 (* Total: a closed code can always be used in slices, etc. *)
 val open_code : closed_code_repr -> code_repr
 
+(* The type of the code expression that represents a literal function. Such
+   code expression is essentially a pattern clause.
+   It is a `subtype' of the regular 'a code
+*)
+(* This name, as a string, is referenced in typecore.ml. 
+   Beware when renaming! 
+ *)
+type 'a pat_code = private code_repr
+
+
 (* Adjusting the implementation of stackmarks -- needed when delimited
    control is used (other than mere exceptions).
 *)
@@ -107,6 +111,8 @@ type stackmark_region_fn =
 val set_with_stack_mark : stackmark_region_fn -> unit
 
 
+(* First-class pattern-matching (internal version) *)
+val make_match : code_repr -> code_repr list -> code_repr
 
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
@@ -191,3 +197,4 @@ val build_try :
   Location.t -> (Parsetree.pattern list * string Location.loc list) -> 
   code_repr ->
   (code_repr array -> (code_repr option * code_repr) array) -> code_repr
+

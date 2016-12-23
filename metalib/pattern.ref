@@ -1,0 +1,29 @@
+BER MetaOCaml toplevel, version N 104
+        OCaml version 4.04.0
+
+#     #     * *   val t : (unit -> unit) code = .<fun ()  -> ()>. 
+#     * *   val t : (unit -> unit) code = .<fun ()  -> ()>. 
+#     * *   val t : (unit -> unit) Trx.pat_code = <abstr>
+#     * * * *   Characters 11-41:
+  let t = .<let x = function () -> () in x>. [@metaocaml.functionliteral]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be a functional literal as requested
+# Error was expected
+- : unit = ()
+#         * *   val t : ('a -> 'a) Trx.pat_code = <abstr>
+#     * *   val t : ('a list -> bool) Trx.pat_code = <abstr>
+#     * *   - : bool code = .<match [] with | [] -> true | _::_ -> false>. 
+#                 * * * * * * *       val c : int code = .<
+  match [2] with
+  | [] -> 0
+  | 1::[] -> 0
+  | x_4::[] -> x_4 + 1
+  | x_2::y_3 -> x_2 + 1>. 
+#           Exception: Match_failure ("//toplevel//", 62, 32).
+#       Error was expected
+- : unit = ()
+# 
+All done
+
+- : unit = ()
+# 

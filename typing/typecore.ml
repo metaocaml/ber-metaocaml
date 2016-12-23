@@ -2086,8 +2086,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
        | _                   -> assert false 
      in
      let ty = newgenvar() in     (* expected type for the bracketed sexp *)
-     let type_pat_code = 
-       newgenty (Tconstr(pat_code_path, [ty], ref Mnil)) in
+     let type_pat_code = newgenty (Tconstr(pat_code_path, [ty], ref Mnil)) in
      unify_exp_types loc env type_pat_code ty_expected;
      let exp =
         with_stage_up (fun () ->
