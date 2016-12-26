@@ -194,6 +194,8 @@ let with_stage_down loc _env body =
 
 let pat_code_path =
   Path.(Pdot (Pident (Ident.create_persistent "Trx"), "pat_code", 0))
+let val_code_path =
+  Path.(Pdot (Pident (Ident.create_persistent "Trx"), "val_code", 0))
 (* NNN end *)
 
 (*
@@ -2096,6 +2098,42 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
      re @@
       if !global_stage = 0 then
         (* Function literal is certainly a value *)
+        let exp = trx_bracket 1 exp in
+        {exp with exp_type = instance env ty_expected;
+                  exp_attributes = attr_nonexpansive :: exp.exp_attributes}
+      else
+        texp_braesc battr exp env (instance env ty_expected)
+
+        (* the programmer asserts that the bracketed expression represents
+           a value in the generated code. When such an expression is
+           evaluated in the future, it has no side effects
+           (except for heap allocations).
+           Check this assertion, and if so, give it a more refined type: 
+           val_code
+         *)
+  | Bracket(battr,attrs) when vallit_attribute sexp.pexp_attributes ->
+                (* drop bracket attr *)
+     let sexp1 = {sexp with pexp_attributes = attrs} in
+     let () = if not (Trx.is_value_exp 0 sexp1) then 
+       raise @@ Error_forward(Location.errorf ~loc 
+       "The expression does not appear to be a syntactically a value as \
+        requested") in
+     (* check to make sure val_code is really the type 'a val_code
+        that we declared in Trx.mli
+      *)
+     let () = 
+       match Env.find_type val_code_path Env.initial_safe_string with
+       | {type_params = [_]} -> ()
+       | _                   -> assert false 
+     in
+     let ty = newgenvar() in     (* expected type for the bracketed sexp *)
+     let type_val_code = newgenty (Tconstr(val_code_path, [ty], ref Mnil)) in
+     unify_exp_types loc env type_val_code ty_expected;
+     let exp =
+        with_stage_up (fun () -> type_expect env sexp1 ty) in
+     re @@
+      if !global_stage = 0 then
+        (* Value is certainly non-expansive *)
         let exp = trx_bracket 1 exp in
         {exp with exp_type = instance env ty_expected;
                   exp_attributes = attr_nonexpansive :: exp.exp_attributes}

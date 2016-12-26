@@ -169,10 +169,10 @@ let rec get_attr : string -> attributes -> Parsetree.structure option =
     | ({txt = n}, PStr str) :: _ when n = name -> Some str
     | _ :: t -> get_attr name t
 
-let rec is_pattr : string -> Parsetree.attributes -> bool = 
+let rec is_attr : string -> Parsetree.attributes -> bool = 
  fun name -> function
   | [] -> false
-  | ({txt = n},_) :: t -> n = name || is_pattr name t
+  | ({txt = n},_) :: t -> n = name || is_attr name t
 
 let attr_csp : Longident.t loc -> attribute = fun lid ->
   (Location.mknoloc "metaocaml.csp",PStr [
@@ -190,7 +190,14 @@ let attr_nonexpansive : attribute =
  Such function literals act as first-class patterns.
  *)
 let attr_funlit_name = "metaocaml.functionliteral"
-let funlit_attribute : Parsetree.attributes -> bool = is_pattr attr_funlit_name
+let funlit_attribute : Parsetree.attributes -> bool = is_attr attr_funlit_name
+
+(*
+ If set, this is an assertion that a code expression actually
+ represents a value, like a constant, variable reference, constant tuple, etc.
+ *)
+let attr_vallit_name = "metaocaml.value"
+let vallit_attribute : Parsetree.attributes -> bool = is_attr attr_vallit_name
 
   
 (* The result of what_stage_attr *)
@@ -809,6 +816,12 @@ let open_code : closed_code_repr -> code_repr = fun ast ->
 (* The type of the code expression that represents a literal function. Such
    code expression is essentially a pattern clause *)
 type 'a pat_code = private code_repr
+
+(* The type of the code expression that represents a value in the generated
+   code. Such code expressions can be freely duplicated without affecting
+   the behavior of the code.
+ *)
+type 'a val_code = private code_repr
 
 
 (* Compiling a closed code value: a structural constant of
@@ -2301,6 +2314,63 @@ let make_match : code_repr -> code_repr list -> code_repr =
   let caselist = List.fold_right case_fn fns [] in
   Code(vars,
    Ast_helper.Exp.match_ ~loc:(scrutinee.pexp_loc) scrutinee caselist)
+
+(* Check to see if exp is a stage-n value 
+   See the definition in most LambdaU etc. papers
+ *)
+let is_value_exp : stage -> Parsetree.expression -> bool = fun stagel exp ->
+  let res   = ref true in (* drop to false once detected a non-value *)
+  (* stage may be negative when is_value_exp is invoked on the
+     contents of brackets, which is the norm.
+   *)
+  let stage = ref stagel in
+  let open Ast_iterator in
+  let scan_attrs = List.iter @@ function
+  | ({txt = "metaocaml.bracket"},_) -> incr stage
+  | ({txt = "metaocaml.escape"},_)  -> decr stage
+  | _ -> () 
+  in
+  let defl = default_iterator in
+  let iter = 
+     {defl with expr =
+       begin
+       fun this exp ->
+        if !res then  (* if already decided as a non-value, don't recur *)
+        let stage_old = !stage in
+        scan_attrs (exp.pexp_attributes);   (* may change stage *)
+        if !stage < 0 then res := false else (* escape to prev level ... *)
+        if !stage > 0 then  (* a code expression is a value *)
+           defl.expr this exp   (* scan children *)
+        else match exp.pexp_desc with
+        (* always values *)
+        | Pexp_ident _
+        | Pexp_constant _ 
+        | Pexp_fun _
+        | Pexp_function _
+        | Pexp_unreachable 
+          -> ()
+        (* values if sub-expression are values *)
+        | Pexp_let _
+        | Pexp_tuple _
+        | Pexp_construct _
+        | Pexp_variant _
+        | Pexp_record _
+        | Pexp_field _
+        | Pexp_array _
+        | Pexp_coerce _
+        | Pexp_constraint _
+        | Pexp_send _
+        | Pexp_letmodule _
+        | Pexp_letexception _
+        | Pexp_poly _
+        | Pexp_newtype _ -> defl.expr this exp
+        | _  -> res := false
+        ;
+        stage := stage_old
+    end}
+    in 
+    iter.expr iter exp; !res
+
 
 (*{{{ Typedtree traversal to eliminate bracket/escapes *)
 

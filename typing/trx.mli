@@ -64,7 +64,8 @@ val attr_nonexpansive : Parsetree.attribute
  function, like .<function ... -> ...>. or .<fun ... -> ...>.
  Such function literals act as first-class patterns.
  *)
-val funlit_attribute      : Parsetree.attributes -> bool
+val funlit_attribute  : Parsetree.attributes -> bool
+val vallit_attribute  : Parsetree.attributes -> bool
 
 
 (* The following functions operate on untyped code_repr.
@@ -101,6 +102,15 @@ val open_code : closed_code_repr -> code_repr
  *)
 type 'a pat_code = private code_repr
 
+(* The type of the code expression that represents a value in the generated
+   code. Such code expressions can be freely duplicated without affecting
+   the behavior of the code.
+ *)
+(* This name, as a string, is referenced in typecore.ml. 
+   Beware when renaming! 
+ *)
+type 'a val_code = private code_repr
+
 
 (* Adjusting the implementation of stackmarks -- needed when delimited
    control is used (other than mere exceptions).
@@ -112,7 +122,8 @@ val set_with_stack_mark : stackmark_region_fn -> unit
 
 
 (* First-class pattern-matching (internal version) *)
-val make_match : code_repr -> code_repr list -> code_repr
+val make_match   : code_repr -> code_repr list -> code_repr
+val is_value_exp : stage -> Parsetree.expression -> bool
 
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
