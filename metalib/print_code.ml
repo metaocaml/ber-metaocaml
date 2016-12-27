@@ -25,6 +25,9 @@ let open_code : 'a closed_code -> 'a code = fun ccde ->
 (* pat_code has the same representation as code *)
 let code_of_pat_code : 'a Trx.pat_code -> 'a code = fun cde -> Obj.magic cde
 
+(* val_code has the same representation as code *)
+let code_of_val_code : 'a Trx.val_code -> 'a code = fun cde -> Obj.magic cde
+
 (* The original code was authored by  Ed Pizzi
    and simplified by Jacques Carette.
    It is latter borrowed into the main OCaml tree,

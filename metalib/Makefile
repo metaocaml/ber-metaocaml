@@ -95,7 +95,7 @@ clean::
 	rm -f *~
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) clean
 
-test: test-simple test-gadt test-pattern
+test: test-simple test-gadt test-pattern test-values
 
 test-simple:
 	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/trivial.ml > trivial.out && \
@@ -119,6 +119,10 @@ test-gadt:
 test-pattern:
 	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/pattern.ml > pattern.out && \
 	diff -u pattern.out pattern.ref
+
+test-values:
+	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/values.ml > values.out && \
+	diff -u values.out values.ref
 
 test-compile:
 	cd test && \

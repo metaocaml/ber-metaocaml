@@ -2116,7 +2116,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
      let sexp1 = {sexp with pexp_attributes = attrs} in
      let () = if not (Trx.is_value_exp 0 sexp1) then 
        raise @@ Error_forward(Location.errorf ~loc 
-       "The expression does not appear to be a syntactically a value as \
+       "The expression does not appear to be syntactically a value as \
         requested") in
      (* check to make sure val_code is really the type 'a val_code
         that we declared in Trx.mli

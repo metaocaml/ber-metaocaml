@@ -22,6 +22,8 @@ val open_code : 'a closed_code -> 'a code
 (* Total: 'a pat_code is a `subtype' of 'a code *)
 val code_of_pat_code : 'a Trx.pat_code -> 'a code
 
+(* Total: 'a val_code is a `subtype' of 'a code *)
+val code_of_val_code : 'a Trx.val_code -> 'a code
 
 (* Print code values, useful as formatter.
    The code is printed with outer brackets 

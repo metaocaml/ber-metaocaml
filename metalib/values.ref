@@ -1,0 +1,47 @@
+BER MetaOCaml toplevel, version N 104
+        OCaml version 4.04.0
+
+#     #     * *   - : (unit -> unit) code = .<fun ()  -> ()>. 
+#     * *   - : (unit -> unit) Trx.val_code = <abstr>
+#     * *       * *       * *       Characters 329-352:
+  let _ = .<(1+1,function () -> ())>. [@metaocaml.value]
+            ^^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be syntactically a value as requested
+# * * * * *   Error was expected
+- : unit = ()
+#     Characters 11-33:
+  let _ = .<(function () -> ()) ()>. [@metaocaml.value]
+            ^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be syntactically a value as requested
+# * * * * *   Error was expected
+- : unit = ()
+#     * *   - : (unit -> int) Trx.val_code = <abstr>
+#     * *       val t : string Trx.val_code = <abstr>
+#   * *   - : ('a -> 'a) Trx.val_code = <abstr>
+#           * *   val t : ('a -> 'a) Trx.val_code = <abstr>
+#   #         Characters 38-41:
+  let t = .<function x -> .~(let y = .<x+1>. [@metaocaml.value] in 
+                                       ^^^
+Error: The expression does not appear to be syntactically a value as requested
+# * * * * *   Error was expected
+- : unit = ()
+#     * *       * *   - : (int * int) Trx.val_code = <abstr>
+#         * * * *   Characters 42-68:
+  let _ = .<(.~(let x = .<1>. in x),2)>.
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be syntactically a value as requested
+# Error was expected
+- : unit = ()
+#         - : ((int * int) code * int) Trx.val_code = <abstr>
+# * *         Characters 69-111:
+  let _ = .<(.<(3,.~(.~(let x = .<1>. in .<x>.)))>.,2)>.
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be syntactically a value as requested
+# * * * * *   Error was expected
+- : unit = ()
+#         * *   - : (int code * int) Trx.val_code = <abstr>
+#   * * *   #   
+All done
+
+- : unit = ()
+# 

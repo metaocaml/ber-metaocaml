@@ -2349,7 +2349,7 @@ let is_value_exp : stage -> Parsetree.expression -> bool = fun stagel exp ->
         | Pexp_function _
         | Pexp_unreachable 
           -> ()
-        (* values if sub-expression are values *)
+        (* values if sub-expressions are values *)
         | Pexp_let _
         | Pexp_tuple _
         | Pexp_construct _
@@ -2363,7 +2363,8 @@ let is_value_exp : stage -> Parsetree.expression -> bool = fun stagel exp ->
         | Pexp_letmodule _
         | Pexp_letexception _
         | Pexp_poly _
-        | Pexp_newtype _ -> defl.expr this exp
+        | Pexp_newtype _ 
+          -> defl.expr this exp
         | _  -> res := false
         ;
         stage := stage_old
