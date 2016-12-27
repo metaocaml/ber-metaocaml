@@ -110,6 +110,57 @@ completely re-written from scratch and has many comments. The
 traversal algorithm, the way of compiling Parsetree builders, dealing
     with CSP and many other algorithms are all different.
 
+Let-insertion
+
+Since we are already tracking free variables, we may just as well implement
+let-insertion, the primitive genlet.
+
+First, we introduce the type 'a val_code, which is a sort of `subtype'
+of 'a code, representing a code expression that is syntactically a value
+(such as an identifier reference, a constant, a lambda-expression).
+Code values of 'a val_code type can be freely spliced as many times as
+needed without the concern about duplicating effects or evaluation order.
+One can now code-generator-functions that take arguments of 'a val_code
+type, which behave as call-by-value functions even if staging annotations are
+erased. One can always convert val_code to code, using
+      code_of_val_code : 'a val_code -> 'a code
+
+
+One way of producing 'a val_code values is using brackets with
+metaocaml.value attribute, as in
+
+     fun x -> .<(1,function y -> y + .~x)>. [@metaocaml.value]
+  (whose inferred type is: int code -> (int * (int -> int)) val_code)
+
+If the annotated bracketed expression is not actually a value, syntactically,
+a type error is rased. Another way is using
+   genlet : 'a code -> 'a val_code
+
+This function first checks that its argument is already a future-stage
+value. If so, it is returned as it is, but of the val_code type.
+If the argument is not syntactically a value, genlet generates 
+the let-statement, binding the 'a code expression to a fresh future-stage
+variable and returning the code that refers to that variable. 
+Variable references are clearly values.
+That is, genlet exp inserts let freshname = exp in ... somewhere
+in the generated code and returns .<freshname>.
+The `let' is inserted right under the binder for the `latest' free variable
+contained in `exp'.
+
+Normally we use delimited control for let-insertion. In this code, we implement
+a buble-up semantics. We have already annotated generated code with
+the list (heap) of free variables cointained therein. We add another annotation:
+the set (list) of (varname_i,exp_i) pairs describing (to be) let-bound variables
+and the expressions they are to be bound. Each binder 
+(build_fun_simple, etc) will check if
+one of exp_i contains the free variable bound by the binder. If so,
+the let-statement will be generated. Each (varname_i,exp_i) pair is independent
+so the order in the list is in material. 
+
+Keep in mind however that exp_i may itself contain the list of
+(varname_j,exp_j). Such a situation arises from nested genlet. Therefore,
+we need to generate inner let-statement before the outer one.
+
 *)
 
 open Parsetree
