@@ -24,13 +24,19 @@ val trx_bracket : int -> Typedtree.expression -> Typedtree.expression
 (* The result of what_stage_attr *)
 type stage_attr_elim = 
   | Stage0
-  | Bracket of Parsetree.attribute * (* bracket attribute *)
-               Parsetree.attributes  (* other attributes  *)
-  | Escape  of Parsetree.attribute * (* escape attribute *)
-               Parsetree.attributes  (* other attributes  *)
-  | CSP     of Parsetree.attribute * 
-               Longident.t Location.loc * (* CSP attribute and lid *)
-               Parsetree.attributes  (* other attributes  *)
+  | Bracket of Parsetree.attributes * (* bracket attribute *)
+               Parsetree.attributes   (* other attributes  *)
+  | FunBracket 
+            of Parsetree.attributes * (* Literal function bracket attribute *)
+               Parsetree.attributes   (* other attributes  *)
+  | ValBracket 
+            of Parsetree.attributes * (* Value bracket attribute *)
+               Parsetree.attributes   (* other attributes  *)
+  | Escape  of Parsetree.attribute *  (* escape attribute *)
+               Parsetree.attributes   (* other attributes  *)
+  | CSP     of Parsetree.attribute * Longident.t Location.loc * 
+                                      (* CSP attribute and lid *)
+               Parsetree.attributes   (* other attributes  *)
 
 (* Determining if an AST node bears a staging attribute *)
 val what_stage_attr : Parsetree.attributes -> stage_attr_elim
@@ -39,7 +45,7 @@ val what_stage_attr : Parsetree.attributes -> stage_attr_elim
    which is which)
 *)
 val texp_braesc : 
-  Parsetree.attribute -> Typedtree.expression -> Env.t -> Types.type_expr -> 
+  Parsetree.attributes -> Typedtree.expression -> Env.t -> Types.type_expr -> 
   Typedtree.expression
 
 (* Build a Typedtree node for a CSP *)
@@ -58,15 +64,6 @@ val get_level  : Parsetree.attributes -> stage
    We use physical equality comparison, to speed things up
 *)
 val attr_nonexpansive : Parsetree.attribute
-
-(*
- If set, this is an assertion that a code expression is actually a literal
- function, like .<function ... -> ...>. or .<fun ... -> ...>.
- Such function literals act as first-class patterns.
- *)
-val funlit_attribute  : Parsetree.attributes -> bool
-val vallit_attribute  : Parsetree.attributes -> bool
-
 
 (* The following functions operate on untyped code_repr.
    We cannot use the type constructor 'code' here since
@@ -138,6 +135,7 @@ val sample_name        : string Location.loc
 val sample_pat_list    : Parsetree.pattern list
 val sample_pats_names  : Parsetree.pattern list * string Location.loc list
 val sample_record_repr : Types.record_representation
+val sample_attributes  : Parsetree.attributes
 
         (* Run-time quotator *)
 val dyn_quote  : Obj.t -> Longident.t Location.loc -> code_repr
@@ -153,8 +151,8 @@ val lift_constant_string : string -> code_repr
 val build_unreachable : Location.t -> code_repr
 val build_assert      : Location.t -> code_repr -> code_repr
 val build_lazy        : Location.t -> code_repr -> code_repr
-val build_bracket     : Location.t -> code_repr -> code_repr
-val build_escape      : Location.t -> code_repr -> code_repr
+val build_braesc      : Location.t -> 
+                        Parsetree.attributes -> code_repr -> code_repr
 
 val build_sequence : Location.t -> code_repr -> code_repr -> code_repr
 val build_while    : Location.t -> code_repr -> code_repr -> code_repr

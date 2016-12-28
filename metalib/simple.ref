@@ -1,12 +1,12 @@
-BER MetaOCaml toplevel, version N 102
-        OCaml version 4.02.1
+BER MetaOCaml toplevel, version N 104
+        OCaml version 4.04.0
 
 #   #       val tr1 : ('a -> int) code = .<fun x_1  -> 1>. 
 # * *   val tr1' : ('a -> 'b -> 'b) code = .<fun x_2  -> fun x_3_4  -> x_3_4>. 
 # * *   val tr2 : ('a -> int) code = .<fun x_5  -> 1>. 
 # * *     Exception:
 Failure
- "The code built at Characters 72-73:\n  let tr3 = .<fun x -> .~(let x = !. .<x>. in .<x>.)>.;;\n                  ^\n is not closed: identifier x_6 bound at Characters 72-73:\n  let tr3 = .<fun x -> .~(let x = !. .<x>. in .<x>.)>.;;\n                  ^\n is free".
+ "Characters 72-73:\n  let tr3 = .<fun x -> .~(let x = !. .<x>. in .<x>.)>.;;\n                  ^\n is not closed: identifier x_6 bound at Characters 72-73:\n  let tr3 = .<fun x -> .~(let x = !. .<x>. in .<x>.)>.;;\n                  ^\n is free".
 #   * * * * * * * * *   Error was expected
 - : unit = ()
 #   Exception:
@@ -17,13 +17,20 @@ Failure
 #   Characters 36-37:
   let tr4 = .<fun x -> .~(let x = !. x in .<x>.)>.;;
                                      ^
-Wrong level: variable bound at level 1 and used at level 0
+Error: A variable that was bound within brackets is used outside brackets
+for example: .<fun x -> .~(foo x)>.
+Hint: enclose the variable in brackets,
+as in: .<fun x -> .~(foo .<x>.)>.;;
 # * * * * *   Error was expected
 - : unit = ()
 #   val tr5 : ('a -> int) code = .<fun x_8  -> Runcode.(!.) .< 1  >.>. 
 # * *   #   val tr6 : ('a -> 'a) code = .<fun x_9  -> Runcode.(!.) .< x_9  >.>. 
 # * *   #   val tr7 : ('a code -> 'a) code = .<fun x_10  -> Runcode.(!.) x_10>. 
-# * * * * * * * * *   #     val tr8 : ('a -> 'a code) code = .<fun x_11  -> (* CSP y *)>. 
+# * * * * * * * * *   #     Characters 63-64:
+  let tr8 = .<fun x -> .~(let y = .<x>. in .<y>.)>.;;
+                                             ^
+Warning 22: The CSP value is a closure or too deep to serialize
+val tr8 : ('a -> 'a code) code = .<fun x_11  -> (* CSP y *)>. 
 # * * * * * *     val tr8r : '_a -> '_a code = <fun>
 # * * * * * * * * *     - : int code = .<x_11>.
 

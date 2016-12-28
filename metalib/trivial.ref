@@ -1,27 +1,48 @@
-BER MetaOCaml toplevel, version N 102
-        OCaml version 4.02.1
+BER MetaOCaml toplevel, version N 104
+        OCaml version 4.04.0
 
 #   #   - : int = 5
 #   val fact : int -> int = <fun>
 #   #   - : int code = .<1>. 
 #   - : string code = .<"aaa">. 
-#   #     - : int Runcode.closed_code = .<1>. 
-#     * *   - : 'a list -> 'a list = <fun>
+#   #     - : int Print_code.closed_code = .<1>. 
+#       * *   - : 'a list -> 'a list = <fun>
 #       - : ('a list -> 'a list) code = .<List.rev>. 
 #     Characters 74-75:
   .<fun x -> .~(let y = x in y)>.;;
                         ^
-Wrong level: variable bound at level 1 and used at level 0
-# * * * * *   Error was expected
+Error: A variable that was bound within brackets is used outside brackets
+for example: .<fun x -> .~(foo x)>.
+Hint: enclose the variable in brackets,
+as in: .<fun x -> .~(foo .<x>.)>.;;
+# * * * * * * *   Error was expected
 - : unit = ()
-#   Characters 18-28:
+#   Characters 20-21:
+  .<fun x -> .~(succ x)>.;;   (* From the error message *)
+                     ^
+Error: A variable that was bound within brackets is used outside brackets
+for example: .<fun x -> .~(foo x)>.
+Hint: enclose the variable in brackets,
+as in: .<fun x -> .~(foo .<x>.)>.;;
+# Error was expected
+- : unit = ()
+#   Characters 3-10:
+  .~(.<1>.);;
+    ^^^^^^^
+Error: An escape may appear only within brackets
+# * * * *   Error was expected
+- : unit = ()
+#     Characters 19-29:
   .<fun x -> 1 + .~(.<true>.)>.;;
                    ^^^^^^^^^^
 Error: This expression has type bool but an expression was expected of type
          int
 # * * * * * *   Error was expected
 - : unit = ()
-#         - : int code = .<1>. 
+#       val t : int code = .<1 + 2>. 
+# * *   #   val t : int code code = .<.< 1 + 2  >.>. 
+# * *   #       val t : int code code = .<.< 1 + 2  >.>. 
+# * *   #       - : int code = .<1>. 
 # * *   - : float code = .<1.>. 
 # * *   - : bool code = .<true>. 
 # * *   - : string code = .<"aaa">. 
@@ -32,7 +53,9 @@ Error: This expression has type bool but an expression was expected of type
 #   - : int code = .<(* CSP x *) Obj.magic 1>. 
 # * *   # - : float code = .<(* CSP x *)>. 
 # * *   # - : 'a list code = .<(* CSP x *) Obj.magic 0>. 
-# * *   #   - : (int -> int) code = .<(* CSP x *)>. 
+# * *   #   Characters 43-44:
+  Warning 22: The CSP value is a closure or too deep to serialize
+- : (int -> int) code = .<(* CSP x *)>. 
 # * * * * * *     - : ('a list -> 'a list) code = .<List.rev>. 
 # * *     - : ('a array -> int -> 'a) code = .<Array.get>. 
 # * *   - : (int -> int -> int) code = .<Pervasives.(+)>. 
@@ -59,7 +82,7 @@ Error: This expression has type 'a code
 # * *   # Characters 12-40:
   !. .<1 + .~ (.~(let x = 2 in .<.<x>.>.))>.;;
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Wrong level: escape at level 0
+Error: An escape may appear only within brackets
 # * * * * *   Error was expected
 - : unit = ()
 #   - : int code code = .<.< .~(.< 1  >.)  >.>. 
@@ -85,7 +108,8 @@ Wrong level: escape at level 0
 # * *   Characters 52-64:
   .<raise (Scan_failure "")>.;;
            ^^^^^^^^^^^^
-Error: Unbound constructor Scan_failure
+Error: This variant expression is expected to have type exn
+       The constructor Scan_failure does not belong to type exn
 # * * * * *   Error was expected
 - : unit = ()
 # - : 'a code = .<Pervasives.raise (Scanf.Scan_failure "")>. 
@@ -103,36 +127,48 @@ Error: Unbound constructor Scan_failure
 # Characters 8-13:
   .<raise Foo.E>.;;
           ^^^^^
-Exception (extension) Foo.E cannot be used within brackets. Put into a separate file.
+Error: Exception (extension) Foo.E cannot be used within brackets. Put into a separate file.
 # * * * * *   Error was expected
 - : unit = ()
 #   type foo = Bar
 # Characters 2-5:
   .<Bar>.;;
     ^^^
-Unqualified constructor Bar cannot be used within brackets. Put into a separate file.
+Error: Unqualified constructor Bar cannot be used within brackets. Put into a separate file.
 # * * * * *   Error was expected
 - : unit = ()
 #   module Foo : sig type foo = Bar end
 # Characters 2-9:
   .<Foo.Bar>.;;
     ^^^^^^^
-Constructor Bar cannot be used within brackets. Put into a separate file.
+Error: Constructor Bar cannot be used within brackets. Put into a separate file.
 # * * * * *   Error was expected
 - : unit = ()
-#       - : Complex.t code = .<{ Complex.re = 1.0; Complex.im = 2.0 }>. 
-# * *     # - : float code = .<(* CSP x *).Complex.re>. 
+#       - : Complex.t code = .<{ Complex.im = 2.0; Complex.re = 1.0 }>. 
+# * *     # Characters 44-46:
+  let x = {Complex.re = 1.0; im = 2.0} in .<x.re>.;;
+                                              ^^
+Warning 40: re was selected from type Complex.t.
+It is not visible in the current scope, and will not 
+be selected if the type becomes unknown.
+- : float code = .<(* CSP x *).Complex.re>. 
 # * * * * * * * *     - : float code = .<(* CSP x *).Complex.re>. 
-# * * *   # - : int code = .<(* CSP x *).Pervasives.contents>. 
+# * *   # - : int code = .<(* CSP x *).Pervasives.contents>. 
 # * *   # - : unit code = .<(* CSP x *).Pervasives.contents <- 2>. 
-# * * *   - : int ref = {contents = 2}
-#     # - : Complex.t code = .<{ Complex.re = 1.0; Complex.im = 2.0 }>. 
+# * *   - : int ref = {contents = 2}
+#     # - : Complex.t code = .<{ Complex.im = 2.0; Complex.re = 1.0 }>. 
 # * *   # - : float code = .<(* CSP x *).Complex.re>. 
-# * * *   #   type foo = { fool : int; }
+# * *   #   - : Complex.t code = .<{ (* CSP x *) with Complex.re = 2.0 }>. 
+# * *   #   #     Characters 57-85:
+     .<{x with re = 3.0; im = 4.0 }>.);;
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 23: all the fields are explicitly listed in this record:
+the 'with' clause is useless.
+# * * * * * *     type foo = { fool : int; }
 # Characters 3-7:
   .<{fool = 1}>.;;
      ^^^^
-Unqualified label fool cannot be used within brackets. Put into a separate file.
+Error: Unqualified label fool cannot be used within brackets. Put into a separate file.
 # * * * * *   Error was expected
 - : unit = ()
 #       - : int code = .<if true then 1 else 2>. 
@@ -141,9 +177,15 @@ Unqualified label fool cannot be used within brackets. Put into a separate file.
 # * *   - : [> `Bar of int ] code = .<`Bar 1>. 
 # * *   #     val f : < foo : 'a; .. > -> 'a code = <fun>
 # * *   val x : < foo : int > = <obj>
-# * *   - : int code = .<(* CSP x *)#foo>. 
-# * *   #     - : float code = .<Complex.norm { Complex.re = 3.0; Complex.im = 4.0 }>. 
-# * *     #   - : float code = .<Complex.norm { Complex.re = 4.0; Complex.im = 3.0 }>. 
+# * *   Characters 51-52:
+  Warning 22: The CSP value is a closure or too deep to serialize
+- : int code = .<(* CSP x *)#foo>. 
+# * *   Characters 51-52:
+  let 1 = !. (f x);;
+           ^
+Warning 22: The CSP value is a closure or too deep to serialize
+#     - : float code = .<Complex.norm { Complex.im = 4.0; Complex.re = 3.0 }>. 
+# * *     #   - : float code = .<Complex.norm { Complex.im = 3.0; Complex.re = 4.0 }>. 
 # * *     #       - : unit code = .<
 for i_1 = 1 to 5 do
   Printf.printf
@@ -264,13 +306,25 @@ Failure
  "The code built at Characters 62-63:\n  .<for i=1 to 10 do  .~(let _ = !. .<i>. in .<()>.) done>.;;\n        ^\n is not closed: identifier i_14 bound at Characters 62-63:\n  .<for i=1 to 10 do  .~(let _ = !. .<i>. in .<()>.) done>.;;\n        ^\n is free".
 # * * * * * * * * * *   Error was expected
 - : unit = ()
-#     - : unit code = .<for i_16 = 1 to 5 do Pervasives.ignore 0 done>. 
-# * *       Exception:
+#     Characters 24-67:
+  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<0>.; .<()>.) done>.; 
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 10: this expression should have type unit.
+- : unit code = .<for i_16 = 1 to 5 do Pervasives.ignore 0 done>. 
+# * *       Characters 97-140:
+  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; 
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 10: this expression should have type unit.
+Exception:
 Failure
  "Scope extrusion detected at Characters 184-199:\n                       .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                         ^^^^^^^^^^^^^^^\n for code built at Characters 101-102:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n for the identifier i_17 bound at Characters 101-102:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i>.; .<()>.) done>.; \n                             ^\n".
 # * * * *   Error was expected
 - : unit = ()
-#       Exception:
+#       Characters 51-96:
+  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; 
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Warning 10: this expression should have type unit.
+Exception:
 Failure
  "Scope extrusion detected at Characters 140-155:\n                       .<for i=1 to 5 do ignore (.~(!r)) done>.;;\n                                         ^^^^^^^^^^^^^^^\n for code built at Characters 77-80:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; \n                                                   ^^^\n for the identifier i_19 bound at Characters 55-56:\n  let r = ref .<0>. in .<for i=1 to 5 do .~(r := .<i+1>.; .<()>.) done>.; \n                             ^\n".
 #   * * * * * * * *   Error was expected
@@ -289,7 +343,7 @@ Failure
 #   - : unit -> int = <fun>
 #   #   - : (bool -> int) code = .<function | true  -> 1 | false  -> 0>. 
 # * *   #   - : (bool * 'a list -> int) code = .<fun (true ,[])  -> 1>. 
-# * *   Exception: Match_failure ("//toplevel//", 529, 6).
+# * *   Exception: Match_failure ("//toplevel//", 566, 6).
 # * *   Error was expected
 - : unit = ()
 # #   - : (bool array -> int) code = .<fun [|true ;false ;false |]  -> 1>. 
@@ -305,22 +359,38 @@ function
 # * * * * * *       #   #     #         - : (unit -> int) code = .<fun ()  -> 1>. 
 # * *   #       - : ('a -> bool) code = .<fun _  -> true>. 
 #   #   - : (int * int -> int) code = .<fun (x_42,y_43)  -> x_42 + y_43>. 
-# * *   # - : (int option -> int) code = .<
+# * *   # Characters 11-24:
+  .<function (Some x) as y -> x | _ ->  2>.;;
+             ^^^^^^^^^^^^^
+Warning 26: unused variable y.
+- : (int option -> int) code = .<
 function | Some x_46 as y_47 -> x_46 | _ -> 2>. 
-# * *   # # - : (int list -> int) code = .<
+# * *   Characters 108-121:
+  let 1 = (!. .<function (Some x) as y -> x | _ ->  2>.) (Some 1);;
+                         ^^^^^^^^^^^^^
+Warning 26: unused variable y.
+# Characters 23-36:
+  let 2 = (!. .<function (Some x) as y -> x | _ ->  2>.) None;;
+                         ^^^^^^^^^^^^^
+Warning 26: unused variable y.
+# - : (int list -> int) code = .<
 function
 | x_52::y_53::z_54::[] -> (x_52 - y_53) + z_54
 | x_55::y_56::[] -> x_55 - y_56>. 
 # * * * * *   #     - : (int list -> int) code = .<
 fun (x_62::y_63::[]|x_62::y_63::_::[])  -> x_62 - y_63>. 
-# * * *   # # Exception: Match_failure ("//toplevel//", 593, -90).
+# * * *   # # Exception: Match_failure ("//toplevel//", 630, -90).
 #   Error was expected
 - : unit = ()
 #   - : (int list -> int) code = .<
 fun (x_70::y_71::[]|x_70::y_71::_::[]|y_71::x_70::_::_::[])  -> x_70 - y_71>. 
 # * * *   # # #   - : ([< `E of 'a | `F of 'a | `G of 'a ] -> 'a) code = .<
 function | `F x_78|`G x_78 -> x_78 | `E x_79 -> x_79>. 
-# * * *   # # - : (Complex.t -> float) code = .<
+# * * *   # # Characters 25-37:
+  .<function {re=x} -> x | {im=x; re=y} -> x -. y>.;;
+                           ^^^^^^^^^^^^
+Warning 11: this match case is unused.
+- : (Complex.t -> float) code = .<
 function
 | { Complex.re = x_82 } -> x_82
 | { Complex.re = y_83; Complex.im = x_84 } -> x_84 -. y_83>. 
@@ -382,52 +452,81 @@ fun x_144  ->
       (fun x_145  -> Pervasives.string_of_int x_145)
   with | Scanf.Scan_failure x_146 -> "fail " ^ x_146>.
 
-# * * * * * *       #   #       - : int code = .<let x_153 = 1 in x_153>. 
-# * *     # - : int code = .<let x_155 = 1 in let x_156 = x_155 + 1 in x_156>. 
+# * * * * * *       #   #       - : int code = .<let x_153 = 1  in x_153>. 
+# * *     # - : int code = .<let x_155 = 1  in let x_156 = x_155 + 1  in x_156>. 
 # * *     # - : int code = .<
-let rec f_159 n_160 = if n_160 = 0 then 1 else n_160 * (f_159 (n_160 - 1)) in
+let rec f_159 n_160 = if n_160 = 0 then 1 else n_160 * (f_159 (n_160 - 1))
+   in
 f_159 5>. 
-# * * *     #       - : int code = .<
-let f_164 x_163 = x_163 in
-let rec f_165 n_166 = if n_166 = 0 then 1 else n_166 * (f_165 (n_166 - 1)) in
+# * * *     #       Characters 50-51:
+  .<let f = fun x -> x in 
+        ^
+Warning 26: unused variable f.
+- : int code = .<
+let f_164 x_163 = x_163  in
+let rec f_165 n_166 = if n_166 = 0 then 1 else n_166 * (f_165 (n_166 - 1))
+   in
 f_165 5>. 
-# * * * * * * * * *       #     - : int code = .<
-let f_172 x_171 = x_171 in
-let f_174 n_173 = if n_173 = 0 then 1 else n_173 * (f_172 (n_173 - 1)) in
+# * * * * * * * * *       Characters 236-237:
+  let 120 = !. .<let f = fun x -> x in 
+                     ^
+Warning 26: unused variable f.
+#     - : int code = .<
+let f_172 x_171 = x_171  in
+let f_174 n_173 = if n_173 = 0 then 1 else n_173 * (f_172 (n_173 - 1))  in
 f_174 5>. 
 # * * * *     #       - : (int * int) code = .<
-let g_180 x_179 = x_179 + 10 in
+let g_180 x_179 = x_179 + 10  in
 let f_181 x_184 = (g_180 x_184) + 20
-and g_182 n_183 = if n_183 = 0 then 1 else n_183 * (g_180 (n_183 - 1)) in
-((f_181 5), (g_182 5))>. 
-#   * * * * * *       #       - : (int * int) code = .<
-let g_192 x_191 = x_191 + 10 in
+
+and g_182 n_183 = if n_183 = 0 then 1 else n_183 * (g_180 (n_183 - 1))
+ in ((f_181 5), (g_182 5))>. 
+#   * * * * * *       #       Characters 7-8:
+  .<let g = fun x -> x+10 in
+        ^
+Warning 26: unused variable g.
+- : (int * int) code = .<
+let g_192 x_191 = x_191 + 10  in
 let rec f_193 x_196 = (g_194 x_196) + 20
-and g_194 n_195 = if n_195 = 0 then 1 else n_195 * (g_194 (n_195 - 1)) in
-((f_193 5), (g_194 5))>. 
-#   * * * * * * * * * *           #     * * * * *   Characters 11-13:
-  .<let rec [] = [] in []>.
+
+and g_194 n_195 = if n_195 = 0 then 1 else n_195 * (g_194 (n_195 - 1))
+ in ((f_193 5), (g_194 5))>. 
+#   * * * * * * * * * *           Characters 304-305:
+   !. .<let g = fun x -> x+10 in
+            ^
+Warning 26: unused variable g.
+#   Characters 11-13:
+  .<let rec [] = [] in []>.;;
             ^^
-Only variables are allowed as left-hand side of `let rec'
-#     * * * * *   Characters 11-16:
-  .<let rec f = f in f>.
-            ^^^^^
-Recursive let binding must be to a function
+Error: Only variables are allowed as left-hand side of `let rec'
+# * * * * *   Error was expected
+- : unit = ()
+#   Characters 3-16:
+  .<let rec f = f in f>.;;
+    ^^^^^^^^^^^^^
+Error: Recursive let binding must be to a function
+# * * * * *   Error was expected
+- : unit = ()
 #       - : (int -> bool) code = .<
 fun x_203  ->
   let rec even_204 = function | 0 -> true | x_207 -> odd_205 (x_207 - 1)
-  and odd_205 = function | 0 -> false | x_206 -> even_204 (x_206 - 1) in
-  even_204 x_203>.
+  
+  and odd_205 = function | 0 -> false | x_206 -> even_204 (x_206 - 1)
+   in even_204 x_203>.
 
 # * * * * * *   # #       - : int code = .<let x_218 = 1
-                 and y_219 = 2 in x_218 + y_219>. 
+                 
+                 and y_219 = 2
+                  in x_218 + y_219>. 
 # * *   #   - : int code = .<
-let x_222 = 1 in let x_223 = x_222 + 1
-                 and y_224 = x_222 + 1 in x_223 + y_224>.
+let x_222 = 1  in
+let x_223 = x_222 + 1
 
+and y_224 = x_222 + 1
+ in x_223 + y_224>. 
 # * * *   # - : (int option -> int) code = .<
-fun x_228  -> let Some x_229 = x_228 in x_229 + 1>. 
-# * * * * * * * * *   # Exception: Match_failure ("//toplevel//", 834, -265).
+fun x_228  -> let Some x_229 = x_228  in x_229 + 1>. 
+# * * * * * * * * *   # Exception: Match_failure ("//toplevel//", 869, -265).
 # * *   Error was expected
 - : unit = ()
 #         - : int code = .<1>. 

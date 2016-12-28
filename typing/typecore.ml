@@ -2048,7 +2048,7 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
 (* Type checking staging constructs *)
 (* If we are type-checking bracket at level 0, don't build the
    bracket Texp node. Rather, invoke trx_bracket to translate 
-   the bracket body and convert it to the c ode generator.
+   the bracket body and convert it to the code generator.
 *)
 and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   let loc = sexp.pexp_loc in
@@ -2063,7 +2063,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
            a functional literal. Check it, and if so, give it a more
            refined type: pat_code
          *)
-  | Bracket(battr,attrs) when funlit_attribute sexp.pexp_attributes ->
+  | FunBracket(battrs,attrs) ->
      let literal_fn = 
        (* If there are other staging attributes _underneath_, 
           the quoted expression
@@ -2102,7 +2102,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         {exp with exp_type = instance env ty_expected;
                   exp_attributes = attr_nonexpansive :: exp.exp_attributes}
       else
-        texp_braesc battr exp env (instance env ty_expected)
+        texp_braesc battrs exp env (instance env ty_expected)
 
         (* the programmer asserts that the bracketed expression represents
            a value in the generated code. When such an expression is
@@ -2111,7 +2111,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
            Check this assertion, and if so, give it a more refined type: 
            val_code
          *)
-  | Bracket(battr,attrs) when vallit_attribute sexp.pexp_attributes ->
+  | ValBracket(battrs,attrs) ->
                 (* drop bracket attr *)
      let sexp1 = {sexp with pexp_attributes = attrs} in
      let () = if not (Trx.is_value_exp 0 sexp1) then 
@@ -2138,9 +2138,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         {exp with exp_type = instance env ty_expected;
                   exp_attributes = attr_nonexpansive :: exp.exp_attributes}
       else
-        texp_braesc battr exp env (instance env ty_expected)
+        texp_braesc battrs exp env (instance env ty_expected)
 
-  | Bracket(battr,attrs) ->
+  | Bracket(battrs,attrs) ->
        (* Typechecking bracket *)
        (* follow Pexp_array or Pexp_lazy as a template *)
        (* Expected type: ty code where ty is the type
@@ -2164,7 +2164,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                     if nonexp then attr_nonexpansive :: exp.exp_attributes
                               else exp.exp_attributes}
       else
-        texp_braesc battr exp env (instance env ty_expected)
+        texp_braesc battrs exp env (instance env ty_expected)
 
        (* NNN:  Typechecking escapes *)
        (* If ~e is expected to have the type ty then
@@ -2176,12 +2176,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
        let sexp = {sexp with pexp_attributes = attrs} in (* drop bracket attr *)
        let exp = type_expect env sexp sexp_ty_expected in
        re @@
-         texp_braesc battr exp env (instance env ty_expected))
+         texp_braesc [battr] exp env (instance env ty_expected))
 
        (* There is nothing special in type-checking CSPs.
           After lifting, a CSP value becomes an ordinary expression.
         *)
-  | _ -> type_expect_orig ?in_function ~recarg env sexp ty_expected
+  | CSP _ -> type_expect_orig ?in_function ~recarg env sexp ty_expected
   (* NNN end *)
 
 and type_expect_orig ?in_function ~recarg env sexp ty_expected =  (* NNN *)

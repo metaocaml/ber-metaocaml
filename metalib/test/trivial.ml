@@ -14,8 +14,9 @@ let 120 = fact 5;;
 let 1 = !. .<1>.;;
 (* - : int = 1 *)
 
-close_code .<1>.;;
+Print_code.close_code .<1>.;;
 (* - : int Runcode.closed_code = .<1>.  *)
+
 
 (* Problem with special treatment of top-level identifiers by the
    type checker
@@ -60,6 +61,27 @@ Error: This expression has type bool but an expression was expected of type
 *)
 print_endline "Error was expected";;
 
+
+(* attributes *)
+let t = (1 + 2) [@metaocaml.bracket];;
+(*
+val t : int code = .<1 + 2>. 
+*)
+let 3 = run t;;
+
+let t = (1 + 2) [@metaocaml.bracket] [@metaocaml.bracket];;
+(*
+val t : int code code = .<.< 1 + 2  >.>. 
+*)
+let 3 = run @@ run t;;
+
+let t = (1 + 2) 
+  [@metaocaml.bracket] [@metaocaml.escape] 
+  [@metaocaml.bracket] [@metaocaml.bracket];;
+(*
+ val t : int code code = .<.< 1 + 2  >.>. 
+*)
+let 3 = run @@ run t;;
 
 (* CSP *)
 
@@ -1085,7 +1107,7 @@ let (140,120) =
   let rec f = fun x -> g x + 20
   and g = fun n -> if n = 0 then 1 else n * g (n-1) in (f 5,g 5)>.;;
 
-.<let rec [] = [] in []>.
+.<let rec [] = [] in []>.;;
 (*
 Characters 10-12:
   .<let rec [] = [] in []>.;;
@@ -1094,7 +1116,7 @@ Only variables are allowed as left-hand side of `let rec'
 *)
 print_endline "Error was expected";;
 
-.<let rec f = f in f>.
+.<let rec f = f in f>.;;
 (*
 Characters 10-15:
   .<let rec f = f in f>.;;

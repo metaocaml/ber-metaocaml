@@ -140,6 +140,46 @@ let _ = .<(.<1+1>.,2)>.
 *)
 ;;
 
+let _ = .<(.<1+1>.,2)>.
+  [@metaocaml.functionliteral]
+  [@metaocaml.value]
+;;
+(*
+  Characters 8-23:
+  let _ = .<(.<1+1>.,2)>.
+          ^^^^^^^^^^^^^^^
+Error: bracket is followed by inconsistent metaocaml attributes
+*)
+print_endline "Error was expected";;
+
+let _ = (.<1+1>.,2)
+  [@metaocaml.value]
+;;
+(*
+Characters 24-39:
+    [@metaocaml.value]
+      ^^^^^^^^^^^^^^^
+Error: attribute metaocaml.value is misplaced. It must follow the closing bracket
+*)
+print_endline "Error was expected";;
+
+let _ = (.<1>. [@metaocaml.value],2);;
+(*
+- : int Trx.val_code * int = (<abstr>, 2)
+*)
+
+let t = .<(.<1>. [@metaocaml.value],2)>.
+(*
+val t : (int Trx.val_code * int) code = .<
+  (.< ((1)[@metaocaml.value ])  >., 2)>. 
+*)
+let t1 = run t;;
+(*
+val t1 : int Trx.val_code * int = (<abstr>, 2)
+*)
+let 1 = run (Print_code.code_of_val_code @@ fst t1);;
+
+
 (*
 let _ = .<.~(.<1>.)>.
   [@metaocaml.value]

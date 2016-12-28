@@ -39,7 +39,7 @@ let power7 : int -> int =
 
 (* But the following does. It is the explicit version of the above *)
 let power7 : int -> int = 
-  Runcode.run_bytecode (Runcode.close_code 
+  Runcode.run_bytecode (Print_code.close_code 
                .<fun x -> .~(Printf.printf "power\n"; power 7 .<x>.)>.);;
 (* "power" printed once *)
 let (128, 2187) = (power7 2, power7 3);;

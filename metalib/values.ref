@@ -40,7 +40,23 @@ Error: The expression does not appear to be syntactically a value as requested
 # * * * * *   Error was expected
 - : unit = ()
 #         * *   - : (int code * int) Trx.val_code = <abstr>
-#   * * *   #   
+#         Characters 9-24:
+  let _ = .<(.<1+1>.,2)>.
+          ^^^^^^^^^^^^^^^
+Error: bracket is followed by inconsistent metaocaml attributes
+# * * * * *   Error was expected
+- : unit = ()
+#       Characters 25-40:
+    [@metaocaml.value]
+      ^^^^^^^^^^^^^^^
+Error: attribute metaocaml.value is misplaced. It must follow the closing bracket
+# * * * * *   Error was expected
+- : unit = ()
+#   - : int Trx.val_code * int = (<abstr>, 2)
+# * *       * * *   val t : (int Trx.val_code * int) code = .<
+  (.< ((1)[@metaocaml.value ])  >., 2)>. 
+val t1 : int Trx.val_code * int = (<abstr>, 2)
+# * *   #     * * *   #   
 All done
 
 - : unit = ()

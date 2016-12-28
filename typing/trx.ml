@@ -110,6 +110,39 @@ completely re-written from scratch and has many comments. The
 traversal algorithm, the way of compiling Parsetree builders, dealing
     with CSP and many other algorithms are all different.
 
+Special sorts of brackets
+
+MetaOCaml brackets .<e>. (as well as escapes .~e and CSP expressions)
+are internally represented as ordinary OCaml expressions annotated
+with metaocaml.bracket and metaocaml.escape. That is,
+.<e>. is just the syntactic sugar for e [@metaocaml.bracket].
+An expreession may have several MetaOCaml attributes, corresponding to
+nested brackets and escapes.
+
+Besides metaocaml.bracket, there are other two other bracket-related
+attributes. They are meant to be attached to a bracket expression. It is
+an error to use them otherwise. The attributes, together with the bracket
+expression they are attached to, may be regarded as a special sort
+of bracket. Currently we provide no syntax sure for those `special' brackets
+(to be less disruptive of baseline OCaml syntax). Only one of the following
+two bracket-modifying attributes may be attached to a bracket.
+
+The first bracket-modifying attribute is metaocaml.functionliteral.
+It is an assertion that the bracketed expression is actually a literal
+function, like .<function ... -> ...>. or .<fun ... -> ...>.
+Such function literals act as first-class patterns. 
+The type-checker checks to see  if the bracketed expression is really
+the function literal, and if so, gives it a more refined type: pat_code
+See make_match.
+
+The other bracket-modifying attribute is metaocaml.value.
+It is also an assertion that a bracketed expression actually
+represents a value, like a constant, variable reference, constant tuple, etc.
+The type-checker checks the assertion. If holds, gives the bracketed 
+expression a more refined type: val_code
+For more detail, see the section on let-insertion below.
+
+
 Let-insertion
 
 Since we are already tracking free variables, we may just as well implement
@@ -210,20 +243,18 @@ let initial_env = Env.initial_safe_string
    the corresponding nodes. 
 *)
 
-let attr_bracket = (Location.mknoloc "metaocaml.bracket",PStr [])
-
-let attr_escape = (Location.mknoloc "metaocaml.escape",PStr [])
-
 let rec get_attr : string -> attributes -> Parsetree.structure option =
   fun name -> function
     | [] -> None
     | ({txt = n}, PStr str) :: _ when n = name -> Some str
     | _ :: t -> get_attr name t
 
+(*
 let rec is_attr : string -> Parsetree.attributes -> bool = 
  fun name -> function
   | [] -> false
   | ({txt = n},_) :: t -> n = name || is_attr name t
+*)
 
 let attr_csp : Longident.t loc -> attribute = fun lid ->
   (Location.mknoloc "metaocaml.csp",PStr [
@@ -235,43 +266,64 @@ let attr_csp : Longident.t loc -> attribute = fun lid ->
 let attr_nonexpansive : attribute = 
   (Location.mknoloc "metaocaml.nonexpansive",PStr [])
 
-(*
- If set, this is an assertion that a code expression is actually a literal
- function, like .<function ... -> ...>. or .<fun ... -> ...>.
- Such function literals act as first-class patterns.
- *)
-let attr_funlit_name = "metaocaml.functionliteral"
-let funlit_attribute : Parsetree.attributes -> bool = is_attr attr_funlit_name
 
-(*
- If set, this is an assertion that a code expression actually
- represents a value, like a constant, variable reference, constant tuple, etc.
- *)
-let attr_vallit_name = "metaocaml.value"
-let vallit_attribute : Parsetree.attributes -> bool = is_attr attr_vallit_name
-
-  
 (* The result of what_stage_attr *)
 type stage_attr_elim = 
   | Stage0
-  | Bracket of attribute * (* bracket attribute *)
-               attributes  (* other attributes  *)
+  | Bracket of attributes * (* bracket attribute *)
+               attributes   (* other attributes  *)
+  | FunBracket 
+            of attributes * (* Literal function bracket attribute *)
+               attributes   (* other attributes  *)
+  | ValBracket 
+            of attributes * (* Value bracket attribute *)
+               attributes   (* other attributes  *)
   | Escape  of attribute * (* escape attribute *)
                attributes  (* other attributes  *)
   | CSP     of attribute * Longident.t loc * (* CSP attribute and lid *)
                attributes  (* other attributes  *)
 
 (* Determining if an AST node bears a staging attribute *)
+(* FunBracket is the metaocaml.bracket followed by metaocaml.functionliteral
+   And similar for metaocaml.value *)
 let what_stage_attr : attributes -> stage_attr_elim =
   let rec loop acc = function
     | [] -> Stage0
-    | (({txt = "metaocaml.bracket"},_) as a) :: t -> 
-        Bracket (a,acc @ t)
+    | ({txt = ("metaocaml.functionliteral")} as l,_) :: _
+    | ({txt = ("metaocaml.value")} as l,_) :: _ -> 
+        trx_error @@ Location.errorf ~loc:l.loc 
+         "attribute %s is misplaced. It must follow the closing bracket"
+         l.txt
+    | (({txt = "metaocaml.bracket"},_) as ab) :: t -> 
+        (* Now check if any modifier attribute is to follow *)
+        let rec get_specials specials acc = function 
+          | ([] as rest)
+          | ((({txt = "metaocaml.bracket"},_) :: _) as rest)
+          | ((({txt = "metaocaml.escape"},_) :: _) as rest) -> 
+              (specials,List.rev_append acc rest)
+          | (({txt = "metaocaml.functionliteral"},_) as a) :: t -> 
+            get_specials (a::specials) acc t
+          | (({txt = "metaocaml.value"},_) as a) :: t -> 
+            get_specials (a::specials) acc t
+          | a :: t -> get_specials specials (a::acc) t
+        in
+        let (specials, rest) = get_specials [] acc t in
+        begin
+          match specials with
+          | [] -> Bracket ([ab],rest)  (* no special attributes *)
+          | [({txt = "metaocaml.functionliteral"},_)] ->
+              FunBracket (ab::specials,rest)
+          | [({txt = "metaocaml.value"},_)] ->
+              ValBracket (ab::specials,rest)
+          | _ -> 
+              trx_error @@ Location.errorf ~loc:(fst ab).loc 
+                  "bracket is followed by inconsistent metaocaml attributes"
+        end
     | (({txt = "metaocaml.escape"},_) as a) :: t -> 
-        Escape (a,acc @ t)
+        Escape (a,List.rev_append acc t)
     | (({txt = "metaocaml.csp"},PStr [{pstr_desc = 
             Pstr_eval ({pexp_desc=Pexp_ident lid},_)}]) as a) :: t -> 
-        CSP (a,lid,acc @ t)
+        CSP (a,lid,List.rev_append acc t)
     | a :: t -> loop (a::acc) t
   in loop []
 
@@ -508,6 +560,9 @@ let sample_lid = dummy_lid "*sample*"
 (* Exported. Used as a template for constructing name expression *)
 let sample_name : string loc = mknoloc "*sample*"
 
+(* Exported. Used as a template for constructing brackets and escapes *)
+let sample_attributes  : Parsetree.attributes = []
+
 (* Exported. Used as a template for constructing pattern lists expressions *)
 let sample_pat_list : Parsetree.pattern list = []
 let sample_pats_names : Parsetree.pattern list * string loc list = ([],[])
@@ -547,10 +602,10 @@ let texp_zero = (* TExp node for constant 0 *)
   texp_int 0
 
 let texp_braesc : 
-  attribute -> Typedtree.expression -> Env.t -> type_expr -> 
+  attributes -> Typedtree.expression -> Env.t -> type_expr -> 
   Typedtree.expression =
-  fun attr exp env ty ->
-    mk_texp ~env ~attrs:(attr :: exp.exp_attributes)
+  fun attrs exp env ty ->
+    mk_texp ~env ~attrs:(attrs @ exp.exp_attributes)
             ~loc:exp.exp_loc (Texp_sequence (texp_zero, exp)) ty
 
 
@@ -656,6 +711,12 @@ let texp_string_loc : string loc -> Typedtree.expression = fun name ->
   let name_exp = texp_ident "Trx.sample_name" in
   {name_exp with
    exp_desc = (texp_csp (Obj.repr name)).exp_desc}
+
+(* Compiling a list of attributes *)
+let texp_attributes : attributes -> Typedtree.expression = fun attrs ->
+  let attrs_exp = texp_ident "Trx.sample_attributes" in
+  {attrs_exp with
+   exp_desc = (texp_csp (Obj.repr attrs)).exp_desc}
 
 (* Compiling an option *)
 (* For prototype, see Typecore.option_none *)
@@ -1080,14 +1141,11 @@ Texp_record must be sorted, in their declared order!
 let build_lazy : Location.t -> code_repr -> code_repr = 
   code_wrapper @@
     fun loc e -> Ast_helper.Exp.lazy_ ~loc e
-let build_bracket : Location.t -> code_repr -> code_repr = 
-  code_wrapper @@
-    fun _ e -> {e with pexp_attributes = 
-                   attr_bracket :: e.pexp_attributes }
-let build_escape : Location.t -> code_repr -> code_repr = 
-  code_wrapper @@
-    fun _ e -> {e with pexp_attributes = 
-                        attr_escape :: e.pexp_attributes}
+let build_braesc : Location.t -> attributes -> code_repr -> code_repr = 
+  fun l attrs exp ->
+  code_wrapper
+    (fun _ e -> {e with pexp_attributes = 
+                   attrs @ e.pexp_attributes }) l exp
 
 let build_sequence : Location.t -> code_repr -> code_repr -> code_repr = 
   fun loc e1 e2 -> 
@@ -1899,18 +1957,22 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
   | Stage0 -> trx_bracket_ n exp
         (* see texp_braesc for the representation of brackets and escapes
            in the Typedtree *)
-  | Bracket(_,attrs) -> 
+  | Bracket(battrs,attrs)
+  | FunBracket(battrs,attrs)
+  | ValBracket(battrs,attrs) -> 
   begin
     match exp.exp_desc with
     | Texp_sequence (_,exp) ->
       {exp with exp_type = wrap_ty_in_code n exp.exp_type;
                 exp_attributes = attrs;
                 exp_desc =
-                 texp_apply (texp_ident "Trx.build_bracket")
-                   [texp_loc exp.exp_loc; trx_bracket (n+1) exp]}
+                 texp_apply (texp_ident "Trx.build_braesc")
+                   [texp_loc exp.exp_loc; 
+                    texp_attributes battrs;
+                    trx_bracket (n+1) exp]}
     | _ -> assert false   (* corrupted representation of bracket *)
   end
-  | Escape(_,attrs) -> 
+  | Escape(ea,attrs) -> 
   begin
     match exp.exp_desc with
     | Texp_sequence (_,exp) ->
@@ -1919,8 +1981,10 @@ let rec trx_bracket : int -> expression -> expression = fun n exp ->
         {exp with 
           exp_type = wrap_ty_in_code n exp.exp_type;
           exp_attributes = attrs;
-          exp_desc = texp_apply (texp_ident "Trx.build_escape")
-                      [texp_loc exp.exp_loc; trx_bracket (n-1) exp]}
+          exp_desc = texp_apply (texp_ident "Trx.build_braesc")
+                      [texp_loc exp.exp_loc; 
+                       texp_attributes [ea];
+                       trx_bracket (n-1) exp]}
     | _ -> assert false   (* corrupted representation of escape *)
   end
   | CSP(_,li,attrs) -> (* For CSP, we only need to propagate the CSP attr *)
