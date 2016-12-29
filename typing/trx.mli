@@ -122,6 +122,9 @@ val set_with_stack_mark : stackmark_region_fn -> unit
 val make_match   : code_repr -> code_repr list -> code_repr
 val is_value_exp : stage -> Parsetree.expression -> bool
 
+(* let-insertion (internal version) *)
+val genlet : code_repr -> code_repr
+
 (* The following names are used by Trx itself to construct a Parsetree
    or as templates to build the Typedtree.
    Trx may generate code the refers to the functions below.

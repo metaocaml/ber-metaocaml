@@ -114,32 +114,33 @@ Special sorts of brackets
 
 MetaOCaml brackets .<e>. (as well as escapes .~e and CSP expressions)
 are internally represented as ordinary OCaml expressions annotated
-with metaocaml.bracket and metaocaml.escape. That is,
+with the attributes metaocaml.bracket (corr. metaocaml.escape). That is,
 .<e>. is just the syntactic sugar for e [@metaocaml.bracket].
 An expreession may have several MetaOCaml attributes, corresponding to
 nested brackets and escapes.
 
-Besides metaocaml.bracket, there are other two other bracket-related
-attributes. They are meant to be attached to a bracket expression. It is
-an error to use them otherwise. The attributes, together with the bracket
-expression they are attached to, may be regarded as a special sort
-of bracket. Currently we provide no syntax sure for those `special' brackets
-(to be less disruptive of baseline OCaml syntax). Only one of the following
-two bracket-modifying attributes may be attached to a bracket.
+Besides metaocaml.bracket, there are two other bracket-related
+attributes. They are meant to be attached to a bracket expression; it
+is an error to use them otherwise. The attributes, together with the
+bracket expression they are attached to, may be regarded as a special
+sort of bracket. Currently we provide no syntax sugar for these
+`special' brackets (to be less disruptive of the baseline OCaml
+syntax). Only one of the following bracket-modifying attributes may be
+attached to a bracket.
 
 The first bracket-modifying attribute is metaocaml.functionliteral.
 It is an assertion that the bracketed expression is actually a literal
-function, like .<function ... -> ...>. or .<fun ... -> ...>.
-Such function literals act as first-class patterns. 
-The type-checker checks to see  if the bracketed expression is really
-the function literal, and if so, gives it a more refined type: pat_code
-See make_match.
+function, like .<function p1 -> e1 | ... pn -> en>. or .<fun p -> e>.
+Such function literals act as first-class patterns.  The type-checker
+checks that the bracketed expression is really the function literal,
+and if so, gives it a more refined type: pat_code.  See make_match for
+more detail.
 
 The other bracket-modifying attribute is metaocaml.value.
 It is also an assertion that a bracketed expression actually
-represents a value, like a constant, variable reference, constant tuple, etc.
-The type-checker checks the assertion. If holds, gives the bracketed 
-expression a more refined type: val_code
+represents a value: a constant, variable reference, constant tuple, etc.
+If this is indeed the case, the typechecker gives the bracketed 
+expression a more refined type: val_code. Otherwise, an error is reported.
 For more detail, see the section on let-insertion below.
 
 
@@ -149,15 +150,14 @@ Since we are already tracking free variables, we may just as well implement
 let-insertion, the primitive genlet.
 
 First, we introduce the type 'a val_code, which is a sort of `subtype'
-of 'a code, representing a code expression that is syntactically a value
+of 'a code. It represents a code expression that is syntactically a value
 (such as an identifier reference, a constant, a lambda-expression).
 Code values of 'a val_code type can be freely spliced as many times as
-needed without the concern about duplicating effects or evaluation order.
-One can now code-generator-functions that take arguments of 'a val_code
-type, which behave as call-by-value functions even if staging annotations are
+needed without worrying about duplicating effects or evaluation order.
+We now can write code-generator-functions that take arguments of 'a val_code
+type, which behave as call-by-value functions when the staging annotations are
 erased. One can always convert val_code to code, using
       code_of_val_code : 'a val_code -> 'a code
-
 
 One way of producing 'a val_code values is using brackets with
 metaocaml.value attribute, as in
@@ -166,13 +166,13 @@ metaocaml.value attribute, as in
   (whose inferred type is: int code -> (int * (int -> int)) val_code)
 
 If the annotated bracketed expression is not actually a value, syntactically,
-a type error is rased. Another way is using
+a type error is rased. Another way of producing 'a val_code is by
    genlet : 'a code -> 'a val_code
 
-This function first checks that its argument is already a future-stage
-value. If so, it is returned as it is, but of the val_code type.
+This function first checks that its argument is already a (future-stage)
+value. If so, it is returned as it is, but of the 'a val_code type.
 If the argument is not syntactically a value, genlet generates 
-the let-statement, binding the 'a code expression to a fresh future-stage
+the let-statement, binding the argument to a fresh future-stage
 variable and returning the code that refers to that variable. 
 Variable references are clearly values.
 That is, genlet exp inserts let freshname = exp in ... somewhere
@@ -180,19 +180,32 @@ in the generated code and returns .<freshname>.
 The `let' is inserted right under the binder for the `latest' free variable
 contained in `exp'.
 
-Normally we use delimited control for let-insertion. In this code, we implement
-a buble-up semantics. We have already annotated generated code with
-the list (heap) of free variables cointained therein. We add another annotation:
-the set (list) of (varname_i,exp_i) pairs describing (to be) let-bound variables
-and the expressions they are to be bound. Each binder 
-(build_fun_simple, etc) will check if
-one of exp_i contains the free variable bound by the binder. If so,
-the let-statement will be generated. Each (varname_i,exp_i) pair is independent
-so the order in the list is in material. 
+Let-insertion is an instance of delimited control. Rather than using
+delimcc or other such library, we implement a sort of a buble-up
+semantics.  We have already annotated generated code with the list
+(heap) of free variables cointained therein. We add another
+annotation: the set (list) of (varname_i,exp_i) pairs describing (to
+be) let-bound variables and the expressions they are to be bound. Each
+binder (build_fun_simple, etc) will check if one of exp_i contains the
+free variable bound by the binder. If so, the let-statement will be
+generated. Each (varname_i,exp_i) pair is independent so the order in
+the list is immaterial.
+
+Thus the (potentially open) code is represented as a triple
+  heap * [(var_i, exp_i)...] * exp
+Here heap is the list (heap, actually) of free variables of the overall
+expression, that is, of exp as well as of all exp_i.
+
+The last two components can be thought of as a virtual `let' statement
+    let var_1 = exp_1 and ... var_i = exp_i in exp
+The exp may have free occurrences of var_i, which are however bound
+by the virtual let and therefore are not counted as free variables of
+the overall expression and are not reflected in heap.
 
 Keep in mind however that exp_i may itself contain the list of
 (varname_j,exp_j). Such a situation arises from nested genlet. Therefore,
-we need to generate inner let-statement before the outer one.
+we need to generate inner let-statement before the outer one. Such nesting
+represents the dependency among let-bindings.
 
 *)
 
@@ -869,17 +882,18 @@ let set_with_stack_mark : stackmark_region_fn -> unit =
 *)
 type prio = int
 type 'v heap = Nil | HNode of prio * stackmark * 'v * 'v heap * 'v heap
-let empty = Nil
+let empty_heap = Nil
 
-let rec merge : 'v heap -> 'v heap -> 'v heap = fun h1 h2 ->
+let rec merge_heap : 'v heap -> 'v heap -> 'v heap = fun h1 h2 ->
   match (h1,h2) with
   | (Nil,h) | (h,Nil)-> h
   | (HNode (p1,k1,v1,l1,r1), HNode (p2,k2,v2,l2,r2)) ->
       begin
         match p1 - p2 with
-        | 0 -> HNode (p1,k1,v1, merge l1 l2, merge r1 r2) (* same keys *)
-        | n when n < 0 -> HNode (p2,k2,v2, merge h1 l2, r2)
-        | _ -> HNode (p1,k1,v1,l1,merge h2 r1)
+        | 0 -> 
+            HNode (p1,k1,v1, merge_heap l1 l2, merge_heap r1 r2) (* same keys *)
+        | n when n < 0 -> HNode (p2,k2,v2, merge_heap h1 l2, r2)
+        | _ -> HNode (p1,k1,v1,l1,merge_heap h2 r1)
       end
 
 (* Remove the node with a given priority *)
@@ -888,16 +902,61 @@ let rec remove : prio -> 'v heap -> 'v heap = fun p -> function
   | HNode (pn,k,v,h1,h2) as h -> 
       begin
         match p - pn with
-        | 0 -> merge h1 h2              (* p cannot occur in h1 or h2 *)
+        | 0 -> merge_heap h1 h2         (* p cannot occur in h1 or h2 *)
         | n when n > 0 -> h             (* entire tree has the lower prio *)
         | _ -> HNode (pn,k,v, remove p h1, remove p h2)
       end
 
-(* The representation of the possibly open code: AST plus the
-   set of free identifiers, annotated with the marks
+(* Quickly check to see if the heap has a node with the given priority.
+   We rely on the heap invariant to avoid the full heap traversal
+ *)
+let rec member_heap : prio -> 'v heap -> bool = fun p -> function
+  | Nil -> false
+  | HNode (pn,k,v,h1,h2) -> 
+      begin
+        match p - pn with
+        | 0            -> true
+        | n when n > 0 -> false             (* entire tree has the lower prio *)
+        | _ -> member_heap p h1 || member_heap p h2
+      end
+
+(* Check to see if the heap has a value that satisfies a given predicate *)
+let rec any_heap : ('v -> bool) -> 'v heap -> bool = fun pred -> function
+  | Nil -> false
+  | HNode (_,_,v,l,r) -> pred v || any_heap pred l || any_heap pred r
+
+
+(* The representation of the possibly open code: AST plus virtual
+   lety-bindings plus the set of free identifiers, annotated with the marks
    of the corresponding with_binding_region forms
 *)
-type code_repr = Code of string loc heap * Parsetree.expression
+type code_repr = 
+  Code of flvars * Parsetree.expression
+and flvars =                 (* virtually let-bound and free vars *)
+  string loc heap * vletbindings
+and
+  vletbindings = (string * code_repr) list
+
+let empty : flvars = (empty_heap, [])
+
+let merge : flvars -> flvars -> flvars = fun (h1,vl1) (h2,vl2) ->
+  (merge_heap h1 h2, vl1 @ vl2)
+
+(* Actualize all virtual let-bindings. Except for the let-bound variables
+   (which are not reflected in the heap), there should be no other free
+   variables. This function is called upon conversion to closed code.
+ *)
+let vlet_bind_all : 
+  vletbindings -> Parsetree.expression -> Parsetree.expression =
+  let rec vbind (vi,codi) exp =
+    match codi with
+    | Code((Nil,vls'),expi) -> 
+        let open Ast_helper in
+        Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] @@
+        List.fold_right vbind vls' exp
+    | _  -> assert false                (* heap is supposed to be empty *)
+  in List.fold_right vbind
+
 
 (* The closed code is AST *)
 type closed_code_repr = Parsetree.expression
@@ -908,11 +967,12 @@ type closed_code_repr = Parsetree.expression
    rather than performing it.
    This is useful for debugging and for showing the code
 *)
+
 let close_code_delay_check : code_repr -> closed_code_repr * (unit -> unit) =
  function
-  | Code (Nil,ast) -> (ast,fun () -> ())
-  | Code (HNode (_,_,var,_,_),ast) ->
-    (ast, fun () ->
+  | Code ((Nil,vls),ast) -> (vlet_bind_all vls ast,fun () -> ())
+  | Code ((HNode (_,_,var,_,_),_),ast) ->
+    (ast, fun () ->                     (* TODO? somehow show vls? *)
       Format.fprintf Format.str_formatter
       "The code built at %a is not closed: identifier %s bound at %a is free"
       Location.print ast.pexp_loc var.txt Location.print var.loc;
@@ -968,6 +1028,16 @@ let reset_gensym_counter () = gensym_count := 0
 let genident : string loc -> string loc = fun name ->
   {name with txt = gensym name.txt}
 
+(* Produce the name of the fresh variable that certainly does not
+   occur in flvars 
+*)
+let rec get_fresh_name : flvars -> string = fun ((heap,lvs) as flvars) ->
+  let fresh = gensym "lv" in
+  if any_heap (function {txt} -> txt = fresh) heap ||
+     List.exists (fun (n,_) -> n = fresh) lvs 
+    then get_fresh_name flvars          (* try again, choose a different name *)
+    else fresh
+
 (* This is a run-time error, rather than a translation-time error *)
 let scope_extrusion_error : 
   detected:Location.t -> occurred:Location.t -> string loc -> 'a = 
@@ -997,8 +1067,8 @@ let scope_extrusion_error :
 *)
 let validate_vars : Location.t -> code_repr -> code_repr = 
   fun l -> function
-  | Code (Nil,_) as cde -> cde
-  | Code (h, ast) as cde -> begin
+  | Code ((Nil,_),_) as cde -> cde
+  | Code ((h,_),ast) as cde -> begin
       let rec check = function
         | Nil -> ()
         | HNode (_,sm,var,h1,h2) ->
@@ -1008,23 +1078,43 @@ let validate_vars : Location.t -> code_repr -> code_repr =
   end
 
 let validate_vars_option : Location.t -> code_repr option -> 
-  Parsetree.expression option * string loc heap = 
+  Parsetree.expression option * flvars = 
   fun l -> function
-  | None -> (None,Nil)
+  | None -> (None,empty)
   | Some e -> let Code (vars, e) = validate_vars l e in (Some e, vars)
 
 let validate_vars_map : Location.t -> 
-  (Location.t -> 'a -> 'b * string loc heap) -> 'a list ->
-  'b list * string loc heap = fun loc f xs ->
+  (Location.t -> 'a -> 'b * flvars) -> 'a list -> 'b list * flvars = 
+  fun loc f xs ->
   map_accum (fun acc x -> 
       let (y,vars) = f loc x in
       (y, merge vars acc))
     empty xs
 
 let validate_vars_list : Location.t -> code_repr list -> 
-  Parsetree.expression list * string loc heap = fun l cs ->
+  Parsetree.expression list * flvars = fun l cs ->
   validate_vars_map l 
       (fun l c -> let Code (vars,e) = validate_vars l c in (e,vars)) cs
+
+(* Remove the mentioning of all variables with the given priority
+   from the code, in preparation for binding off those variables.
+   If those variables appear in virtual let-bidings, actualize those bindings
+   and their dependent bindings
+*)
+let vlet_bind : Location.t -> prio -> code_repr -> code_repr = fun l p ->
+  let rec vbind ((vi,cdi) as vl) ((vls,exp) as z) =
+    let Code ((h,vli),expi) = validate_vars l cdi in
+    if member_heap p h then
+      (* bind the dependent vl first *)
+      let (vls,exp) = List.fold_right vbind vli z in 
+      let open Ast_helper in
+      (vls,Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp)
+    else  (* keep vl as virtual *)
+      (vl::vls,exp)
+  in fun cde ->
+    let Code ((h,vls),exp) = validate_vars l cde in
+    let (vls,exp) = List.fold_right vbind vls ([],exp)
+    in Code ((remove p h,vls),exp)
 
 (* Generate a fresh name off the given name, enter a new binding region
    and evaluate a function passing it the generated name as code_repr.
@@ -1035,7 +1125,7 @@ let validate_vars_list : Location.t -> code_repr list ->
 *)
       (* Counter for assigning priorities to vars heap nodes. *)
       (* Keep in mind the invariant that variables of the same priority
-         comes from the same binding location. So, we must keep the
+         come from the same binding location. So, we must keep the
          priorities unique to binders. Giving binders monotonically
          increasing priorities is helpful: the innermost binding
          has the highest priority and it will be at the top of the heap,
@@ -1045,18 +1135,18 @@ let prio_counter = ref 0
 
 let with_binding_region : 
   Location.t -> string loc -> (code_repr -> code_repr) -> 
-  string loc * string loc heap * Parsetree.expression = fun l name f -> 
+  string loc * flvars * Parsetree.expression = fun l name f -> 
   let new_name = genident name in
   let (vars,e) = 
    !with_stack_mark.stackmark_region_fn (fun mark ->
      incr prio_counter;
      let prio = !prio_counter in
      let var_code = (* code that corresponds to the bound variable *)
-       Code (HNode (prio,mark,new_name,Nil,Nil),
+       Code ((HNode (prio,mark,new_name,Nil,Nil),[]),
           Ast_helper.Exp.mk ~loc:name.loc   (* the loc of the binder *)
            (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc))) in
-     let Code (vars,e) = validate_vars l (f var_code) in
-     (remove prio vars, e)) in
+     let Code (vars,e) = vlet_bind l prio (f var_code) in
+     (vars,e)) in
   (new_name, vars, e)
 
 (* The most general version with several bindings and several expressions 
@@ -1064,26 +1154,29 @@ let with_binding_region :
  *)
 let with_binding_region_gen : 
   Location.t -> string loc list -> 
-  (Location.t -> 'a -> 'b * string loc heap) -> (code_repr array -> 'a array) ->
-  string loc list * string loc heap * 'b list
+  (Location.t -> 'a -> 'b * flvars) -> (code_repr array -> 'a array) ->
+  string loc list * flvars * 'b list
   = fun l names tr f -> 
+    failwith "XXX"
+(*
   let new_names = List.map genident names in
   let (vars,es) = 
    !with_stack_mark.stackmark_region_fn (fun mark ->
      incr prio_counter;
      let prio = !prio_counter in
-     let vars_code = Array.of_list (List.map (fun new_name ->
+     let vars_code = Array.of_list @@ List.map @@ fun new_name ->
                       (* code that corresponds to a bound variable *)
-       Code (HNode (prio,mark,new_name,Nil,Nil),
+       Code ((HNode (prio,mark,new_name,Nil,Nil),[]),
           Ast_helper.Exp.mk ~loc:new_name.loc    (* the loc of the binder *)
-            (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc))))
-       new_names) in
+            (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)))
+       new_names in
      let cs = Array.to_list (f vars_code) in
      let (es,vars) = map_accum (fun vars c -> 
                       let (e,var) = tr l c in
                       (e,merge var vars)) empty cs in
      (remove prio vars, es)) in
   (new_names, vars, es)
+*)
 
 (* ------------------------------------------------------------------------ *)
 (* Building Parsetree nodes *)
@@ -1793,7 +1886,7 @@ let pattern_subst_list :
    for processing letrec.
 *)
 let prepare_cases : Location.t -> 
-  string loc heap ->     (* extra free variables used in kontinuation *)
+  flvars ->     (* extra free variables used in kontinuation *)
   (* The following argument is a pair: a pattern list for the clauses
      of the function, and the list of names of bound variables, in order.
   *)
@@ -1804,6 +1897,8 @@ let prepare_cases : Location.t ->
   (code_repr array -> (code_repr option * code_repr) array) -> 
   (* The continuation *)
   (Parsetree.case list -> Parsetree.expression) -> code_repr =
+  failwith "XXX"
+(*
   fun loc evars (pats,old_names) fgbodies k -> 
     let tr loc (eo,e) = 
         let (eo,vo)        = validate_vars_option loc eo in
@@ -1819,6 +1914,7 @@ let prepare_cases : Location.t ->
     Code(merge evars vars,
          k @@ List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
               pats egbodies)
+*)
 
 let build_fun : 
   Location.t -> arg_label -> 
@@ -2486,6 +2582,20 @@ let is_value_exp : stage -> Parsetree.expression -> bool = fun stagel exp ->
     end}
     in 
     iter.expr iter exp; !res
+
+
+(* let-insertion *)
+
+(* The resulting code_repr represents a value and hence may be given type
+   'a val_code
+ *)
+let genlet : code_repr -> code_repr = fun cde ->
+  let Code ((heap,_) as vars,exp) = validate_vars Location.none cde in
+  if is_value_exp 0 exp then cde else
+  let freshname = get_fresh_name vars in
+  Code ((heap, [(freshname,cde)]),
+        Ast_helper.Exp.ident (mknoloc (Longident.Lident freshname)))
+
 
 
 (*{{{ Typedtree traversal to eliminate bracket/escapes *)
