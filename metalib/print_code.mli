@@ -3,6 +3,8 @@
 (* Common interface *)
 
 type 'a closed_code = Trx.closed_code_repr
+type 'a pat_code = 'a Trx.pat_code      (* re-export for convenience here *)
+type 'a val_code = 'a Trx.val_code
 
 (* Check that the code is closed and return the closed code *)
 val close_code : 'a code -> 'a closed_code
@@ -20,10 +22,10 @@ val close_code_delay_check : 'a code -> 'a closed_code * (unit -> unit)
 val open_code : 'a closed_code -> 'a code
 
 (* Total: 'a pat_code is a `subtype' of 'a code *)
-val code_of_pat_code : 'a Trx.pat_code -> 'a code
+val code_of_pat_code : 'a pat_code -> 'a code
 
 (* Total: 'a val_code is a `subtype' of 'a code *)
-val code_of_val_code : 'a Trx.val_code -> 'a code
+val code_of_val_code : 'a val_code -> 'a code
 
 (* Print code values, useful as formatter.
    The code is printed with outer brackets 
@@ -41,4 +43,7 @@ val format_code : Format.formatter -> 'a closed_code -> unit
 val print_code_as_ast : 'a closed_code -> unit
 
 (* make a match statement *)
-val make_match : 'a code -> ('a -> 'w) Trx.pat_code list -> 'w code
+val make_match : 'a code -> ('a -> 'w) pat_code list -> 'w code
+
+(* let-insertion *)
+val genlet : 'a code -> 'a val_code

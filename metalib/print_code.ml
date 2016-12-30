@@ -8,6 +8,9 @@ open Format
 
 type 'a closed_code = Trx.closed_code_repr
 
+type 'a pat_code = 'a Trx.pat_code      (* re-export for convenience here *)
+type 'a val_code = 'a Trx.val_code
+
 (* Check that the code is closed and return the closed code *)
 let close_code : 'a code -> 'a closed_code = fun cde ->
   Trx.close_code_repr (Obj.magic cde)
@@ -23,10 +26,10 @@ let open_code : 'a closed_code -> 'a code = fun ccde ->
   Obj.magic (Trx.open_code ccde)
 
 (* pat_code has the same representation as code *)
-let code_of_pat_code : 'a Trx.pat_code -> 'a code = fun cde -> Obj.magic cde
+let code_of_pat_code : 'a pat_code -> 'a code = fun cde -> Obj.magic cde
 
 (* val_code has the same representation as code *)
-let code_of_val_code : 'a Trx.val_code -> 'a code = fun cde -> Obj.magic cde
+let code_of_val_code : 'a val_code -> 'a code = fun cde -> Obj.magic cde
 
 (* The original code was authored by  Ed Pizzi
    and simplified by Jacques Carette.
@@ -79,4 +82,8 @@ let make_match : 'a code -> ('a -> 'w) Trx.pat_code list -> 'w code =
     Obj.magic (Trx.make_match scrutinee cases)
 
 
-        
+(* let-insertion *)
+let genlet : 'a code -> 'a val_code = fun cde -> 
+  let cde = ((Obj.magic cde) : Trx.code_repr) in
+  Obj.magic @@ Trx.genlet cde
+

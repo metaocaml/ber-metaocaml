@@ -203,7 +203,29 @@ by the virtual let and therefore are not counted as free variables of
 the overall expression and are not reflected in heap.
 
 Keep in mind however that exp_i may itself contain the list of
-(varname_j,exp_j). Such a situation arises from nested genlet. Therefore,
+(varname_j,exp_j). Such a situation arises from nested genlet. For example,
+genlet <x+1> (where x is some variable in scope) corresponds to
+     (heap ["x"], [("var1",(heap ["x"],[],<x+1>))], <var1>)
+then
+   <z + ~(genlet <y + ~(genlet <x+1>)>)>
+corresponds to
+     (heap ["x","y","z"],
+       [("var2", (heap ["x","y"], 
+                  [("var1",(heap ["x"],[],<x+1>))], <y+var1>))],
+       <z + var2>)
+When the variable y is going to be bound off, var2 binding must be actualized:
+     (heap ["x","y","z"],
+       [("var1",(heap ["x"],[],<x+1>))],
+       <let var2 = y + var1 in z + var2>)
+but "var1" may float.
+
+When "x" is retracted, we first actualize var2, and then var1. The dependency
+comes out automatically; we actualize var2 because its heap contains "x"
+as well; the heap of the code value contains the free variables mentioned
+within its virtual bindings as well.
+   
+
+Therefore,
 we need to generate inner let-statement before the outer one. Such nesting
 represents the dependency among let-bindings.
 
@@ -912,7 +934,7 @@ let rec remove : prio -> 'v heap -> 'v heap = fun p -> function
  *)
 let rec member_heap : prio -> 'v heap -> bool = fun p -> function
   | Nil -> false
-  | HNode (pn,k,v,h1,h2) -> 
+  | HNode (pn,_,_,h1,h2) -> 
       begin
         match p - pn with
         | 0            -> true
@@ -926,8 +948,8 @@ let rec any_heap : ('v -> bool) -> 'v heap -> bool = fun pred -> function
   | HNode (_,_,v,l,r) -> pred v || any_heap pred l || any_heap pred r
 
 
-(* The representation of the possibly open code: AST plus virtual
-   lety-bindings plus the set of free identifiers, annotated with the marks
+(* The representation of the possibly open code: AST plus the virtual
+   let-bindings plus the set of free identifiers, annotated with the marks
    of the corresponding with_binding_region forms
 *)
 type code_repr = 
@@ -949,11 +971,12 @@ let merge : flvars -> flvars -> flvars = fun (h1,vl1) (h2,vl2) ->
 let vlet_bind_all : 
   vletbindings -> Parsetree.expression -> Parsetree.expression =
   let rec vbind (vi,codi) exp =
+    (* bind from outside in *)
     match codi with
     | Code((Nil,vls'),expi) -> 
+        List.fold_right vbind vls' @@
         let open Ast_helper in
-        Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] @@
-        List.fold_right vbind vls' exp
+        Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp
     | _  -> assert false                (* heap is supposed to be empty *)
   in List.fold_right vbind
 
@@ -1099,14 +1122,14 @@ let validate_vars_list : Location.t -> code_repr list ->
 (* Remove the mentioning of all variables with the given priority
    from the code, in preparation for binding off those variables.
    If those variables appear in virtual let-bidings, actualize those bindings
-   and their dependent bindings
+   and their dependent bindings.
+   We also validate the code as a matter of course.
 *)
 let vlet_bind : Location.t -> prio -> code_repr -> code_repr = fun l p ->
-  let rec vbind ((vi,cdi) as vl) ((vls,exp) as z) =
+  let rec vbind ((vi,cdi) as vl) (vls,exp) =
     let Code ((h,vli),expi) = validate_vars l cdi in
     if member_heap p h then
-      (* bind the dependent vl first *)
-      let (vls,exp) = List.fold_right vbind vli z in 
+      List.fold_right vbind vli @@
       let open Ast_helper in
       (vls,Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp)
     else  (* keep vl as virtual *)
@@ -1154,29 +1177,25 @@ let with_binding_region :
  *)
 let with_binding_region_gen : 
   Location.t -> string loc list -> 
-  (Location.t -> 'a -> 'b * flvars) -> (code_repr array -> 'a array) ->
-  string loc list * flvars * 'b list
-  = fun l names tr f -> 
-    failwith "XXX"
-(*
+  (code_repr array ->                         (* freshly bound variables *)
+    (code_repr -> code_repr) ->               (* callback to clean-up code *)
+    flvars * 'a list) ->
+  string loc list * flvars * 'a list
+  = fun l names f -> 
   let new_names = List.map genident names in
   let (vars,es) = 
    !with_stack_mark.stackmark_region_fn (fun mark ->
      incr prio_counter;
      let prio = !prio_counter in
-     let vars_code = Array.of_list @@ List.map @@ fun new_name ->
+     let vars_code = Array.of_list @@ List.map (fun new_name ->
                       (* code that corresponds to a bound variable *)
        Code ((HNode (prio,mark,new_name,Nil,Nil),[]),
           Ast_helper.Exp.mk ~loc:new_name.loc    (* the loc of the binder *)
-            (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc)))
+            (Pexp_ident (mkloc (Longident.Lident new_name.txt) new_name.loc))))
        new_names in
-     let cs = Array.to_list (f vars_code) in
-     let (es,vars) = map_accum (fun vars c -> 
-                      let (e,var) = tr l c in
-                      (e,merge var vars)) empty cs in
-     (remove prio vars, es)) in
+     f vars_code (fun cde -> vlet_bind l prio cde))
+   in
   (new_names, vars, es)
-*)
 
 (* ------------------------------------------------------------------------ *)
 (* Building Parsetree nodes *)
@@ -1897,15 +1916,25 @@ let prepare_cases : Location.t ->
   (code_repr array -> (code_repr option * code_repr) array) -> 
   (* The continuation *)
   (Parsetree.case list -> Parsetree.expression) -> code_repr =
-  failwith "XXX"
-(*
   fun loc evars (pats,old_names) fgbodies k -> 
-    let tr loc (eo,e) = 
-        let (eo,vo)        = validate_vars_option loc eo in
-        let Code (vars,e)  = validate_vars loc e in
-        ((eo,e),merge vo vars) in
+    (* because of fold_left, which is convenient, the order of clauses
+       is reversed.
+    *)
+    let fgbodies' newvars cleanupf = 
+      let f (varss,es) = function
+        | (None,cde) -> 
+            let Code (vars,e) = cleanupf cde in
+            (merge vars varss,(None,e)::es)
+        | (Some ocde,cde) -> 
+            let Code (vars,e)   = cleanupf cde in
+            let Code (ovars,oe) = cleanupf ocde in
+            (merge (merge vars ovars) varss,(Some oe,e)::es)
+      in
+      Array.fold_left f (empty,[]) @@ fgbodies newvars in
     let (names,vars,egbodies) = 
-         with_binding_region_gen loc old_names tr fgbodies in
+         with_binding_region_gen loc old_names fgbodies' in
+    (* restore the order reversed by fgbodies', see comment above *)
+    let egbodies = List.rev egbodies in 
     let pats = 
       if names = [] then pats else
       let (pats,acc) = pattern_subst_list names pats in
@@ -1914,7 +1943,6 @@ let prepare_cases : Location.t ->
     Code(merge evars vars,
          k @@ List.map2 (fun p (eo,e) -> {pc_lhs=p;pc_guard=eo;pc_rhs=e}) 
               pats egbodies)
-*)
 
 let build_fun : 
   Location.t -> arg_label -> 

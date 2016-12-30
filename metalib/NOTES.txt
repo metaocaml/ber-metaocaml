@@ -2,20 +2,24 @@
 
 * New notes, things to try
 
+** Declare 'a code in trx.mli (just like pat_code and val_code)
+rather than in predef.mli. Hence we can define 
+  type 'a pat_code  = private 'a code
+  type 'a val_code  = private 'a code
+in trx.mli. The conversion from pat_code to code can be done by simple
+coercion (:>). We would avoid many Obj.magic in print_code.
+The drawback is that the inferred type for brackets
+will show Trx.code rather than code. The solution could be to
+re-export 'a code (as we do with pat_code and val_code) in Print_code,
+and then arrange Print_code to be open by default (for metaocaml,
+modify the start-up code; for metaocaml, insert a compiler flag to
+open Print_code). Perhaps we can rename print_code.ml to just code.ml?
+
+
 ** import-for-syntax: essentially prohibiting all CSP and instead
 introducing a form to copy the entire world (so it is available on the
 next stage). Of course the pure, stateless bindings can be shared,
 but stateful functions has to be copied.
-
-** automatic let-insertion
-Have a way to make sure that the piece of code is really a value.
-New type like 'a vcode with injection to 'a code? Some functions
-could take 'a vcode making sure that their argument code is simple and
-can be duplicated. To convert from 'a code to 'a vcode, one use
-genlet (Since genlet is primitive, it can actually check if its
-argument code is a simple value; and if so, don't do any
-let-insertion). Perhaps that coercion to 'a code to 'a vcode could
-be automated (implicit).
 
 ** CSP and modular implicits
 See Jeremy Yallop's message, Caml-list Wed, 6 May 2015 16:58:03 +0100
@@ -67,6 +71,14 @@ open.
 
 
 ** Substantial changes, user-visible
+ -- let-insertion as a primitive (genlet) and the val_code for
+    code that represents values
+
+ -- first-class patterns and the type pat_code for functional literals
+
+ -- native MetaOCaml
+
+[N102]
  -- New function Runcode.typecheck_code for the benefit of offshoring
 
  -- New function Runcode.add_search_path to add a directory to
@@ -764,6 +776,16 @@ let id y = y in .<let f = fun x -> id x in (f 1, f true)>.;;
 write something more helpful. After all, most of the time, there are
 only two levels. So, we can make good error messages.
 (Jeremy Yallop's suggestion)
+
+** automatic let-insertion
+Have a way to make sure that the piece of code is really a value.
+New type like 'a vcode with injection to 'a code? Some functions
+could take 'a vcode making sure that their argument code is simple and
+can be duplicated. To convert from 'a code to 'a vcode, one use
+genlet (Since genlet is primitive, it can actually check if its
+argument code is a simple value; and if so, don't do any
+let-insertion). Perhaps that coercion to 'a code to 'a vcode could
+be automated (implicit).
 
 ** first-class patters
 The implemented approach uses literal ('a->'w) expressions, that is,
