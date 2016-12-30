@@ -222,13 +222,18 @@ but "var1" may float.
 When "x" is retracted, we first actualize var2, and then var1. The dependency
 comes out automatically; we actualize var2 because its heap contains "x"
 as well; the heap of the code value contains the free variables mentioned
-within its virtual bindings as well.
-   
+within its virtual bindings as well. So, actualizing the bindings outside-in
+is not only natural: it is exactly the right strategy.
 
-Therefore,
-we need to generate inner let-statement before the outer one. Such nesting
-represents the dependency among let-bindings.
+Since the same code value may be spliced in multiple times, it could be that
+the list of virtual bindings has duplicates. for example:
+    let x = genlet <1+2> in
+    x + x
+    let x = genlet <1+2> in
+    x + genlet (x+1)
 
+If the let-bound name is duplicated, then the corresponding expression is
+an exact replica. So, it is OK to keep only one copy...
 *)
 
 open Parsetree
@@ -967,18 +972,30 @@ let merge : flvars -> flvars -> flvars = fun (h1,vl1) (h2,vl2) ->
 (* Actualize all virtual let-bindings. Except for the let-bound variables
    (which are not reflected in the heap), there should be no other free
    variables. This function is called upon conversion to closed code.
+   Bindings may be duplicated! To detect the duplication, phisical equality
+   is ok.
+   However, simply eliminating the duplication is complicated: condider
+   let x = 1+2 in let y = 1 + x in let x = 1 + 2 in ...
+   We have to eliminate the last duplication but not the first.
+   So, we first compute the list of bindings, from outer to inner,
+   elimitate inner, and then perform the let-bindings
  *)
 let vlet_bind_all : 
   vletbindings -> Parsetree.expression -> Parsetree.expression =
-  let rec vbind (vi,codi) exp =
+  let bind exp (vi,expi) =             (* do the let-bindings *)
+    let open Ast_helper in
+    Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp
+  in
+  let rec compute_bind (vi,codi) bs =  (* from outer to inner *)
+    if List.mem_assq vi bs then bs else
     (* bind from outside in *)
     match codi with
     | Code((Nil,vls'),expi) -> 
-        List.fold_right vbind vls' @@
-        let open Ast_helper in
-        Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp
+        (vi,expi) :: List.fold_right compute_bind vls' bs
     | _  -> assert false                (* heap is supposed to be empty *)
-  in List.fold_right vbind
+  in fun vl exp -> 
+  List.fold_left bind exp @@
+  List.fold_right compute_bind vl []    (* The innermost is at the top *)
 
 
 (* The closed code is AST *)
@@ -1124,20 +1141,32 @@ let validate_vars_list : Location.t -> code_repr list ->
    If those variables appear in virtual let-bidings, actualize those bindings
    and their dependent bindings.
    We also validate the code as a matter of course.
+   Bindings may be duplicated! To detect the duplication, phisical equality
+   is ok.
+   See the comments to vlet_bind_all for the complications...
 *)
 let vlet_bind : Location.t -> prio -> code_repr -> code_repr = fun l p ->
-  let rec vbind ((vi,cdi) as vl) (vls,exp) =
+  let bind exp (vi,expi) =             (* do the let-bindings *)
+    let open Ast_helper in
+    Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp
+  in
+  (* partition the bindings into to be performed and the ones that can
+     stay virtual. The order of virtual is irrelevant. But the bindings
+     to perform are ordered so that the innermost is at the top.
+  *)
+  let rec compute_bind ((vi,cdi) as vl) ((vls,actual) as z) =
+    if List.mem_assq vi actual then z else
     let Code ((h,vli),expi) = validate_vars l cdi in
     if member_heap p h then
-      List.fold_right vbind vli @@
-      let open Ast_helper in
-      (vls,Exp.let_ Nonrecursive [Vb.mk (Pat.var (mknoloc vi)) expi] exp)
+      let (vls,actual) = List.fold_right compute_bind vli (vls,actual) in
+      (vls, (vi,expi) :: actual)
     else  (* keep vl as virtual *)
-      (vl::vls,exp)
+      (vl::vls,actual)
   in fun cde ->
     let Code ((h,vls),exp) = validate_vars l cde in
-    let (vls,exp) = List.fold_right vbind vls ([],exp)
-    in Code ((remove p h,vls),exp)
+    let (vls,actual) = List.fold_right compute_bind vls ([],[]) in
+    let exp = List.fold_left bind exp actual in
+    Code ((remove p h,vls),exp)
 
 (* Generate a fresh name off the given name, enter a new binding region
    and evaluate a function passing it the generated name as code_repr.

@@ -54,7 +54,27 @@ BER MetaOCaml toplevel, version N 104
 # * * * * * *   #       val t : (int -> int -> int) code = .<
   let lv_48 = (1 + 3) + 2  in
   let lv_49 = 1 + lv_48  in fun x_46  -> fun y_47  -> (x_46 + y_47) + lv_49>. 
-# * * * *   #             module type DSL =
+# * * * *   #           val t : int code = .<let lv_50 = 1 + 2  in lv_50 + lv_50>. 
+# * *   #           val t : int code = .<
+  let lv_51 = 1 + 2  in let lv_52 = 1 + lv_51  in lv_51 + lv_52>. 
+# * * *   #             * * * *   val t : int code = .<
+  let lv_53 = 1 + 2  in
+  let lv_54 = 1 + lv_53  in let lv_55 = 1 + lv_54  in (lv_53 + lv_55) + lv_54>.
+  
+#             val t : (int -> int) code = .<
+  let lv_57 = 1 + 2  in
+  fun u_56  -> let lv_58 = u_56 + lv_57  in lv_57 + lv_58>. 
+# * * *   #             val t : (int -> int) code = .<
+  fun u_59  ->
+    let lv_60 = u_59 + 2  in let lv_61 = 1 + lv_60  in lv_60 + lv_61>.
+  
+# #               val t : (int -> int) code = .<
+  fun u_62  ->
+    let lv_63 = u_62 + 2  in
+    let lv_64 = 1 + lv_63  in
+    let lv_65 = 1 + lv_64  in ((lv_63 + lv_65) + lv_64) + lv_65>.
+  
+# * * * * * * *   #                 module type DSL =
   sig
     val sqr : int code -> int code
     val make_incr_fun : (int code -> int code) -> (int -> int) code
@@ -72,21 +92,18 @@ BER MetaOCaml toplevel, version N 104
     val make_incr_fun : (int code -> int code) -> (int -> int) code
   end
 #     - : int code * (int -> int) code * (int -> int) code =
-(.<(2 + 3) * (2 + 3)>. , .<fun x_50  -> x_50 + ((2 + 3) * (2 + 3))>. , .<
- fun x_51  -> x_51 + ((x_51 + 3) * (x_51 + 3))>. )
+(.<(2 + 3) * (2 + 3)>. , .<fun x_66  -> x_66 + ((2 + 3) * (2 + 3))>. , .<
+ fun x_67  -> x_67 + ((x_67 + 3) * (x_67 + 3))>. )
 # * * * * *           #             module DSL2 :
   sig
     val make_incr_fun : (int code -> int code) -> (int -> int) code
     val sqr : int code -> int code
   end
 #     - : int code * (int -> int) code * (int -> int) code =
-(.<let lv_54 = 2 + 3  in let lv_54 = 2 + 3  in lv_54 * lv_54>. , .<
- let lv_56 = 2 + 3  in
- let lv_56 = 2 + 3  in fun x_55  -> x_55 + (lv_56 * lv_56)>. , .<
- fun x_57  ->
-   let lv_58 = x_57 + 3  in let lv_58 = x_57 + 3  in x_57 + (lv_58 * lv_58)>.
- )
-# * * * * * * * *             #   
+(.<let lv_70 = 2 + 3  in lv_70 * lv_70>. , .<
+ let lv_72 = 2 + 3  in fun x_71  -> x_71 + (lv_72 * lv_72)>. , .<
+ fun x_73  -> let lv_74 = x_73 + 3  in x_73 + (lv_74 * lv_74)>. )
+# * * * * *             #   
 All done
 
 - : unit = ()

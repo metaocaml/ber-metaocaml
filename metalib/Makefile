@@ -127,6 +127,7 @@ test-values:
 test-genlet:
 	TERM=dumb $(BINDIR)/metaocaml -w -8 < test/genlet.ml > genlet.out && \
 	diff -u genlet.out genlet.ref
+	TERM=dumb $(BINDIR)/metaocaml -w -8 test/fib.ml
 
 test-compile:
 	cd test && \
@@ -142,6 +143,8 @@ test-compile:
 	cp test/t4types.cmi . # .cmi file should be where the executable is
 	$(BINDIR)/metaocamlc -w -8 -o t4 -I test/ test/t4.ml
 	./t4
+	$(BINDIR)/metaocamlc -w -8 -o fib -I test/ test/fib.ml
+	./fib
 #	cd gprint && $(MAKE) CAMLROOT=../$(CAMLROOT) vgprint
 # Testing setting of the .cmo path
 	$(BINDIR)/metaocamlc test/test_path_a.ml
@@ -155,7 +158,8 @@ test-native:
 	./qtn
 
 clean::
-	rm -f simple_true quick_test t4 pt trivial.out simple.out a.out tp qtn
+	rm -f simple_true quick_test t4 fib \
+	pt trivial.out simple.out a.out tp qtn
 
 clean::
 	rm -f test/csp1 test/*.cmi test/*.cmo

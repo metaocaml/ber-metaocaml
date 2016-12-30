@@ -7,10 +7,7 @@
 
 open Print_code
 ;;
-type 'a val_code = 'a Trx.val_code
-;;
 
-let genlet : 'a code -> 'a val_code = fun cde -> failwith "na"
 
 (* The original Gibonacci *)
 
@@ -47,7 +44,6 @@ val test_gibgen5 : (int -> int -> int) code = .<
 (* There is a lot of duplicated code ... *)
 
 let 8 = Runcode.run test_gibgen5 1 1;;
-
 
 
 (* Gibonacci with open recursion *)
@@ -149,5 +145,20 @@ let test_ssv n = .<fun x y ->
      y_memo (sgibv (.<x>. [@metaocaml.value]) (.<y>. [@metaocaml.value])) n)>.;;
 
 let test_ssv1 = test_ssv 5;;
+(*
+val test_ssv1 : (int -> int -> int) code = .<
+  fun x_35  ->
+    fun y_36  ->
+      let lv_37 = y_36 + x_35  in
+      let lv_38 = lv_37 + y_36  in
+      let lv_39 = lv_38 + lv_37  in let lv_40 = lv_39 + lv_38  in lv_40>.
+  
+*)
 
-;;
+(* The code is indeed in the A-normal form *)
+let 8 = Runcode.run test_ssv1 1 1;;
+
+let tests30 = test_ssv 30;;
+let 1346269 = Runcode.run tests30 1 1;;
+
+print_endline "\nAll done\n";;

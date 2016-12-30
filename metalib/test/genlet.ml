@@ -158,6 +158,78 @@ val t : (int -> int -> int) code = .<
 *)
 let 12 = Runcode.run t 1 4;;
 
+(* Duplication *)
+let t =
+  let x = code_of_val_code @@ genlet .<1 + 2>. in
+  .<.~x + .~x>.
+;;
+(*
+  val t : int code = .<let lv_1 = 1 + 2  in lv_1 + lv_1>. 
+*)
+let 6 = Runcode.run t;;
+
+let t =
+  let x = code_of_val_code @@ genlet .<1 + 2>. in
+  let y = code_of_val_code @@ genlet .<1 + .~x>. in
+  .<.~x + .~y>.
+;;
+(*
+    val t : int code = .<
+  let lv_2 = 1 + 2  in let lv_3 = 1 + lv_2  in lv_2 + lv_3>. 
+*)
+let 7 = Runcode.run t;;
+
+let t =
+  let x = code_of_val_code @@ genlet .<1 + 2>. in
+  let y = code_of_val_code @@ genlet .<1 + .~x>. in
+  let z = code_of_val_code @@ genlet .<1 + .~y>. in
+  .<.~x + .~z + .~y>.
+(*
+          val t : int code = .<
+  let lv_4 = 1 + 2  in
+  let lv_5 = 1 + lv_4  in let lv_6 = 1 + lv_5  in (lv_4 + lv_6) + lv_5>. 
+*)
+let 12 = Runcode.run t;;
+
+let t =
+ .<fun u ->
+  .~(let x = code_of_val_code @@ genlet .<1 + 2>. in
+     let y = code_of_val_code @@ genlet .<u + .~x>. in
+     .<.~x + .~y>.)>.
+;;
+(*
+    val t : (int -> int) code = .<
+  let lv_8 = 1 + 2  in fun u_7  -> let lv_9 = u_7 + lv_8  in lv_8 + lv_9>. 
+*)
+let 8 = Runcode.run t 2;;
+
+let t =
+ .<fun u ->
+  .~(let x = code_of_val_code @@ genlet .<u + 2>. in
+     let y = code_of_val_code @@ genlet .<1 + .~x>. in
+     .<.~x + .~y>.)>.
+;;
+let 9 = Runcode.run t 2;;
+
+let t =
+ .<fun u ->
+  .~(let x = code_of_val_code @@ genlet .<u + 2>. in
+     let y = code_of_val_code @@ genlet .<1 + .~x>. in
+     let z = code_of_val_code @@ genlet .<1 + .~y>. in
+     .<.~x + .~z + .~y + .~z>.)>.
+;;
+(*
+      val t : (int -> int) code = .<
+  fun u_11  ->
+    let lv_12 = u_11 + 2  in
+    let lv_13 = 1 + lv_12  in
+    let lv_14 = 1 + lv_13  in ((lv_12 + lv_14) + lv_13) + lv_14>.
+  
+*)
+let 21 = Runcode.run t 2;;
+
+
+
 (* A simple DSL. See loop_motion_gen.ml for a realistic example *)
 module type DSL = sig
   val sqr           : int code -> int code
@@ -204,12 +276,9 @@ let module M = DSLExp(DSL2) in
 ;;
 (*
 - : int code * (int -> int) code * (int -> int) code =
-(.<let lv_45 = 2 + 3  in let lv_45 = 2 + 3  in lv_45 * lv_45>. , .<
- let lv_47 = 2 + 3  in
- let lv_47 = 2 + 3  in fun x_46  -> x_46 + (lv_47 * lv_47)>. , .<
- fun x_48  ->
-   let lv_49 = x_48 + 3  in let lv_49 = x_48 + 3  in x_48 + (lv_49 * lv_49)>.
- )
+(.<let lv_19 = 2 + 3  in lv_19 * lv_19>. , .<
+ let lv_21 = 2 + 3  in fun x_20  -> x_20 + (lv_21 * lv_21)>. , .<
+ fun x_22  -> let lv_23 = x_22 + 3  in x_22 + (lv_23 * lv_23)>. )
 *)
 
 let (25,35,179) =
