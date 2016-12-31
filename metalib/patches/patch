@@ -1,21 +1,11 @@
 diff --git a/.depend b/.depend
-index 5d95a9b..63a137f 100644
+index 4513260..74fa081 100644
 --- a/.depend
 +++ b/.depend
-@@ -122,6 +122,9 @@ typing/printtyped.cmi : typing/typedtree.cmi
- typing/stypes.cmi : typing/typedtree.cmi parsing/location.cmi \
-     typing/annot.cmi
- typing/subst.cmi : typing/types.cmi typing/path.cmi typing/ident.cmi
-+typing/trx.cmi : typing/types.cmi typing/typedtree.cmi parsing/parsetree.cmi \
-+    parsing/longident.cmi parsing/location.cmi typing/env.cmi \
-+    parsing/asttypes.cmi
- typing/typeclass.cmi : typing/types.cmi typing/typedtree.cmi \
-     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
-     typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi
-@@ -280,6 +283,18 @@ typing/subst.cmo : typing/types.cmi utils/tbl.cmi typing/path.cmi \
- typing/subst.cmx : typing/types.cmx utils/tbl.cmx typing/path.cmx \
-     utils/misc.cmx parsing/location.cmx typing/ident.cmx utils/clflags.cmx \
-     typing/btype.cmx parsing/ast_mapper.cmx typing/subst.cmi
+@@ -332,6 +332,21 @@ typing/tast_mapper.cmx : typing/typedtree.cmx typing/env.cmx \
+     parsing/asttypes.cmi typing/tast_mapper.cmi
+ typing/tast_mapper.cmi : typing/typedtree.cmi typing/env.cmi \
+     parsing/asttypes.cmi
 +typing/trx.cmo : utils/warnings.cmi typing/types.cmi typing/typedtree.cmi \
 +    typing/printtyp.cmi typing/predef.cmi typing/path.cmi \
 +    parsing/parsetree.cmi utils/misc.cmi parsing/longident.cmi \
@@ -28,83 +18,36 @@ index 5d95a9b..63a137f 100644
 +    parsing/location.cmx typing/ident.cmx typing/env.cmx typing/ctype.cmx \
 +    typing/btype.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
 +    typing/trx.cmi
++typing/trx.cmi : typing/types.cmi typing/typedtree.cmi parsing/parsetree.cmi \
++    parsing/longident.cmi parsing/location.cmi typing/env.cmi \
++    parsing/asttypes.cmi
  typing/typeclass.cmo : utils/warnings.cmi typing/typetexp.cmi \
      typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
-     typing/typecore.cmi parsing/syntaxerr.cmi typing/subst.cmi \
-@@ -299,23 +314,25 @@ typing/typeclass.cmx : utils/warnings.cmx typing/typetexp.cmx \
-     utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
-     parsing/ast_helper.cmx typing/typeclass.cmi
+     typing/typecore.cmi typing/subst.cmi typing/stypes.cmi \
+@@ -354,7 +369,7 @@ typing/typeclass.cmi : typing/types.cmi typing/typedtree.cmi \
+     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
+     typing/ident.cmi typing/env.cmi typing/ctype.cmi parsing/asttypes.cmi
  typing/typecore.cmo : utils/warnings.cmi typing/typetexp.cmi \
--    typing/types.cmi typing/typedtree.cmi parsing/syntaxerr.cmi \
--    typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi \
--    typing/primitive.cmi typing/predef.cmi typing/path.cmi \
--    parsing/parsetree.cmi typing/parmatch.cmi typing/oprint.cmi \
--    utils/misc.cmi parsing/longident.cmi parsing/location.cmi \
--    typing/ident.cmi typing/env.cmi typing/ctype.cmi typing/cmt_format.cmi \
--    utils/clflags.cmi typing/btype.cmi parsing/asttypes.cmi \
--    parsing/ast_helper.cmi typing/annot.cmi typing/typecore.cmi
-+    typing/types.cmi typing/typedtree.cmi typing/trx.cmi \
-+    parsing/syntaxerr.cmi typing/subst.cmi typing/stypes.cmi \
-+    typing/printtyp.cmi typing/primitive.cmi typing/predef.cmi \
-+    typing/path.cmi parsing/parsetree.cmi typing/parmatch.cmi \
-+    typing/oprint.cmi utils/misc.cmi parsing/longident.cmi \
-+    parsing/location.cmi typing/ident.cmi typing/env.cmi typing/ctype.cmi \
-+    typing/cmt_format.cmi utils/clflags.cmi typing/btype.cmi \
-+    parsing/asttypes.cmi parsing/ast_helper.cmi typing/annot.cmi \
-+    typing/typecore.cmi
+-    typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
++    typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi typing/trx.cmi \
+     typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi \
+     typing/primitive.cmi typing/predef.cmi typing/path.cmi \
+     parsing/parsetree.cmi typing/parmatch.cmi typing/oprint.cmi \
+@@ -364,7 +379,7 @@ typing/typecore.cmo : utils/warnings.cmi typing/typetexp.cmi \
+     parsing/asttypes.cmi parsing/ast_helper.cmi typing/annot.cmi \
+     typing/typecore.cmi
  typing/typecore.cmx : utils/warnings.cmx typing/typetexp.cmx \
--    typing/types.cmx typing/typedtree.cmx parsing/syntaxerr.cmx \
--    typing/subst.cmx typing/stypes.cmx typing/printtyp.cmx \
--    typing/primitive.cmx typing/predef.cmx typing/path.cmx \
--    parsing/parsetree.cmi typing/parmatch.cmx typing/oprint.cmx \
--    utils/misc.cmx parsing/longident.cmx parsing/location.cmx \
--    typing/ident.cmx typing/env.cmx typing/ctype.cmx typing/cmt_format.cmx \
--    utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
--    parsing/ast_helper.cmx typing/annot.cmi typing/typecore.cmi
-+    typing/types.cmx typing/typedtree.cmx typing/trx.cmx \
-+    parsing/syntaxerr.cmx typing/subst.cmx typing/stypes.cmx \
-+    typing/printtyp.cmx typing/primitive.cmx typing/predef.cmx \
-+    typing/path.cmx parsing/parsetree.cmi typing/parmatch.cmx \
-+    typing/oprint.cmx utils/misc.cmx parsing/longident.cmx \
-+    parsing/location.cmx typing/ident.cmx typing/env.cmx typing/ctype.cmx \
-+    typing/cmt_format.cmx utils/clflags.cmx typing/btype.cmx \
-+    parsing/asttypes.cmi parsing/ast_helper.cmx typing/annot.cmi \
-+    typing/typecore.cmi
- typing/typedecl.cmo : utils/warnings.cmi typing/typetexp.cmi \
-     typing/types.cmi typing/typedtree.cmi parsing/syntaxerr.cmi \
-     typing/subst.cmi typing/printtyp.cmi typing/primitive.cmi \
+-    typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx \
++    typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx typing/trx.cmx \
+     typing/subst.cmx typing/stypes.cmx typing/printtyp.cmx \
+     typing/primitive.cmx typing/predef.cmx typing/path.cmx \
+     parsing/parsetree.cmi typing/parmatch.cmx typing/oprint.cmx \
 diff --git a/Makefile b/Makefile
-index 6c0e7e6..287d183 100644
+index 85be2db..68c2bc9 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -20,6 +20,9 @@ CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink
- COMPFLAGS=-strict-sequence -w +33..39+48 -warn-error A -bin-annot \
-           -safe-string $(INCLUDES)
- LINKFLAGS=
-+# For debugging
-+# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
-+# LINKFLAGS=-g #NNN
- 
- CAMLYACC=boot/ocamlyacc
- YACCFLAGS=-v
-@@ -49,6 +52,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
-   parsing/pprintast.cmo \
-   parsing/ast_mapper.cmo
- 
-+# NNN (trx)
- TYPING=typing/ident.cmo typing/path.cmo \
-   typing/primitive.cmo typing/types.cmo \
-   typing/btype.cmo typing/oprint.cmo \
-@@ -59,6 +63,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
-   typing/mtype.cmo typing/envaux.cmo typing/includecore.cmo \
-   typing/typedtreeIter.cmo typing/typedtreeMap.cmo typing/cmt_format.cmo \
-   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
-+  typing/trx.cmo \
-   typing/stypes.cmo typing/typecore.cmo \
-   typing/typedecl.cmo typing/typeclass.cmo \
-   typing/typemod.cmo
-@@ -130,6 +135,8 @@ all:
- 	$(MAKE) otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
+@@ -38,6 +38,8 @@ all:
+ 	$(MAKE) otherlibraries $(WITH_DEBUGGER) \
  	  $(WITH_OCAMLDOC)
  
 +# NNN make all && (cd metalib && make clean all) && (make install; cd metalib && make install)
@@ -112,44 +55,65 @@ index 6c0e7e6..287d183 100644
  # Compile everything the first time
  world:
  	$(MAKE) coldstart
-@@ -325,6 +332,13 @@ install:
+@@ -240,6 +242,13 @@ install:
  	   $(INSTALL_COMPLIBDIR)
  	cp expunge $(INSTALL_LIBDIR)/expunge$(EXE)
  	cp toplevel/topdirs.cmi $(INSTALL_LIBDIR)
 +# NNN typing/trx.ml needs its own interface (since it looks up identifiers
 +# in itself)
 +# Although typing/trx.cmi is already copied, see above, it is copied
-+# into $((COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
++# into $(COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
 +	cp typing/trx.cmi $(INSTALL_LIBDIR)
 +# BTW, trx.cmo is part of ocamlcommon.cma
 +# NNN end
  	cd tools; $(MAKE) install
  	-cd man; $(MAKE) install
  	for i in $(OTHERLIBRARIES); do \
-@@ -744,7 +758,7 @@ html_doc: ocamldoc
- partialclean::
- 	cd ocamldoc && $(MAKE) clean
+diff --git a/Makefile.shared b/Makefile.shared
+index 5ffccb4..0d1e7f8 100644
+--- a/Makefile.shared
++++ b/Makefile.shared
+@@ -28,6 +28,9 @@ COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48 \
+ 	  -warn-error A \
+           -bin-annot -safe-string -strict-formats $(INCLUDES)
+ LINKFLAGS=
++# For debugging
++# COMPFLAGS=-warn-error A -g $(INCLUDES) # NNN
++# LINKFLAGS=-g #NNN
  
--alldepend::
-+alldepen1d::
- 	cd ocamldoc && $(MAKE) depend
+ YACCFLAGS=-v --strict
+ CAMLLEX=$(CAMLRUN) boot/ocamllex
+@@ -57,6 +60,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
+   parsing/ast_mapper.cmo parsing/ast_iterator.cmo parsing/attr_helper.cmo \
+   parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo
  
- # The extra libraries
++# NNN (trx)
+ TYPING=typing/ident.cmo typing/path.cmo \
+   typing/primitive.cmo typing/types.cmo \
+   typing/btype.cmo typing/oprint.cmo \
+@@ -69,6 +73,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
+   typing/tast_mapper.cmo \
+   typing/cmt_format.cmo typing/untypeast.cmo \
+   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
++  typing/trx.cmo \
+   typing/stypes.cmo typing/typedecl.cmo typing/typecore.cmo \
+   typing/typeclass.cmo \
+   typing/typemod.cmo
 diff --git a/parsing/lexer.mll b/parsing/lexer.mll
-index 237b447..c009d8b 100644
+index a485f3e..1a4854d 100644
 --- a/parsing/lexer.mll
 +++ b/parsing/lexer.mll
-@@ -270,6 +270,8 @@ let identchar_latin1 =
+@@ -290,6 +290,8 @@ let identchar_latin1 =
    ['A'-'Z' 'a'-'z' '_' '\192'-'\214' '\216'-'\246' '\248'-'\255' '\'' '0'-'9']
  let symbolchar =
    ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
-+let symbolcharnodot =                                                  (* NNN *)
-+ ['!' '$' '%' '&' '*' '+' '-' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~'] (* NNN *)
++let symbolcharnodot =                                                       (* NNN *)
++  ['!' '$' '%' '&' '*' '+' '-'     '/' ':' '<' '=' '>' '?' '@' '^' '|' '~'] (* NNN *)
  let decimal_literal =
    ['0'-'9'] ['0'-'9' '_']*
  let hex_literal =
-@@ -302,6 +304,9 @@ rule token = parse
-       }
+@@ -323,6 +325,9 @@ rule token = parse
+         EOL }
    | blank +
        { token lexbuf }
 +  | ".<" { DOTLESS }     (* NNN *)
@@ -158,7 +122,7 @@ index 237b447..c009d8b 100644
    | "_"
        { UNDERSCORE }
    | "~"
-@@ -472,8 +477,10 @@ rule token = parse
+@@ -503,8 +508,10 @@ rule token = parse
              { PREFIXOP(Lexing.lexeme lexbuf) }
    | ['~' '?'] symbolchar +
              { PREFIXOP(Lexing.lexeme lexbuf) }
@@ -170,42 +134,11 @@ index 237b447..c009d8b 100644
    | ['@' '^'] symbolchar *
              { INFIXOP1(Lexing.lexeme lexbuf) }
    | ['+' '-'] symbolchar *
-@@ -483,6 +490,8 @@ rule token = parse
-   | '%'     { PERCENT }
-   | ['*' '/' '%'] symbolchar *
-             { INFIXOP3(Lexing.lexeme lexbuf) }
-+  | "let" symbolchar*                            (* NNN *)
-+            { LETOP(Lexing.lexeme lexbuf) }      (* NNN *)
-   | eof { EOF }
-   | _
-       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
 diff --git a/parsing/parser.mly b/parsing/parser.mly
-index ba8e98e..43330f1 100644
+index 1b642b2..b98d6ff 100644
 --- a/parsing/parser.mly
 +++ b/parsing/parser.mly
-@@ -273,6 +273,21 @@ let wrap_type_annotation newtypes core_type body =
-   in
-   (exp, ghtyp(Ptyp_poly(newtypes,varify_constructors newtypes core_type)))
- 
-+    (* NNN: the whole definition *)
-+let let_operator op bindings cont =
-+  let pat, expr =
-+    match bindings with
-+    | []   -> assert false
-+    | [x]  -> (x.pvb_pat,x.pvb_expr)
-+    | l    -> 
-+        let pats, exprs = 
-+          List.fold_right
-+            (fun {pvb_pat=p;pvb_expr=e} (ps,es) -> (p::ps,e::es)) l ([],[]) in
-+        ghpat (Ppat_tuple pats), ghexp (Pexp_tuple exprs)
-+    in
-+      mkexp(Pexp_apply(op, [("", expr); 
-+                            ("", ghexp(Pexp_fun("", None, pat, cont)))]))
-+
- let wrap_exp_attrs body (ext, attrs) =
-   (* todo: keep exact location for the entire attribute *)
-   let body = {body with pexp_attributes = attrs @ body.pexp_attributes} in
-@@ -293,6 +308,9 @@ let mkctf_attrs d attrs =
+@@ -464,6 +464,9 @@ let package_type_of_module_type pmty =
  
  /* Tokens */
  
@@ -215,79 +148,30 @@ index ba8e98e..43330f1 100644
  %token AMPERAMPER
  %token AMPERSAND
  %token AND
-@@ -358,6 +376,7 @@ let mkctf_attrs d attrs =
- %token LESS
- %token LESSMINUS
- %token LET
-+%token <string> LETOP /* NNN */
- %token <string> LIDENT
- %token LPAREN
- %token LBRACKETAT
-@@ -441,6 +460,7 @@ The precedences must be listed from low to high.
- %nonassoc below_SEMI
- %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
- %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
-+%nonassoc LETOP           /* NNN */
- %nonassoc below_WITH
- %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
- %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
-@@ -468,6 +488,7 @@ The precedences must be listed from low to high.
- %nonassoc prec_unary_minus prec_unary_plus /* unary - */
- %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
- %nonassoc prec_constr_appl              /* above AS BAR COLONCOLON COMMA */
-+%left	  prec_escape    /* NNN */
- %nonassoc below_SHARP
- %nonassoc SHARP                         /* simple_expr/toplevel_directive */
- %nonassoc below_DOT
-@@ -1084,6 +1105,8 @@ expr:
-       { mkexp(Pexp_apply($1, List.rev $2)) }
-   | LET ext_attributes rec_flag let_bindings_no_attrs IN seq_expr
-       { mkexp_attrs (Pexp_let($3, List.rev $4, $6)) $2 }
-+  | let_operator ext_attributes let_bindings IN seq_expr     /* NNN */
-+      { wrap_exp_attrs (let_operator $1 $3 $5) $2 }          /* NNN */
-   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
-       { mkexp_attrs (Pexp_letmodule(mkrhs $4 4, $5, $7)) $3 }
-   | LET OPEN override_flag ext_attributes mod_longident IN seq_expr
-@@ -1200,6 +1223,12 @@ simple_expr:
+@@ -649,7 +652,7 @@ The precedences must be listed from low to high.
+           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
+           NEW PREFIXOP STRING TRUE UIDENT
+           LBRACKETPERCENT LBRACKETPERCENTPERCENT
+-
++          DOTLESS DOTTILDE             /* NNN */
+ 
+ /* Entry points */
+ 
+@@ -1480,6 +1483,12 @@ simple_expr:
        { reloc_exp $2 }
    | LPAREN seq_expr error
        { unclosed "(" 1 ")" 3 }
 +  | DOTLESS expr GREATERDOT                 /* NNN */
 +      { wrap_exp_attrs $2 
 +           (None,[ghloc "metaocaml.bracket",PStr []]) }            /* NNN */
-+  | DOTTILDE simple_expr %prec prec_escape  /* NNN */
++  | DOTTILDE simple_expr  /* NNN */
 +      { wrap_exp_attrs $2 
 +           (None,[ghloc "metaocaml.escape",PStr []]) }             /* NNN */
    | BEGIN ext_attributes seq_expr END
        { wrap_exp_attrs (reloc_exp $3) $2 (* check location *) }
    | BEGIN ext_attributes END
-@@ -1961,6 +1990,7 @@ operator:
-   | INFIXOP2                                    { $1 }
-   | INFIXOP3                                    { $1 }
-   | INFIXOP4                                    { $1 }
-+  | LETOP                                       { $1 } /* NNN */
-   | BANG                                        { "!" }
-   | PLUS                                        { "+" }
-   | PLUSDOT                                     { "+." }
-@@ -1978,6 +2008,16 @@ operator:
-   | PLUSEQ                                      { "+=" }
-   | PERCENT                                     { "%" }
- ;
-+    /* NNN: the whole definition */
-+let_operator:
-+    LETOP                                   { mkexp (Pexp_ident(
-+                                                     mkloc (Lident $1)
-+                                                           (symbol_rloc ()))) }
-+  | mod_longident DOT LETOP                 { mkexp (Pexp_ident(
-+                                                     mkloc (Ldot($1,$3))
-+                                                           (symbol_rloc ()))) }
-+;
-+
- constr_ident:
-     UIDENT                                      { $1 }
- /*  | LBRACKET RBRACKET                           { "[]" } */
 diff --git a/parsing/pprintast.ml b/parsing/pprintast.ml
-index 7dea70c..91ddb5e 100644
+index f9e5152..b480941 100644
 --- a/parsing/pprintast.ml
 +++ b/parsing/pprintast.ml
 @@ -47,6 +47,8 @@ let fixity_of_string  = function
@@ -299,11 +183,14 @@ index 7dea70c..91ddb5e 100644
    | _ -> `Normal  ;;
  
  let is_infix  = function  | `Infix _ -> true | _  -> false
-@@ -512,11 +514,44 @@ class printer  ()= object(self:'self)
-            end
-     | _ -> false
-   method expression f x =
--    if x.pexp_attributes <> [] then begin
+@@ -486,10 +488,45 @@ and sugar_expr ctxt f e =
+   | _ -> false
+ 
+ and expression ctxt f x =
+-  if x.pexp_attributes <> [] then
+-    pp f "((%a)@,%a)" (expression ctxt) {x with pexp_attributes=[]}
+-      (attributes ctxt) x.pexp_attributes
+-  else match x.pexp_desc with
 +    (* NNN begin *)
 +    (* Keep in mind that there may be several metaocaml
 +       attributes, and the order matters *)
@@ -312,12 +199,13 @@ index 7dea70c..91ddb5e 100644
 +    *)
 +    match x.pexp_attributes with
 +    | ({txt="metaocaml.bracket"},_) :: t ->
-+        pp f "@[<hov2>.<@ %a @ >.@]" self#expression {x with pexp_attributes=t}
++        pp f "@[<hov2>.<@ %a @ >.@]" 
++          (expression ctxt) {x with pexp_attributes=t}
 +    | ({txt="metaocaml.escape"},_) :: t ->
 +        begin
 +        match x.pexp_desc with
-+        | Pexp_ident li when t = [] -> pp f ".~%a" self#longident_loc li
-+        | _ -> pp f ".~%a" (self#paren true self#expression)
++        | Pexp_ident li when t = [] -> pp f ".~%a" longident_loc li
++        | _ -> pp f ".~%a" (paren true (expression ctxt))
 +                              {x with pexp_attributes=t}
 +        end
 +    | [({txt = "metaocaml.csp"},PStr [{pstr_desc = 
@@ -325,41 +213,39 @@ index 7dea70c..91ddb5e 100644
 +              begin
 +                (* This CSP is easy to print, so we print it *)
 +                match x.pexp_desc with
-+                | Pexp_apply (_,[("",{pexp_desc=Pexp_constant (Const_int _)})])
++                | Pexp_apply (_,
++                    [(Nolabel, {pexp_desc=Pexp_constant (Pconst_integer _)})])
 +                    -> 
 +                      pp f "(* CSP %a *) %a"
-+                        self#longident_loc li
-+                        self#expression {x with pexp_attributes=[]}
++                        longident_loc li
++                        (expression ctxt) {x with pexp_attributes=[]}
 +                | _ -> 
 +                      pp f "(* CSP %a *)"
-+                        self#longident_loc li
++                        longident_loc li
 +              end
-+    (* if x.pexp_attributes <> [] then begin *)
++    (* if x.pexp_attributes <> [] then *)
 +    | _::_ ->
-       pp f "((%a)%a)" self#expression {x with pexp_attributes=[]}
-         self#attributes x.pexp_attributes
--    end
--    else match x.pexp_desc with
-+    (* end *)
++      pp f "((%a)@,%a)" (expression ctxt) {x with pexp_attributes=[]}
++        (attributes ctxt) x.pexp_attributes
 +    | _ -> begin match x.pexp_desc with
 +    (* else match x.pexp_desc with *)
 +    (* NNN end *)
      | Pexp_function _ | Pexp_fun _ | Pexp_match _ | Pexp_try _ | Pexp_sequence _
-       when pipe || semi ->
-         self#paren true self#reset#expression f x
-@@ -620,6 +655,7 @@ class printer  ()= object(self:'self)
-         pp f "@[<2>`%s@;%a@]" l  self#simple_expr eo
-     | Pexp_extension e -> self#extension f e
-     | _ -> self#expression1 f x
+       when ctxt.pipe || ctxt.semi ->
+         paren true (expression reset_ctxt) f x
+@@ -623,6 +660,7 @@ and expression ctxt f x =
+     | Pexp_extension e -> extension ctxt f e
+     | Pexp_unreachable -> pp f "."
+     | _ -> expression1 ctxt f x
 +   end (* NNN *)
-   method expression1 f x =
-     if x.pexp_attributes <> [] then self#expression f x
-     else match x.pexp_desc with
+ 
+ and expression1 ctxt f x =
+   if x.pexp_attributes <> [] then expression ctxt f x
 diff --git a/typing/predef.ml b/typing/predef.ml
-index e9b9f7e..9a08a86 100644
+index a16997f..0e0ce79 100644
 --- a/typing/predef.ml
 +++ b/typing/predef.ml
-@@ -120,6 +120,17 @@ and ident_nil = ident_create "[]"
+@@ -146,6 +146,17 @@ and ident_nil = ident_create "[]"
  and ident_cons = ident_create "::"
  and ident_none = ident_create "None"
  and ident_some = ident_create "Some"
@@ -377,7 +263,7 @@ index e9b9f7e..9a08a86 100644
  let common_initial_env add_type add_extension empty_env =
    let decl_bool =
      {decl_abstr with
-@@ -157,6 +168,13 @@ let common_initial_env add_type add_extension empty_env =
+@@ -185,6 +196,13 @@ let common_initial_env add_type add_extension empty_env =
       type_params = [tvar];
       type_arity = 1;
       type_variance = [Variance.covariant]}
@@ -391,7 +277,7 @@ index e9b9f7e..9a08a86 100644
    in
  
    let add_extension id l =
-@@ -184,6 +202,7 @@ let common_initial_env add_type add_extension empty_env =
+@@ -214,6 +232,7 @@ let common_initial_env add_type add_extension empty_env =
                           [newgenty (Ttuple[type_string; type_int; type_int])] (
    add_extension ident_undefined_recursive_module
                           [newgenty (Ttuple[type_string; type_int; type_int])] (
@@ -399,41 +285,41 @@ index e9b9f7e..9a08a86 100644
    add_type ident_int64 decl_abstr (
    add_type ident_int32 decl_abstr (
    add_type ident_nativeint decl_abstr (
-@@ -198,7 +217,8 @@ let common_initial_env add_type add_extension empty_env =
-   add_type ident_string decl_abstr (
-   add_type ident_char decl_abstr (
-   add_type ident_int decl_abstr (
--    empty_env))))))))))))))))))))))))))
-+    empty_env)))))))))))))))))))))))))) ) (* NNN extra parenthesis *)
+@@ -229,7 +248,8 @@ let common_initial_env add_type add_extension empty_env =
+   add_type ident_char decl_abstr_imm (
+   add_type ident_int decl_abstr_imm (
+   add_type ident_extension_constructor decl_abstr (
+-    empty_env)))))))))))))))))))))))))))
++    empty_env)))))))))))))))))))))))))))) (* NNN extra parenthesis *)
 +
  
  let build_initial_env add_type add_exception empty_env =
    let common = common_initial_env add_type add_exception empty_env in
 diff --git a/typing/predef.mli b/typing/predef.mli
-index 9723671..29f79d6 100644
+index a7bf063..4086fbc 100644
 --- a/typing/predef.mli
 +++ b/typing/predef.mli
-@@ -29,6 +29,7 @@ val type_nativeint: type_expr
+@@ -32,6 +32,7 @@ val type_nativeint: type_expr
  val type_int32: type_expr
  val type_int64: type_expr
  val type_lazy_t: type_expr -> type_expr
 +val type_code:   type_expr -> type_expr (* NNN *)
+ val type_extension_constructor:type_expr
  
  val path_int: Path.t
- val path_char: Path.t
-@@ -45,6 +46,7 @@ val path_nativeint: Path.t
+@@ -49,6 +50,7 @@ val path_nativeint: Path.t
  val path_int32: Path.t
  val path_int64: Path.t
  val path_lazy_t: Path.t
 +val path_code: Path.t  (* NNN *)
+ val path_extension_constructor: Path.t
  
  val path_match_failure: Path.t
- val path_assert_failure : Path.t
 diff --git a/typing/typecore.ml b/typing/typecore.ml
-index b173d99..bbbbeef 100644
+index 116dc1b..5204a95 100644
 --- a/typing/typecore.ml
 +++ b/typing/typecore.ml
-@@ -93,6 +93,91 @@ let type_object =
+@@ -103,6 +103,101 @@ let type_object =
         Env.t -> Location.t -> Parsetree.class_structure ->
           Typedtree.class_structure * Types.class_signature * string list)
  
@@ -446,7 +332,8 @@ index b173d99..bbbbeef 100644
 +  expression or binding
 +  (whenever you do Typetexp.reset_type_variables();)
 +
-+ Check all instances of Env.add_value and make sure that
++ Check all instances of Env.add_value and Env.enter_value and Texp_ident
++  make sure that
 + we record the stage of every identifier that is added to the
 + value env (unless the stage is 0).
 +also check all val_attributes and Val_reg
@@ -491,8 +378,12 @@ index b173d99..bbbbeef 100644
 + The particular error message we emit here does not use paths.
 +*)
 +let raise_wrong_stage_error loc n m =
-+  raise @@
-+  Error_forward(Location.errorf ~loc 
++  raise @@ Error_forward(match (n,m) with
++  | (1,0) -> Location.errorf ~loc 
++    "A variable that was bound within brackets is used outside brackets\n\
++for example: .<fun x -> .~(foo x)>.\n\
++Hint: enclose the variable in brackets,\nas in: .<fun x -> .~(foo .<x>.)>.;;"
++  | _ -> Location.errorf ~loc 
 +   "Wrong level: variable bound at level %d and used at level %d" n m)
 +
 +let raise_unsupported loc txt =
@@ -509,32 +400,37 @@ index b173d99..bbbbeef 100644
 +   with e ->
 +   global_stage := old_stage; raise e
 +
-+let with_stage_down loc env body =
++let with_stage_down loc _env body =
 +   let old_stage = !global_stage in
 +   if !global_stage = 0 then
 +     raise @@ Error_forward(Location.errorf ~loc 
-+       "Wrong level: escape at level 0");
++       "An escape may appear only within brackets");
 +   decr global_stage;
 +   try 
 +    let r = body () in
 +    global_stage := old_stage; r
 +   with e ->
 +   global_stage := old_stage; raise e
++
++let pat_code_path =
++  Path.(Pdot (Pident (Ident.create_persistent "Trx"), "pat_code", 0))
++let val_code_path =
++  Path.(Pdot (Pident (Ident.create_persistent "Trx"), "val_code", 0))
 +(* NNN end *)
 +
  (*
    Saving and outputting type information.
    We keep these function names short, because they have to be
-@@ -1258,7 +1343,7 @@ let add_pattern_variables ?check ?check_as env =
+@@ -1437,7 +1532,7 @@ let add_pattern_variables ?check ?check_as env =
         let check = if as_var then check_as else check in
         Env.add_value ?check id
           {val_type = ty; val_kind = Val_reg; Types.val_loc = loc;
 -          val_attributes = [];
-+          val_attributes = [Trx.attr_level !global_stage]    (* NNN *)
++          val_attributes = [Trx.attr_level !global_stage];   (* NNN *)
           } env
       )
       pv env,
-@@ -1301,7 +1386,8 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
+@@ -1480,7 +1575,8 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
           ((id', name, id, ty)::pv,
            Env.add_value id' {val_type = ty;
                               val_kind = Val_ivar (Immutable, cl_num);
@@ -544,7 +440,7 @@ index b173d99..bbbbeef 100644
                               Types.val_loc = loc;
                              } ~check
              env))
-@@ -1325,6 +1411,10 @@ let type_self_pattern cl_num privty val_env met_env par_env spat =
+@@ -1504,6 +1600,10 @@ let type_self_pattern cl_num privty val_env met_env par_env spat =
    let pv = !pattern_variables in
    pattern_variables := [];
    let (val_env, met_env, par_env) =
@@ -553,9 +449,9 @@ index b173d99..bbbbeef 100644
 +	     since we don't handle classes within brackets.
 +	   *)
      List.fold_right
-       (fun (id, ty, name, loc, as_var) (val_env, met_env, par_env) ->
+       (fun (id, ty, _name, loc, as_var) (val_env, met_env, par_env) ->
           (Env.add_value id {val_type = ty;
-@@ -1377,6 +1467,7 @@ let rec final_subexpression sexp =
+@@ -1556,6 +1656,7 @@ let rec final_subexpression sexp =
  (* Generalization criterion for expressions *)
  
  let rec is_nonexpansive exp =
@@ -563,7 +459,7 @@ index b173d99..bbbbeef 100644
    match exp.exp_desc with
      Texp_ident(_,_,_) -> true
    | Texp_constant _ -> true
-@@ -1491,7 +1582,14 @@ let rec approx_type env sty =
+@@ -1675,7 +1776,14 @@ let rec approx_type env sty =
        approx_type env sty
    | _ -> newvar ()
  
@@ -578,20 +474,8 @@ index b173d99..bbbbeef 100644
 +  type_approx_orig env sexp =          (* NNN end *)
    match sexp.pexp_desc with
      Pexp_let (_, _, e) -> type_approx env e
-   | Pexp_fun (p, _, _, e) when is_optional p ->
-@@ -1702,6 +1800,11 @@ let duplicate_ident_types loc caselist env =
-            I don't think this is what we want *)
-         let (path, desc) = Env.lookup_value (Longident.Lident s) env in
-         match path with
-+        (* NNN The code below uses the existing desc (value-descriptor)
-+           as the template and simply changes val_type.
-+           The attributes, specifically staging level attribute,
-+           are preserved then.
-+         *)
-           Path.Pident id ->
-             let desc = {desc with val_type = correct_levels desc.val_type} in
-             Env.add_value id desc env
-@@ -1736,8 +1839,66 @@ and type_expect ?in_function env sexp ty_expected =
+   | Pexp_fun (p, _, _, e) ->
+@@ -1936,8 +2044,148 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
      (Cmt_format.Partial_expression exp :: previous_saved_types);
    exp
  
@@ -599,17 +483,99 @@ index b173d99..bbbbeef 100644
 +(* Type checking staging constructs *)
 +(* If we are type-checking bracket at level 0, don't build the
 +   bracket Texp node. Rather, invoke trx_bracket to translate 
-+   the bracket body and convert it to the c ode generator.
++   the bracket body and convert it to the code generator.
 +*)
- and type_expect_ ?in_function env sexp ty_expected =
+ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
    let loc = sexp.pexp_loc in
 +  let open Trx in
 +  (* Keep in mind that there may be several metaocaml attributes,
 +     and their order matters. 
 +  *)
 +  match what_stage_attr sexp.pexp_attributes with
-+  | Stage0 -> type_expect_orig ?in_function env sexp ty_expected
-+  | Bracket(battr,attrs) ->
++  | Stage0 -> type_expect_orig ?in_function ~recarg env sexp ty_expected
++
++        (* the programmer asserts that the bracketed expression is
++           a functional literal. Check it, and if so, give it a more
++           refined type: pat_code
++         *)
++  | FunBracket(battrs,attrs) ->
++     let literal_fn = 
++       (* If there are other staging attributes _underneath_, 
++          the quoted expression
++          has brackets and escapes and hence cannot be a function literal
++        *)
++       if what_stage_attr attrs <> Stage0 then false
++       else match sexp.pexp_desc with
++       | Pexp_fun (Nolabel, None, _, _) 
++       | Pexp_function _ -> true
++       | _               -> false
++     in
++     let () = if not literal_fn then 
++       raise @@ Error_forward(Location.errorf ~loc 
++       "The expression does not appear to be a functional literal as \
++        requested") in
++     (* check to make sure pat_code is really the type 'a pat_code
++        that we declared in Trx.mli
++      *)
++     let () = 
++       match Env.find_type pat_code_path Env.initial_safe_string with
++       | {type_params = [_]} -> ()
++       | _                   -> assert false 
++     in
++     let ty = newgenvar() in     (* expected type for the bracketed sexp *)
++     let type_pat_code = newgenty (Tconstr(pat_code_path, [ty], ref Mnil)) in
++     unify_exp_types loc env type_pat_code ty_expected;
++     let exp =
++        with_stage_up (fun () ->
++                (* drop bracket attr *)
++          let sexp = {sexp with pexp_attributes = attrs} in
++          type_expect env sexp ty) in
++     re @@
++      if !global_stage = 0 then
++        (* Function literal is certainly a value *)
++        let exp = trx_bracket 1 exp in
++        {exp with exp_type = instance env ty_expected;
++                  exp_attributes = attr_nonexpansive :: exp.exp_attributes}
++      else
++        texp_braesc battrs exp env (instance env ty_expected)
++
++        (* the programmer asserts that the bracketed expression represents
++           a value in the generated code. When such an expression is
++           evaluated in the future, it has no side effects
++           (except for heap allocations).
++           Check this assertion, and if so, give it a more refined type: 
++           val_code
++         *)
++  | ValBracket(battrs,attrs) ->
++                (* drop bracket attr *)
++     let sexp1 = {sexp with pexp_attributes = attrs} in
++     let () = if not (Trx.is_value_exp 0 sexp1) then 
++       raise @@ Error_forward(Location.errorf ~loc 
++       "The expression does not appear to be syntactically a value as \
++        requested") in
++     (* check to make sure val_code is really the type 'a val_code
++        that we declared in Trx.mli
++      *)
++     let () = 
++       match Env.find_type val_code_path Env.initial_safe_string with
++       | {type_params = [_]} -> ()
++       | _                   -> assert false 
++     in
++     let ty = newgenvar() in     (* expected type for the bracketed sexp *)
++     let type_val_code = newgenty (Tconstr(val_code_path, [ty], ref Mnil)) in
++     unify_exp_types loc env type_val_code ty_expected;
++     let exp =
++        with_stage_up (fun () -> type_expect env sexp1 ty) in
++     re @@
++      if !global_stage = 0 then
++        (* Value is certainly non-expansive *)
++        let exp = trx_bracket 1 exp in
++        {exp with exp_type = instance env ty_expected;
++                  exp_attributes = attr_nonexpansive :: exp.exp_attributes}
++      else
++        texp_braesc battrs exp env (instance env ty_expected)
++
++  | Bracket(battrs,attrs) ->
 +       (* Typechecking bracket *)
 +       (* follow Pexp_array or Pexp_lazy as a template *)
 +       (* Expected type: ty code where ty is the type
@@ -633,7 +599,7 @@ index b173d99..bbbbeef 100644
 +                    if nonexp then attr_nonexpansive :: exp.exp_attributes
 +                              else exp.exp_attributes}
 +      else
-+        texp_braesc battr exp env (instance env ty_expected)
++        texp_braesc battrs exp env (instance env ty_expected)
 +
 +       (* NNN:  Typechecking escapes *)
 +       (* If ~e is expected to have the type ty then
@@ -645,28 +611,28 @@ index b173d99..bbbbeef 100644
 +       let sexp = {sexp with pexp_attributes = attrs} in (* drop bracket attr *)
 +       let exp = type_expect env sexp sexp_ty_expected in
 +       re @@
-+         texp_braesc battr exp env (instance env ty_expected))
++         texp_braesc [battr] exp env (instance env ty_expected))
 +
 +       (* There is nothing special in type-checking CSPs.
-+          After lifting, a CSP value becomes an ordinaru expression.
++          After lifting, a CSP value becomes an ordinary expression.
 +        *)
-+  | _ -> type_expect_orig ?in_function env sexp ty_expected
++  | CSP _ -> type_expect_orig ?in_function ~recarg env sexp ty_expected
 +  (* NNN end *)
 +
-+and type_expect_orig ?in_function env sexp ty_expected =  (* NNN *)
++and type_expect_orig ?in_function ~recarg env sexp ty_expected =  (* NNN *)
 +  let loc = sexp.pexp_loc in
    (* Record the expression type before unifying it with the expected type *)
    let rue exp =
      unify_exp env (re exp) (instance env ty_expected);
-@@ -1756,6 +1917,7 @@ and type_expect_ ?in_function env sexp ty_expected =
-           let name = Path.name ~paren:Oprint.parenthesized_ident path in
-           Stypes.record (Stypes.An_ident (loc, name, annot))
+@@ -1973,6 +2221,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
+         | false, Required, _  ->
+             () (* will fail later *)
          end;
 +        let stage = Trx.get_level desc.val_attributes in        (* NNN *)
          rue {
            exp_desc =
              begin match desc.val_kind with
-@@ -1779,9 +1941,13 @@ and type_expect_ ?in_function env sexp ty_expected =
+@@ -1996,9 +2245,13 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                  Env.add_required_global (Path.head p);
                  Texp_ident(path, lid, desc)*)
              | _ ->
@@ -680,19 +646,7 @@ index b173d99..bbbbeef 100644
            exp_type = instance env desc.val_type;
            exp_attributes = sexp.pexp_attributes;
            exp_env = env }
-@@ -1875,9 +2041,9 @@ and type_expect_ ?in_function env sexp ty_expected =
-       in
-       type_expect ?in_function env sfun ty_expected
-         (* TODO: keep attributes, call type_function directly *)
--  | Pexp_fun (l, None, spat, sexp) ->
-+  | Pexp_fun (l, None, spat, sexp_body) -> (* NNN fixing the bug: sexp_body *)
-       type_function ?in_function loc sexp.pexp_attributes env ty_expected
--        l [{pc_lhs=spat; pc_guard=None; pc_rhs=sexp}]
-+        l [{pc_lhs=spat; pc_guard=None; pc_rhs=sexp_body}]
-   | Pexp_function caselist ->
-       type_function ?in_function
-         loc sexp.pexp_attributes env ty_expected "" caselist
-@@ -2195,7 +2361,8 @@ and type_expect_ ?in_function env sexp ty_expected =
+@@ -2447,7 +2700,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
          | Ppat_any -> Ident.create "_for", env
          | Ppat_var {txt} ->
              Env.enter_value txt {val_type = instance_def Predef.type_int;
@@ -702,7 +656,7 @@ index b173d99..bbbbeef 100644
                                   val_kind = Val_reg; Types.val_loc = loc; } env
                ~check:(fun s -> Warnings.Unused_for_index s)
          | _ ->
-@@ -2357,7 +2524,8 @@ and type_expect_ ?in_function env sexp ty_expected =
+@@ -2616,7 +2870,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                                  Texp_ident(Path.Pident method_id, lid,
                                             {val_type = method_type;
                                              val_kind = Val_reg;
@@ -712,7 +666,7 @@ index b173d99..bbbbeef 100644
                                              Types.val_loc = Location.none});
                                  exp_loc = loc; exp_extra = [];
                                  exp_type = method_type;
-@@ -2428,6 +2596,8 @@ and type_expect_ ?in_function env sexp ty_expected =
+@@ -2701,6 +2956,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                exp_env = env }
          end
    | Pexp_setinstvar (lab, snewval) ->
@@ -721,8 +675,8 @@ index b173d99..bbbbeef 100644
        begin try
          let (path, desc) = Env.lookup_value (Longident.Lident lab.txt) env in
          match desc.val_kind with
-@@ -2452,6 +2622,8 @@ and type_expect_ ?in_function env sexp ty_expected =
-           raise(Error(loc, env, Unbound_instance_variable lab.txt))
+@@ -2731,6 +2988,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
+                       Unbound_instance_variable (lab.txt, valid_vars)))
        end
    | Pexp_override lst ->
 +      if !global_stage != 0 then                                    (* NNN *)
@@ -730,7 +684,7 @@ index b173d99..bbbbeef 100644
        let _ =
         List.fold_right
          (fun (lab, _) l ->
-@@ -2490,6 +2662,8 @@ and type_expect_ ?in_function env sexp ty_expected =
+@@ -2771,6 +3030,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
            assert false
        end
    | Pexp_letmodule(name, smodl, sbody) ->
@@ -739,7 +693,16 @@ index b173d99..bbbbeef 100644
        let ty = newvar() in
        (* remember original level *)
        begin_def ();
-@@ -3094,7 +3268,7 @@ and type_argument env sarg ty_expected' ty_expected =
+@@ -2800,6 +3061,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
+         exp_attributes = sexp.pexp_attributes;
+         exp_env = env }
+   | Pexp_letexception(cd, sbody) ->
++      if !global_stage != 0 then                                    (* NNN *)
++        raise_unsupported loc "letexception";                       (* NNN *)
+       let (cd, newenv) = Typedecl.transl_exception env cd in
+       let body = type_expect newenv sbody ty_expected in
+       re {
+@@ -3429,7 +3692,7 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
           exp_desc =
           Texp_ident(Path.Pident id, mknoloc (Longident.Lident name),
                      {val_type = ty; val_kind = Val_reg;
@@ -748,29 +711,30 @@ index b173d99..bbbbeef 100644
                       Types.val_loc = Location.none})}
        in
        let eta_pat, eta_var = var_pair "eta" ty_arg in
-@@ -3722,6 +3896,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
+@@ -4134,6 +4397,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
+ (* Typing of toplevel bindings *)
  
  let type_binding env rec_flag spat_sexp_list scope =
-   Typetexp.reset_type_variables();
 +  global_stage := 0;			(* NNN *)
-   let (pat_exp_list, new_env, unpacks) =
+   Typetexp.reset_type_variables();
+   let (pat_exp_list, new_env, _unpacks) =
      type_let
-       ~check:(fun s -> Warnings.Unused_value_declaration s)
-@@ -3739,17 +3914,34 @@ let type_let env rec_flag spat_sexp_list scope =
+@@ -4151,18 +4415,35 @@ let type_let env rec_flag spat_sexp_list scope =
+ (* Typing of toplevel expressions *)
  
  let type_expression env sexp =
-   Typetexp.reset_type_variables();
 +  global_stage := 0;			(* NNN *)
+   Typetexp.reset_type_variables();
    begin_def();
    let exp = type_exp env sexp in
    end_def();
-   if is_nonexpansive exp then generalize exp.exp_type
-   else generalize_expansive env exp.exp_type;
+   if not (is_nonexpansive exp) then generalize_expansive env exp.exp_type;
+   generalize exp.exp_type;
 +  (* NNN The original code 
    match sexp.pexp_desc with
      Pexp_ident lid ->
        (* Special case for keeping type variables when looking-up a variable *)
-       let (path, desc) = Env.lookup_value lid.txt env in
+       let (_path, desc) = Env.lookup_value lid.txt env in
        {exp with exp_type = desc.val_type}
    | _ -> exp
 +  We have to modify it since <x> is also Pexp_ident, with the additional
@@ -778,13 +742,13 @@ index b173d99..bbbbeef 100644
 +  attribute, or, better, check exp. After type-checking, <x> is no longer
 +  Pexp_ident. For ordinary identifiers though, Pexp_ident li maps to
 +  Texp_ident (..,li,..) -- with the exception of instance vars, which
-+  don't matter at the ttoplevel anyway.
++  don't matter at the toplevel anyway.
 +*)
 + (* NNN new code *)
 +  match exp.exp_desc with
 +    Texp_ident (_,lid,_) ->
 +      (* Special case for keeping type variables when looking-up a variable *)
-+      let (path, desc) = Env.lookup_value lid.txt env in
++      let (_path, desc) = Env.lookup_value lid.txt env in
 +      {exp with exp_type = desc.val_type}
 +  | _ -> exp
 + (* NNN end *)

@@ -1,5 +1,5 @@
 		BER MetaOCaml
-		N102 December 2014
+		N104 December 2016
 
 0. TABLE OF CONTENTS
 
@@ -12,8 +12,7 @@
 
 1. COPYRIGHT
 
-BER MetaOCaml is a complete re-implementation of MetaOCaml, 
-which was licensed according to ORIGINAL-LICENSE-META
+BER MetaOCaml is a complete re-implementation of MetaOCaml.
 
 
 2. INSTALLATION

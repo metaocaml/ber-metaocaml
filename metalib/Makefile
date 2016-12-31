@@ -15,8 +15,9 @@ COMPILER=$(CAMLROOT)/ocamlc
 CAMLC=$(RUNTIME) $(COMPILER) $(INCLUDES)
 COMPFLAGS=-strict-sequence -w +33..39 -warn-error A -nostdlib
 OPTCOMPILER=$(CAMLROOT)/ocamlopt
-CAMLOPT=$(RUNTIME) $(OPTCOMPILER) -nostdlib -I ../stdlib \
-	-I ../otherlibs/dynlink -I ../typing -I ../parsing -I ../utils
+CAMLOPT=$(RUNTIME) $(OPTCOMPILER) -nostdlib -I $(CAMLROOT)/stdlib \
+	-I $(CAMLROOT)/otherlibs/dynlink \
+	-I $(CAMLROOT)/typing -I $(CAMLROOT)/parsing -I $(CAMLROOT)/utils
 OPTCOMPFLAGS=-strict-sequence -w +33..39-58 -warn-error A -nostdlib
 CAMLDEP=$(CAMLROOT)/boot/ocamlrun $(CAMLROOT)/tools/ocamldep
 
@@ -159,7 +160,7 @@ test-native:
 
 clean::
 	rm -f simple_true quick_test t4 fib \
-	pt trivial.out simple.out a.out tp qtn
+	pt trivial.out simple.out a.out tp test/qtn
 
 clean::
 	rm -f test/csp1 test/*.cmi test/*.cmo

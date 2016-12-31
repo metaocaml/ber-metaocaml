@@ -1,8 +1,13 @@
+December 31, 2016
+	Release N104
+
 December 30, 2016
-	Let-insertion
+	Let-insertion. See genlet.ml and fib.ml in the tests directory
+	for the examples.
 
 December 23, 2016
-	First-class patterns
+	First-class patterns. See test/pattern.ml for an example of how to
+	use this feature.
 
 December 16, 2016
 	Native MetaOCaml

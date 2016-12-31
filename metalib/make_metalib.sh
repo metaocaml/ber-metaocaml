@@ -1,6 +1,6 @@
 # Make the distribution directory
 
-DEST=/tmp/ber-metaocaml-102
+DEST=/tmp/ber-metaocaml-104
 
 mkdir $DEST
 
@@ -11,7 +11,6 @@ Files.txt \
 INSTALL \
 Makefile \
 NOTES.txt \
-ORIGINAL-LICENSE-META \
 Problems.txt \
 README \
 berstart.ml \
@@ -23,8 +22,14 @@ print_code.ml \
 print_code.mli \
 runcode.ml \
 runcode.mli \
+runnative.mli \
+runnative.ml \
+metaocamlopt.c \
 simple.ref \
 trivial.ref \
+values.ref \
+pattern.ref \
+genlet.ref \
 $DEST/
 
 mkdir $DEST/patches

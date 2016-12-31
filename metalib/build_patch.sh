@@ -7,9 +7,10 @@
 cd ..
 
 #git diff 327f91b41f16b223c783070fa44058c5b1db8804 -- 
-git diff 4.02 -- \
+git diff 4.04.0 -- \
 ./.depend \
 ./Makefile \
+./Makefile.shared \
 ./parsing/lexer.mll \
 ./parsing/parser.mly \
 ./parsing/pprintast.ml \
