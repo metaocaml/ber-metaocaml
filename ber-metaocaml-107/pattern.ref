@@ -1,0 +1,30 @@
+BER MetaOCaml toplevel, version N 107
+        OCaml version 4.07.1
+
+#     #     * *   val t : (unit -> unit) code = .<fun () -> ()>. 
+#     * *   val t : (unit -> unit) code = .<fun () -> ()>. 
+#     * *   val t : (unit -> unit) pat_code = .<fun () -> ()>. 
+#     * * * *   Characters 11-41:
+  let t = .<let x = function () -> () in x>. [@metaocaml.functionliteral]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be a functional literal as requested
+# Error was expected
+- : unit = ()
+#         * *   val t : ('a -> 'a) pat_code = .<fun x_1 -> x_1>. 
+#     * *   val t : ('a list -> bool) pat_code = .<
+  function | [] -> true | _::_ -> false>. 
+#     * *   - : bool code = .<match [] with | [] -> true | _::_ -> false>. 
+#                 * * * * * * *       val c : int code = .<
+  match [2] with
+  | [] -> 0
+  | 1::[] -> 0
+  | x_4::[] -> x_4 + 1
+  | x_2::y_3 -> x_2 + 1>. 
+#           Exception: Match_failure ("//toplevel//", 62, 21).
+#       Error was expected
+- : unit = ()
+# 
+All done
+
+- : unit = ()
+# 

@@ -1,0 +1,113 @@
+BER MetaOCaml toplevel, version N 107
+        OCaml version 4.07.1
+
+#     - : int code = .<1 + 2>. 
+#       * *   - : (int -> int) code = .<fun x_1 -> x_1 + 2>. 
+#     val t : (int -> int) code = .<let lv_3 = 1 + 2 in fun x_2 -> x_2 + lv_3>. 
+# * *   #     val t : (int -> int) code = .<fun x_4 -> x_4 + x_4>. 
+# * *       val t : (int -> int) code = .<
+  fun x_5 -> let lv_7 = let _y_6 = 1 in x_5 in x_5 + lv_7>. 
+# * * *       val t : (int -> int) code = .<
+  fun x_8 -> let lv_9 () = x_8 in x_8 + (lv_9 ())>. 
+# * * *   #     val t : (int -> int) code = .<
+  let lv_12 x_11 = x_11 + 2 in fun x_10 -> x_10 + (lv_12 x_10)>. 
+# * * *   #     val t : (int -> int) code = .<
+  fun x_13 -> let lv_14 = x_13 + 1 in x_13 + lv_14>. 
+# * * *   #     val t : (int -> int -> int) code = .<
+  let lv_17 = 2 + 3 in fun x_15 -> fun y_16 -> (x_15 + y_16) + lv_17>. 
+# * * *     #   val t : (int -> int -> int) code = .<
+  fun x_18 -> fun y_19 -> (x_18 + y_19) + x_18>. 
+# * * *   #   val t : (int -> int -> int) code = .<
+  fun x_20 -> fun y_21 -> (x_20 + y_21) + y_21>. 
+# # * * *   #   val t : (int -> int -> int) code = .<
+  fun x_22 -> let lv_24 = x_22 + 1 in fun y_23 -> (x_22 + y_23) + lv_24>. 
+# * * *   #   val t : (int -> int -> int) code = .<
+  fun x_25 -> fun y_26 -> let lv_27 = y_26 + 1 in (x_25 + y_26) + lv_27>. 
+# * * *   #   val t : (int -> int -> int) code = .<
+  fun x_28 ->
+    fun y_29 -> let lv_30 = (y_29 + 1) + x_28 in (x_28 + y_29) + lv_30>.
+  
+# * * * * *   #         val t : (int -> int -> int) code = .<
+  fun x_31 ->
+    fun y_32 -> let lv_33 = (y_32 + 1) + x_31 in (x_31 + y_32) + lv_33>.
+  
+#   #     val t : (int -> int -> int) code = .<
+  let lv_36 = 1 + 2 in
+  fun x_34 -> fun y_35 -> let lv_37 = y_35 + lv_36 in (x_34 + y_35) + lv_37>. 
+# * * * * * *   #     val t : (int -> int -> int) code = .<
+  fun x_38 ->
+    let lv_40 = 1 + x_38 in
+    fun y_39 -> let lv_41 = y_39 + lv_40 in (x_38 + y_39) + lv_41>.
+  
+# * * * * * *   #     val t : (int -> int -> int) code = .<
+  fun x_42 ->
+    fun y_43 ->
+      let lv_44 = (1 + x_42) + y_43 in
+      let lv_45 = y_43 + lv_44 in (x_42 + y_43) + lv_45>.
+  
+# * * * * * * *   #     val t : (int -> int -> int) code = .<
+  fun x_46 ->
+    fun y_47 ->
+      let lv_48 = (1 + x_46) + y_47 in
+      let lv_49 = x_46 + lv_48 in (x_46 + y_47) + lv_49>.
+  
+# * * * * * * *   #     val t : (int -> int -> int) code = .<
+  fun x_50 ->
+    let lv_52 = (1 + x_50) + 2 in
+    let lv_53 = 1 + lv_52 in fun y_51 -> (x_50 + y_51) + lv_53>.
+  
+# * * * * * *   #     val t : (int -> int -> int) code = .<
+  let lv_56 = (1 + 3) + 2 in
+  let lv_57 = 1 + lv_56 in fun x_54 -> fun y_55 -> (x_54 + y_55) + lv_57>. 
+# * * * *   #           val t : int code = .<let lv_58 = 1 + 2 in lv_58 + lv_58>. 
+# * *   #           val t : int code = .<
+  let lv_59 = 1 + 2 in let lv_60 = 1 + lv_59 in lv_59 + lv_60>. 
+# * * *   #             * * * *   val t : int code = .<
+  let lv_61 = 1 + 2 in
+  let lv_62 = 1 + lv_61 in let lv_63 = 1 + lv_62 in (lv_61 + lv_63) + lv_62>. 
+#             val t : (int -> int) code = .<
+  let lv_65 = 1 + 2 in fun u_64 -> let lv_66 = u_64 + lv_65 in lv_65 + lv_66>.
+  
+# * * *   #             val t : (int -> int) code = .<
+  fun u_67 -> let lv_68 = u_67 + 2 in let lv_69 = 1 + lv_68 in lv_68 + lv_69>.
+  
+# #               val t : (int -> int) code = .<
+  fun u_70 ->
+    let lv_71 = u_70 + 2 in
+    let lv_72 = 1 + lv_71 in
+    let lv_73 = 1 + lv_72 in ((lv_71 + lv_73) + lv_72) + lv_73>.
+  
+# * * * * * * *   #                 module type DSL =
+  sig
+    val sqr : int code -> int code
+    val make_incr_fun : (int code -> int code) -> (int -> int) code
+  end
+#               module DSLExp :
+  functor (S : DSL) ->
+    sig
+      val exp1 : int code
+      val exp2 : (int -> int) code
+      val exp3 : (int -> int) code
+    end
+#           module DSL1 :
+  sig
+    val sqr : int code -> int code
+    val make_incr_fun : (int code -> int code) -> (int -> int) code
+  end
+#     - : int code * (int -> int) code * (int -> int) code =
+(.<(2 + 3) * (2 + 3)>. , .<fun x_74 -> x_74 + ((2 + 3) * (2 + 3))>. , .<
+ fun x_75 -> x_75 + ((x_75 + 3) * (x_75 + 3))>. )
+# * * * * *           #             module DSL2 :
+  sig
+    val make_incr_fun : (int code -> int code) -> (int -> int) code
+    val sqr : int code -> int code
+  end
+#     - : int code * (int -> int) code * (int -> int) code =
+(.<let lv_78 = 2 + 3 in lv_78 * lv_78>. , .<
+ let lv_80 = 2 + 3 in fun x_79 -> x_79 + (lv_80 * lv_80)>. , .<
+ fun x_81 -> let lv_82 = x_81 + 3 in x_81 + (lv_82 * lv_82)>. )
+# * * * * *             #   
+All done
+
+- : unit = ()
+# 

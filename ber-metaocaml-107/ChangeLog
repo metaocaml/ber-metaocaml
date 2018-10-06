@@ -1,0 +1,177 @@
+October 5, 2018
+	Release N107
+
+September 22 - October 5, 2018
+	Renamed print_code to codelib, which is opened by default.
+	The code type is no longer predefined, hence no bootstrapping
+	is needed. To make sure it is still printed as `int code'
+	rather than `int Trx.code' or `int Codelib.code', we
+	make Codelib module opened by default and we set -short-paths
+	flag by default.
+	Due to changes in OCaml lexer, writing .~.~xxx and
+	.~.<xxx>. is no longer allowed. Insert parentheses, as in
+	.~(.~xxx) or .~(.<xxx>.).
+        Type ascriptions are now accepted (for documentation purposes
+	and for type-checking the *meta-program*) but ignored for
+	code generation. For `persistent' type ascriptions,
+	one should use something like as_int (the identity function
+	of a specific type).
+	!. is deprecated (still accepted for a while). Use run.
+	Improved the scope extrusion error message: now, it also shows
+	the code in which the escaped variable has appeared.
+	Added lift module for the explicit lifting.
+	Added the basic offshoring and a simple illustrative test of
+	offshoring to C.
+
+September 19, 2017
+	Renamed genlet to genletv; added genlet that produces
+	code rather than val_code
+	Do let-bind expressions that are values, but expensive values
+	such as abstractions (closure creation), constant arrays,
+	strings. Albeit values, they allocate memory and are not cheap
+	to copy. They should be shared.
+
+April 10, 2017
+	Jeremy Yallop: Added a patch that supports writing
+	.< e1; e2 >. which previously required parentheses:
+	.< (e1; e2) >.
+
+February 7, 2017
+	Make 'a closed_code abstract to prevent OCaml from eagerly
+	expanding that alias (as reported by Atsushi Igarashi).
+	Introducing ast_of_code to get AST.
+
+December 31, 2016
+	Release N104
+
+December 30, 2016
+	Let-insertion. See genlet.ml and fib.ml in the tests directory
+	for the examples.
+
+December 23, 2016
+	First-class patterns. See test/pattern.ml for an example of how to
+	use this feature.
+
+December 16, 2016
+	Native MetaOCaml
+
+December 15, 2016
+	Pattern-matching on GADTs within brackets is generally unsound
+	(analogous to a lazy pattern-match on GADT).
+	(Problem reported by Jeremy Yallop)
+	Pattern-matching on GADTs is now prohibited within brackets.
+
+December 14, 2016
+	Completed port to OCaml 4.04
+	Improved error messages (at least the ones that the metaocaml-specific
+	code emits)
+
+August 13, 2015
+	Removed the let! feature. Monadic programming is better done
+	with syntactic extensions such as those used by Lwt.
+
+June 22, 2015
+	Applying a patch by Jeremy Yallop, to correct for the problem
+	when a CSP value has the abstract type (that is represented as
+	string, for example). In OCaml, the same value may indeed have
+	multiple incompatible types. Therefore, we no longer can leave
+	strings and doubles to the dyn_quote. If we know the type, we have
+	to compile in the appropriate quoter.
+
+December 31, 2014
+	Release N102
+	- There is no longer a separate Typedtree traversal pass, after
+	the type checking, to translate brackets and escapes. The
+	translation is done right after the type-checking of the 0-level
+	bracket. That means that for staging-annotation-free code,
+	MetaOCaml has no substantial overhead.
+	- Use attributes for brackets, escapes and CSP (and internally
+	for levels and inexpansiveness). Much fewer OCaml files are
+	modified.
+	- New function Runcode.typecheck_code for the benefit of offshoring
+	- New function Runcode.add_search_path to add a directory to
+	the search path for .cmi/.cmo files -- report by Nicolas Ojeda Bar
+	- Better handling of CSP. For simple cases, there are no longer
+	any serialization problems.
+	- Overall better printing, of CSP, code and error messages.
+	- Overall, more uniform, better-factored code.
+	- metaocamlc is now a simple .c file; it adds compiler-libs only
+	in the case when the executable is built. Otherwise, we may end up
+	with the duplicate libraries.
+
+April 24, 2014
+	Fixed the problem noted by Jun Inoue in toplevel MetaOCaml.
+	If the first Runcode.run is used after a type declaration,
+	the defined type is considered locally scoped, which causes
+	type checking errors or assettion faliures in typechecking.
+	Preparing the environment for Runcode.run has a side-effect,
+	of corrupting Ident timestamps. The timestamps are preserved now.
+
+November 26, 2013
+	Release N101
+	Removed environment classifiers.
+	Syntax .! is replaced with the ordinary prefix operation
+	!.  (alias run) in the module Runcode. Runcode.run is an
+	ordinary function, and is not part of the MetaOCaml kernel.
+	New API for running code, encouraging the development of new ways
+	to execute code values (see metalib/runcode.mli).
+	BER N101 is binary compatible with OCaml 4.01. Building it
+	no longer involves bootstrapping.
+	Printing code is now part of OCaml (Pprintast, which was influenced by
+        MetaOCaml).
+	Scope-extrusion check works with delimited control.
+	Added a test for the well-formedness of recursive let.
+	Faster generation of code (especially for functions and nonbinding
+	functions).
+	More precise tracking of free variables and reporting of scope
+	extrusion.
+
+February 20, 2013
+	Re-enabled ocamlbuild.byte target in the Makefile, so to
+	to build ocamlbuild as part of the make all.
+	A small fix to permit compiling ocamlopt. Although at present,
+	ocamlopt can't compile code with brackets, it can compile
+	the regular OCaml code. In addition, it supports let!.
+	Thanks to Bob Zhang for suggestions.
+
+January 30, 2013
+	Rewritten trx.ml. Release N100.
+
+January 12, 2013
+	Importing the pretty-printing of code, greatly improved by Jacques
+	Carette.
+
+January 7-12, 2013
+	Beginning the port to OCaml 4.00.1. The basic changes to OCaml
+	are done. Started work on re-writing trx.ml
+
+December 28, 2012
+	Version N004 released
+
+November 8, 2012
+	Eliminating val_level from value_desc. Introducing Env map stage
+	to map an identifier to its stage, if not zero. Several
+	OCaml modules no longer have to be patched.
+	Simplified CSP code, removed a few patches from typecore.
+	SCP now carries strings, native_int, int32, int64 as
+	literal constants. Identifiers in List module are carried
+	by reference.
+
+October 4, 2012
+	Jacques Carette has committed Alain Frisch's patch implementing
+	the let! form proposed by Nicolas Pouillard for monadic
+	programming in Ocaml.
+	http://pauillac.inria.fr/~protzenk/let-bang.html
+	See metalib/test/pythagorian_triples.ml for an example.
+
+January 3, 2011
+	Added metaocamlmktop
+
+December 2010
+	Patch from Fabrice Le Fessant to remove functional values
+	from typing Env. See entry May 5, 2010 in Problems.txt.
+	Generic printing is now part of BER MetaOCaml.
+
+March 1, 2010
+	Version N002 released, based on OCaml 3.11
+

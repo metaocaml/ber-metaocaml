@@ -1,0 +1,47 @@
+BER MetaOCaml toplevel, version N 107
+        OCaml version 4.07.1
+
+#   #       val tr1 : ('a -> int) code = .<fun x_1 -> 1>. 
+# * *   val tr1' : ('a -> 'b -> 'b) code = .<fun x_2 -> fun x_3_4 -> x_3_4>. 
+# * *   val tr2 : ('a -> int) code = .<fun x_5 -> 1>. 
+# * *     Exception:
+Failure
+ "Characters 72-73:\n  let tr3 = .<fun x -> .~(let x = run .<x>. in .<x>.)>.;;\n                  ^\n is not closed: identifier x_6 bound at Characters 72-73:\n                                          let tr3 = .<fun x -> .~(let x = run .<x>. in .<x>.)>.;;\n                                              "... (* string length 360; truncated *).
+#   * * * * * * * * *   Error was expected
+- : unit = ()
+#   Exception:
+Failure
+ "The code built at Characters 8-9:\n                    .< fun x -> .~ (run .< x >.) >.;;\n                           ^\n                   is not closed: identifier x_7 bound at Characters 8-9:\n                                                            .< fun x -> .~ (run .< x >.) >.;;\n             "... (* string length 420; truncated *).
+# * * * * * * * * * *   Error was expected
+- : unit = ()
+#   Characters 37-38:
+  let tr4 = .<fun x -> .~(let x = run x in .<x>.)>.;;
+                                      ^
+Error: A variable that was bound within brackets is used outside brackets
+for example: .<fun x -> .~(foo x)>.
+Hint: enclose the variable in brackets,
+as in: .<fun x -> .~(foo .<x>.)>.;;
+# * * * * *   Error was expected
+- : unit = ()
+#   val tr5 : ('a -> int) code = .<fun x_8 -> Runcode.run .< 1  >.>. 
+# * *   #   val tr6 : ('a -> 'a) code = .<fun x_9 -> Runcode.run .< x_9  >.>. 
+# * *   #   val tr7 : ('a code -> 'a) code = .<fun x_10 -> Runcode.run x_10>. 
+# * * * * * * * * *   #     Characters 63-64:
+  let tr8 = .<fun x -> .~(let y = .<x>. in .<y>.)>.;;
+                                             ^
+Warning 22: The CSP value is a closure or too deep to serialize
+val tr8 : ('a -> 'a code) code = .<fun x_11 -> (* CSP y *)>. 
+# * * * * * *     val tr8r : '_weak1 -> '_weak1 code = <fun>
+# * * * * * * * * *     - : int code = .<x_11>.
+
+Failure("The code built at Characters 36-37:\n                    val tr8r : '_a -> '_a code = <fun>\n                                                     ^\n                   is not closed: identifier x_11 bound at Characters 36-37:\n                                                             val tr8r : '_a -> '_a code = <fun>\n                                                                                              ^\n                                                            is free")
+# * * * *   Error was expected
+- : unit = ()
+#   val tm1 : ('a -> 'a code) code = .<fun x_12 -> .< x_12  >.>. 
+# * *   - : int code = .<(* CSP x_12 *) Obj.magic 10>. 
+# * *   #       val tg1 : '_weak2 list ref = {contents = []}
+# * * *   val tg2 : '_weak3 list ref = {contents = []}
+# * * *     * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *     
+All Done
+- : unit = ()
+# 
