@@ -178,6 +178,10 @@ let rec add_expr bv exp =
   | Pexp_newtype (_, e) -> add_expr bv e
   | Pexp_pack m -> add_module bv m
   | Pexp_open (_ovf, m, e) -> addmodule bv m; add_expr bv e
+(* NNN through the rest of the pattern-match *)
+  | Pexp_bracket e -> add_expr bv e
+  | Pexp_escape e  -> add_expr bv e
+  | Pexp_cspval _  -> ()
 
 and add_pat_expr_list bv pel =
   List.iter (fun (p, e) -> let bv = add_pattern bv p in add_expr bv e) pel

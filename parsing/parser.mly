@@ -298,10 +298,25 @@ let wrap_type_annotation newtypes core_type body =
   in
   (exp, ghtyp(Ptyp_poly(newtypes,varify_constructors newtypes core_type)))
 
+    (* NNN: the whole definition *)
+let let_operator op bindings cont =
+  let pat, expr =
+    match List.rev bindings with
+    | []  -> assert false
+    | [x] -> x
+    | l   ->
+        let pats, exprs = List.split l in
+        ghpat (Ppat_tuple pats), ghexp (Pexp_tuple exprs)
+    in
+      mkexp(Pexp_apply(op, [("", expr); 
+                            ("", ghexp(Pexp_function("", None, [pat, cont])))]))
 %}
 
 /* Tokens */
 
+%token DOTLESS     /* NNN */
+%token GREATERDOT  /* NNN */
+%token DOTTILDE    /* NNN */
 %token AMPERAMPER
 %token AMPERSAND
 %token AND
@@ -365,6 +380,7 @@ let wrap_type_annotation newtypes core_type body =
 %token LESS
 %token LESSMINUS
 %token LET
+%token <string> LETOP /* NNN */
 %token <string> LIDENT
 %token LPAREN
 %token MATCH
@@ -441,6 +457,7 @@ The precedences must be listed from low to high.
 %nonassoc below_SEMI
 %nonassoc SEMI                          /* below EQUAL ({lbl=...; lbl=...}) */
 %nonassoc LET                           /* above SEMI ( ...; let ... in ...) */
+%nonassoc LETOP           /* NNN */
 %nonassoc below_WITH
 %nonassoc FUNCTION WITH                 /* below BAR  (match ... with ...) */
 %nonassoc AND             /* above WITH (module rec A: SIG with ... and ...) */
@@ -465,6 +482,7 @@ The precedences must be listed from low to high.
 %nonassoc prec_unary_minus prec_unary_plus /* unary - */
 %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
 %nonassoc prec_constr_appl              /* above AS BAR COLONCOLON COMMA */
+%left	  prec_escape    /* NNN */
 %nonassoc below_SHARP
 %nonassoc SHARP                         /* simple_expr/toplevel_directive */
 %nonassoc below_DOT
@@ -968,6 +986,8 @@ expr:
       { mkexp(Pexp_apply($1, List.rev $2)) }
   | LET rec_flag let_bindings IN seq_expr
       { mkexp(Pexp_let($2, List.rev $3, $5)) }
+  | let_operator let_bindings IN seq_expr     /* NNN */
+      { let_operator $1 $2 $4 }               /* NNN */
   | LET MODULE UIDENT module_binding IN seq_expr
       { mkexp(Pexp_letmodule(mkrhs $3 3, $4, $6)) }
   | LET OPEN override_flag mod_longident IN seq_expr
@@ -1076,6 +1096,10 @@ simple_expr:
       { reloc_exp $2 }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
+  | DOTLESS expr GREATERDOT                 /* NNN */
+      { mkexp(Pexp_bracket $2) }            /* NNN */
+  | DOTTILDE simple_expr %prec prec_escape  /* NNN */
+      { mkexp(Pexp_escape $2) }             /* NNN */
   | BEGIN seq_expr END
       { reloc_exp $2 }
   | BEGIN END
@@ -1705,6 +1729,7 @@ operator:
   | INFIXOP2                                    { $1 }
   | INFIXOP3                                    { $1 }
   | INFIXOP4                                    { $1 }
+  | LETOP                                       { $1 } /* NNN */
   | BANG                                        { "!" }
   | PLUS                                        { "+" }
   | PLUSDOT                                     { "+." }
@@ -1719,6 +1744,15 @@ operator:
   | AMPERSAND                                   { "&" }
   | AMPERAMPER                                  { "&&" }
   | COLONEQUAL                                  { ":=" }
+;
+    /* NNN: the whole definition */
+let_operator:
+    LETOP                                   { mkexp (Pexp_ident(
+                                                     mkloc (Lident $1)
+                                                           (symbol_rloc ()))) }
+  | mod_longident DOT LETOP                 { mkexp (Pexp_ident(
+                                                     mkloc (Ldot($1,$3))
+                                                           (symbol_rloc ()))) }
 ;
 constr_ident:
     UIDENT                                      { $1 }

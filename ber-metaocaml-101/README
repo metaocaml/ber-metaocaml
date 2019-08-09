@@ -1,0 +1,152 @@
+		BER MetaOCaml
+		N101 November 2013
+
+0. TABLE OF CONTENTS
+
+   1 Copyright 
+   2 Installation
+   3 Staging constructs
+   4 Restrictions and Common Problems
+   5 Detailed Discussion
+   6 Credits
+
+1. COPYRIGHT
+
+BER MetaOCaml is a complete re-implementation of MetaOCaml, 
+which was licensed according to ORIGINAL-LICENSE-META
+
+
+2. INSTALLATION
+
+  Please see the file INSTALL
+
+
+3. STAGING CONSTRUCTS
+   (This is a modified version of the section from the last
+    release of the original MetaOCaml, Feb 3, 2006)
+
+  The three new constructs are
+
+    bracket: .< e >.  to delay computation (to the future stage)
+    escape:  .~ e     to perform a computation within brackets
+                      and splice-in the result
+    run:     !. e     to run a future-stage computation, or code, now
+
+  A special type constructor, called 'code' builds the type of
+  future-stage computations, or code expressions. For example, 
+
+    # .< 2 + 4 >.;;
+    - : int code = .<2 + 4>. 
+
+  The type constructor 'code' takes as its argument the type of the
+  future-stage expression. Future-stage expressions are executed later,
+  but are type-checked now. Therefore, the generated code is assuredly
+  well-typed.
+
+  Code fragments can be spliced into larger code contexts by using the
+  escape construct: 
+
+    # let x = .< 2 + 4 >. in .< .~ x + .~ x >. ;;
+    - : int code = .<(2 + 4) + (2 + 4)>. 
+
+  The escape construct takes an expression of type (t code) and
+  produces an expression of type t, but only inside of a
+  code-constructing context (i.e., inside inside code brackets).
+  Attempting to escape code outside of a code-building context results
+  in the following type error:
+
+    # .~ .< 2 + 3 >.;;
+    Characters 0-14:
+    .~ .< 2 + 3 >.;;
+    ^^^^^^^^^^^^^^
+    Wrong level: escape at level 0
+
+
+  The run construct takes a code value, executes it and returns its result. 
+  It is actually an ordinary function Runcode.run, which is also bound 
+  to the prefix operation (!.). These operations are in the module
+  Runcode (which is not opened by default). For example: 
+
+    # Runcode.run .< 2 + 3 >.;;
+    - : int = 5
+    # open Runcode;;
+    # !. .<fun x y -> x + y >. 2 3;;
+    - : int = 5
+
+  The run construct only works on closed code values. Attempting to run
+  open code leads to an exception in the generator (which can be traced
+  as any other exception).
+
+    # .< fun x -> .~ (let u = !. .< x >. in .<()>.) >.;;
+    Exception:
+    Failure
+     "The code built at Characters 7-8:
+      .< fun x -> .~ (let u = !. .< x >. in .<()>.) >.;;
+             ^
+     is not closed: identifier x_91 bound at Characters 7-8:
+      .< fun x -> .~ (let u = !. .< x >. in .<()>.) >.;;
+             ^
+    is free".
+
+  Please see many more examples in test/trivial.ml and other files
+  in the test/ directory.
+
+
+4. RESTRICTIONS AND COMMON PROBLEMS
+
+   1. All data constructors and record labels used within brackets must
+   come from the types that are declared in separately compiled modules.
+   For example, the following works:
+       .<true>.                 (* data constructor is Pervasive *)
+       .<Some [1]>.             (* ditto                         *)
+       .<{Complex.re = 1.0; im = 2.0}>. (* The Record Complex is defined *)
+                                        (* in the standard library.      *)
+       open Complex                     (* which is separately complied  *)
+       .<{re = 1.0; im = 2.0}>.
+
+   But the following are not allowed and flagged as compile-time error:
+
+       type foo = Bar
+       .<Bar>.
+
+       module Foo = struct exception E end
+      .<raise Foo.E>.
+
+   The type declaration foo or the module declaration Foo must be
+   moved into a separate file. The corresponding .cmi file must also be
+   available at run-time: either placed into the same directory as
+   the executable, or somewhere within the OCaml library search
+   path.
+
+   2. Escaped expressions at the same level evaluate in the same
+   order as arguments in an application. For byte-code OCaml,
+   this order is RIGHT to left.
+
+   3. Objects and modules are not supported within brackets
+     (but you can use brackets within modules or objects).
+
+
+5. DETAILED DISCUSSION
+
+   For differences from the original MetaOCaml and further discussion,
+   see NOTES.txt.
+
+
+6. CREDITS
+
+  BER MetaOCaml is a complete re-implementation of the original MetaOCaml. 
+
+  The original MetaOCaml was funded primarily by an NSF project titled:
+
+	"ITR/SY(CISE): Putting Multi-Stage Annotations to Work"
+
+  That project was led by Walid Taha. Most of the original development
+  and implementation of staging was done by Cristiano
+  Calcagno, then at Imperial College. 
+  Edward Pizzi has implemented the pretty-printing of code -- which
+  since then has been extensively modified and maintained by 
+  Jacques Carette.
+  Xavier Leroy, INRIA, helped with the compiler specifics.
+
+  Many members of the metaocaml-users and metaocaml-hackers lists have
+  helped identify bugs and in some cases fixed them.

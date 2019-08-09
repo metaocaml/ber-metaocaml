@@ -119,6 +119,9 @@ and expression_desc =
   | Pexp_newtype of string * expression
   | Pexp_pack of module_expr
   | Pexp_open of override_flag * Longident.t loc * expression
+  | Pexp_bracket of expression (* NNN *)
+  | Pexp_escape of expression  (* NNN *)
+  | Pexp_cspval of Obj.t * Longident.t loc (* NNN *)
 
 (* Value descriptions *)
 

@@ -137,6 +137,7 @@ LIBCMOFILES=$(CMOFILES)
 LIBCMXFILES= $(LIBCMOFILES:.cmo=.cmx)
 LIBCMIFILES= $(LIBCMOFILES:.cmo=.cmi)
 
+# NNN add trx.ml and printtyped.cmo
 # Les cmo et cmx de la distrib OCAML
 OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/typing/ident.cmo \
@@ -178,7 +179,9 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/typing/typeclass.cmo \
 	$(OCAMLSRCDIR)/typing/mtype.cmo \
 	$(OCAMLSRCDIR)/typing/includemod.cmo \
+	$(OCAMLSRCDIR)/typing/trx.cmo \
 	$(OCAMLSRCDIR)/typing/typemod.cmo \
+	$(OCAMLSRCDIR)/typing/printtyped.cmo \
 	$(OCAMLSRCDIR)/bytecomp/lambda.cmo \
 	$(OCAMLSRCDIR)/bytecomp/typeopt.cmo \
 	$(OCAMLSRCDIR)/bytecomp/printlambda.cmo \

@@ -353,6 +353,15 @@ and expression i ppf x =
   | Texp_pack me ->
       line i ppf "Pexp_pack";
       module_expr i ppf me
+        (* NNN: through the rest of the expression *)
+  | Texp_bracket e ->
+      line i ppf "Pexp_bracket";
+      expression i ppf e;
+  | Texp_escape e ->
+      line i ppf "Pexp_escape";
+      expression i ppf e;
+  | Texp_cspval (_, li) ->
+      line i ppf "Pexp_cspval %a\n" fmt_longident li
 
 and value_description i ppf x =
   line i ppf "value_description\n";

@@ -289,6 +289,9 @@ and untype_expression exp =
         Pexp_object (untype_class_structure cl)
     | Texp_pack (mexpr) ->
         Pexp_pack (untype_module_expr mexpr)
+    | Texp_bracket e -> Pexp_bracket (untype_expression e) (* NNN *)
+    | Texp_escape e  -> Pexp_escape (untype_expression e)  (* NNN *)
+    | Texp_cspval (v,li) -> Pexp_cspval (v,li)             (* NNN *)
   in
   List.fold_right untype_extra exp.exp_extra
     { pexp_loc = exp.exp_loc;

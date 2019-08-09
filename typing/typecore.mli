@@ -105,6 +105,7 @@ type error =
   | Recursive_local_constraint of (type_expr * type_expr) list
   | Unexpected_existential
   | Unqualified_gadt_pattern of Path.t * string
+  | Trx_error of (Format.formatter -> unit)               (* NNN *)
 
 exception Error of Location.t * Env.t * error
 

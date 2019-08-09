@@ -344,6 +344,10 @@ module MakeMap(Map : MapArgument) = struct
           Texp_object (map_class_structure cl, string_list)
         | Texp_pack (mexpr) ->
           Texp_pack (map_module_expr mexpr)
+        (* NNN: through the rest of the expression *)
+        | Texp_bracket exp -> Texp_bracket (map_expression exp)
+        | Texp_escape  exp -> Texp_escape  (map_expression exp)
+        | Texp_cspval (_, li) -> exp.exp_desc
     in
     let exp_extra = List.map map_exp_extra exp.exp_extra in
     Map.leave_expression {

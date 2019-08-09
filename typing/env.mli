@@ -14,6 +14,8 @@
 
 open Types
 
+type stage = int        (* NNN; in N100 was type_expr list *)
+
 type summary =
     Env_empty
   | Env_value of summary * Ident.t * value_description
@@ -24,6 +26,7 @@ type summary =
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
   | Env_open of summary * Path.t
+  | Env_stage of summary * Ident.t * stage (* NNN *)
 
 type t
 
@@ -51,6 +54,7 @@ val find_module: Path.t -> t -> module_type
 val find_modtype: Path.t -> t -> modtype_declaration
 val find_class: Path.t -> t -> class_declaration
 val find_cltype: Path.t -> t -> class_type_declaration
+val find_stage: Path.t -> t -> stage	(* NNN *)
 
 val find_type_expansion:
     ?level:int -> Path.t -> t -> type_expr list * type_expr * int option
@@ -80,6 +84,7 @@ val lookup_module: Longident.t -> t -> Path.t * module_type
 val lookup_modtype: Longident.t -> t -> Path.t * modtype_declaration
 val lookup_class: Longident.t -> t -> Path.t * class_declaration
 val lookup_cltype: Longident.t -> t -> Path.t * class_type_declaration
+val lookup_stage: Longident.t -> t -> Path.t * stage (* NNN *)
 
 exception Recmodule
   (* Raise by lookup_module when the identifier refers
@@ -97,6 +102,7 @@ val add_modtype: Ident.t -> modtype_declaration -> t -> t
 val add_class: Ident.t -> class_declaration -> t -> t
 val add_cltype: Ident.t -> class_type_declaration -> t -> t
 val add_local_constraint: Ident.t -> type_declaration -> int -> t -> t
+val add_stage: Ident.t -> stage -> t -> t (* NNN *)
 
 (* Insertion of all fields of a signature. *)
 

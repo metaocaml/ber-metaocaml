@@ -98,6 +98,20 @@ end  = struct
 
 end
 
+(* NNN added a new component of the environment: stage.
+   It maps a term variable to the staging level, 0 for the present stage.
+   It ued to be a list of type_expr -- actually, the list
+   of type variables, that is, env classifiers.
+   We only care about stage level for term variables.
+   Every key in the 'stage' map (the Ident) must occur in
+   the 'values' map.
+*)
+(* NNN
+  The current stage, 0 for the present stage.
+  It used to be a list of active classifiers, whose length
+  was the stage level of a variable.
+*)
+type stage = int	(* NNN *)
 
 type summary =
     Env_empty
@@ -109,6 +123,7 @@ type summary =
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
   | Env_open of summary * Path.t
+  | Env_stage of summary * Ident.t * stage (* NNN *)
 
 module EnvTbl =
   struct
@@ -171,6 +186,7 @@ type t = {
   classes: (Path.t * class_declaration) EnvTbl.t;
   cltypes: (Path.t * class_type_declaration) EnvTbl.t;
   summary: summary;
+  stage: (Path.t * stage) EnvTbl.t;		(* NNN *)
   local_constraints: bool;
   gadt_instances: (int * TypeSet.t ref) list;
   in_signature: bool;
@@ -183,6 +199,9 @@ and module_components_repr =
     Structure_comps of structure_components
   | Functor_comps of functor_components
 
+(* NNN there are no stage levels here: modules must occur at the 0 level.
+   No modules in brackets.
+*)
 and structure_components = {
   mutable comp_values: (string, (value_description * int)) Tbl.t;
   mutable comp_constrs: (string, (constructor_description * int) list) Tbl.t;
@@ -214,6 +233,7 @@ let empty = {
   modules = EnvTbl.empty; modtypes = EnvTbl.empty;
   components = EnvTbl.empty; classes = EnvTbl.empty;
   cltypes = EnvTbl.empty;
+  stage = EnvTbl.empty;                 (* NNN *)
   summary = Env_empty; local_constraints = false; gadt_instances = [];
   in_signature = false;
  }
@@ -289,6 +309,7 @@ let check_consistency filename crcs =
       (fun (name, crc) -> Consistbl.check crc_units name crc filename)
       crcs
   with Consistbl.Inconsistency(name, source, auth) ->
+    Printf.eprintf "failed check_consistency %s %s %s\n" name source auth; (* NNNN *)
     raise(Error(Inconsistent_import(name, auth, source)))
 
 (* Reading persistent structures from .cmi files *)
@@ -425,6 +446,13 @@ and find_class =
   find (fun env -> env.classes) (fun sc -> sc.comp_classes)
 and find_cltype =
   find (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes)
+(* NNN there is no comp_stage since all modules are at stage 0 *)
+let find_stage path env =			(* NNN entire function *)
+  match path with
+  | Pident id -> 
+      let (p, data) = EnvTbl.find_same id env.stage
+      in data
+  | _         -> raise Not_found
 
 let find_type p env =
   fst (find_type_full p env)
@@ -647,6 +675,9 @@ and lookup_class =
   lookup (fun env -> env.classes) (fun sc -> sc.comp_classes)
 and lookup_cltype =
   lookup (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes)
+(* NNN there is no comp_stage since all modules are at stage 0 *)
+let lookup_stage =			(* NNN *)
+  lookup_simple (fun env -> env.stage) (fun sc -> raise Not_found) (* NNN *)
 
 let mark_value_used name vd =
   try Hashtbl.find value_declarations (name, vd.val_loc) ()
@@ -1255,6 +1286,11 @@ and store_cltype slot id path desc env renv =
     cltypes = EnvTbl.add "class type" slot id (path, desc) env.cltypes
                          renv.cltypes;
     summary = Env_cltype(env.summary, id, desc) }
+and store_stage slot id path st env renv =     (* NNN whole clause *)
+  { env with
+    stage = EnvTbl.add "stage" slot id (path, st) env.stage renv.stage;
+    summary = Env_stage(env.summary, id, st) } (* NNN end *)
+
 
 (* Compute the components of a functor application in a path. *)
 
@@ -1299,6 +1335,9 @@ and add_class id ty env =
 
 and add_cltype id ty env =
   store_cltype None id (Pident id) ty env env
+
+let add_stage id st env =		        (* NNN *)
+  store_stage None id (Pident id) st env env    (* NNN *)
 
 let add_local_constraint id info elv env =
   match info with
