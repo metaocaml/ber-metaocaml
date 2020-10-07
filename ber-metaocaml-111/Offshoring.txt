@@ -1,0 +1,81 @@
+A Note on offshoring
+How to write OCaml as if were C (C in the OCaml notation)
+
+The title is neither silly nor trivial. One may legitimately want to
+write (actually, generate) C in OCaml notation. The usual
+(homogeneous) metaprogramming hence turns into heterogeneous
+metaprogramming: getting MetaOCaml to generate C or Fortran or LLVM
+rather than just OCaml. Similar technique was used in F* to be able to
+represent low-level code as F* program for the purpose of
+verification.
+
+At first glance, writing imperative, C-like code in
+OCaml seems trivial. On the second glance, writing C in OCaml notation
+is impossible. We describe the possibility, the impossibility, and a
+modest way out. 
+
+Ocaml: 
+  let addv n vout v1 v2 = for i=0 to n-1 do vout.(i) <- v1.(i) + v2.(i) done
+C:
+  void addv(int n, int* vout, int* v1, int* v2)
+  {
+   int i;
+   for(i=0; i<=n-1; i++)
+     vout[i] = vi[i] + v2[i];
+  }
+
+The correspondence seems obvious.
+Moreover, once can argue that OCaml and the C code have the same meaning.
+Simple objection: int and float in C and OCaml have different meaning.
+But OCaml int (31-bit or 63-bit) actually satisfy the requirements of
+C. If needed 32-bit, one can use Int32 or Int64, built in OCaml.
+Float32 are not provided by the standard library but may be easily
+implemented (besides, big array supports float32 as elements).
+
+Fatal objection: references. Consider
+      let x = ref 0 in let y = x in y := 42; !x
+
+What is the translation in C? Does it have the same meaning?
+
+Modest proposal: use arrays, not pointers -- contra to the usual C
+practice. Take advantage that C, like any natural (programming)
+language is redundant. We generate less pretty C code. But it is
+generated, noone will look at it anyway. Instead of the pleasing
+C code as 
+   p1=v1; p2=v2; while (p1<v1end) {sum += *p1++ * *p2++}
+we would generate 
+  for(i=0; i<n; i++){sum = sum + v1[i] * v2[i];}
+(what is the difference in compiled assembly, with -O4?)
+Instead of *v we generate v[0]. Hence, we always
+interpret pointers as arrays.
+
+#include <stdio.h>
+
+int main(void)
+{
+  int x[] = {3};
+  int * y = x;
+  *y = 42;
+  printf("Result %d\n",*x);
+  return 0;
+}
+
+Hence the proposal is: 
+      OCaml  !x     x := e
+      C      *x     *x = e
+
+That is, x of type int ref should always be interpreted as int * in
+C. Instead of C style `variables' we always use pointers.
+Strictly speaking, let x = ref 3 should be translated into
+
+        register const int * x = alloca(sizeof(int)); *x = 3;
+
+but we simplify the non-standard alloca to the array allocation above.
+Or just 
+        int x[1]; *x = 3;
+
+OTH, maybe it would be better to restrict let x = e to base types,
+with the exception of let x = ref c (that is, when e is ref c, where c
+is a base type).
+Also, array types may be OK (in C as in OCaml, arrays/pointers can be
+aliased).

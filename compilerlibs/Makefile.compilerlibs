@@ -45,6 +45,7 @@ PARSING_CMI=\
   parsing/asttypes.cmi \
   parsing/parsetree.cmi
 
+#NNN trx.cmo
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/type_immediacy.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \
@@ -62,6 +63,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/typedecl_unboxed.cmo typing/typedecl_immediacy.cmo \
   typing/typedecl_separability.cmo \
   typing/typedecl.cmo typing/typeopt.cmo \
+  typing/trx.cmo \
   typing/rec_check.cmo typing/typecore.cmo typing/typeclass.cmo \
   typing/typemod.cmo
 TYPING_CMI=\

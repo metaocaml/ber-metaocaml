@@ -1,0 +1,27 @@
+berstart.cmo :
+berstart.cmx :
+bertop.cmo :
+bertop.cmx :
+codelib.cmo : codelib.cmi
+codelib.cmx : codelib.cmi
+codelib.cmi :
+lifts.cmo : codelib.cmi
+lifts.cmx : codelib.cmx
+metatop.cmi :
+offshoringIR.cmo : runcode.cmi codelib.cmi offshoringIR.cmi
+offshoringIR.cmx : runcode.cmx codelib.cmx offshoringIR.cmi
+offshoringIR.cmi : codelib.cmi
+reify_type.cmo : reify_type.cmi
+reify_type.cmx : reify_type.cmi
+reify_type.cmi :
+run_native.cmo :
+run_native.cmx :
+runcode.cmo : codelib.cmi runcode.cmi
+runcode.cmx : codelib.cmx runcode.cmi
+runcode.cmi : codelib.cmi
+runnative.cmo : runnative.cmi
+runnative.cmx : runnative.cmi
+runnative.cmi : codelib.cmi
+trxtime.cmo : trxtime.cmi
+trxtime.cmx : trxtime.cmi
+trxtime.cmi :

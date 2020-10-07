@@ -578,6 +578,9 @@ let mk_directive ~loc name arg =
 
 /* Tokens */
 
+%token DOTLESS     /* NNN */
+%token GREATERDOT  /* NNN */
+%token DOTTILDE    /* NNN */
 %token AMPERAMPER
 %token AMPERSAND
 %token AND
@@ -769,6 +772,7 @@ The precedences must be listed from low to high.
           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
           NEW PREFIXOP STRING TRUE UIDENT
           LBRACKETPERCENT QUOTED_STRING_EXPR
+          DOTLESS DOTTILDE             /* NNN */
 
 
 /* Entry points */
@@ -2288,6 +2292,16 @@ simple_expr:
       { $1 }
 ;
 %inline simple_expr_attrs:
+  | DOTLESS e = seq_expr GREATERDOT                 /* NNN */
+    { (e.pexp_desc,
+       (None, 
+        Attr.mk ~loc:(make_loc $sloc) (mknoloc "metaocaml.bracket") (PStr []) ::
+                               e.pexp_attributes)) }/* NNN */
+  | DOTTILDE e = simple_expr                        /* NNN */
+    { (e.pexp_desc,                                 
+       (None, 
+        Attr.mk ~loc:(make_loc $sloc) (mknoloc "metaocaml.escape") (PStr []) ::
+        e.pexp_attributes)) }                       /* NNN */
   | BEGIN ext = ext attrs = attributes e = seq_expr END
       { e.pexp_desc, (ext, attrs @ e.pexp_attributes) }
   | BEGIN ext_attributes END

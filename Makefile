@@ -40,6 +40,8 @@ else
 defaultentry: world
 endif
 
+# NNN make all && (cd metalib && make clean all) && (make install; cd metalib && make install)
+
 MKDIR=mkdir -p
 ifeq "$(UNIX_OR_WIN32)" "win32"
 LN = cp
@@ -396,6 +398,14 @@ endif
 	$(INSTALL_DATA) \
 	   $(BYTESTART) $(TOPLEVELSTART) \
 	   "$(INSTALL_COMPLIBDIR)"
+# NNN typing/trx.ml needs its own interface (since it looks up identifiers
+# in itself)
+# Although typing/trx.cmi is already copied, see above, it is copied
+# into $(COMPLIBDIR). We need trx.cmi in the standard .cmi search path.
+# We also copy .cmx file to avoid the warning about packing
+	$(INSTALL_DATA) typing/trx.cmi "$(INSTALL_LIBDIR)"
+# BTW, trx.cmo is part of ocamlcommon.cma
+# NNN end
 	$(INSTALL_PROG) expunge "$(INSTALL_LIBDIR)/expunge$(EXE)"
 	$(INSTALL_DATA) \
 	   toplevel/topdirs.cmi \
@@ -518,6 +528,7 @@ endif
 	    flexdll/flexlink.opt "$(INSTALL_BINDIR)/flexlink$(EXE)" ; \
 	fi
 
+# NNN install trx.cmx in the LIBDIR (not just COMPLIBDIR), where trx.cmi is
 .PHONY: installoptopt
 installoptopt:
 	$(INSTALL_PROG) ocamlc.opt "$(INSTALL_BINDIR)/ocamlc.opt$(EXE)"
@@ -538,6 +549,7 @@ installoptopt:
            middle_end/flambda/base_types/*.cmx \
 	   asmcomp/debug/*.cmx \
           "$(INSTALL_COMPLIBDIR)"
+	$(INSTALL_DATA) typing/trx.cmx "$(INSTALL_LIBDIR)"
 	$(INSTALL_DATA) \
 	   compilerlibs/*.cmxa compilerlibs/*.$(A) \
 	   "$(INSTALL_COMPLIBDIR)"

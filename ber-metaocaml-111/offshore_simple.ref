@@ -1,0 +1,106 @@
+BER MetaOCaml toplevel, version N 111
+        OCaml version 4.11.1
+
+#           # * * * *       - : proc_t =
+Fun ([("x_2", OffshoringIR.TInt); ("y_3", OffshoringIR.TInt)],
+ OffshoringIR.TInt,
+ FunCall ("+",
+  [FunCall ("*",
+    [LocalVar ("x_2", OffshoringIR.TInt);
+     LocalVar ("y_3", OffshoringIR.TInt)]);
+   Const (Const_int 1)]))
+# * * * * * * * * *             - : string = "Don't know what to do with Stdlib.succ"
+# * *                       - : proc_t =
+Fun ([("x_5", OffshoringIR.TInt)], OffshoringIR.TInt,
+ FunCall ("succ", [LocalVar ("x_5", OffshoringIR.TInt)]))
+# * * * *                       - : proc_t = Proc ([], FunCallC ("print", [Const (Const_string "hello")]))
+# * *                       - : proc_t = Proc ([], FunCallC ("fflush", [Const Const_unit]))
+# * *         - : proc_t =
+Proc ([],
+ LetC
+  {OffshoringIR.id = "x_6"; ty = OffshoringIR.TRef OffshoringIR.TInt;
+   bind = FunCall ("ref", [Const (Const_int 1)]);
+   body =
+    FunCallC (":=",
+     [LocalVar ("x_6", OffshoringIR.TRef OffshoringIR.TInt);
+      FunCall ("+",
+       [FunCall ("!",
+         [LocalVar ("x_6", OffshoringIR.TRef OffshoringIR.TInt)]);
+        Const (Const_int 1)])]);
+   attrs = []})
+# * * * * * * * * * * * * * *       - : proc_t =
+Proc ([],
+ LetC
+  {OffshoringIR.id = "x_7"; ty = OffshoringIR.TRef OffshoringIR.TInt;
+   bind = FunCall ("ref", [Const (Const_int 1)]);
+   body =
+    Seq
+     (FunCallC (":=",
+       [LocalVar ("x_7", OffshoringIR.TRef OffshoringIR.TInt);
+        FunCall ("+",
+         [FunCall ("!",
+           [LocalVar ("x_7", OffshoringIR.TRef OffshoringIR.TInt)]);
+          Const (Const_int 1)])]),
+     UnitC);
+   attrs = []})
+# * * * * * * * * * * * * * * * *         - : proc_t =
+Proc ([],
+ LetC
+  {OffshoringIR.id = "x_8"; ty = OffshoringIR.TRef OffshoringIR.TBool;
+   bind = FunCall ("ref", [Const (Const_bool true)]);
+   body =
+    FunCallC (":=",
+     [LocalVar ("x_8", OffshoringIR.TRef OffshoringIR.TBool);
+      Const (Const_bool false)]);
+   attrs = []})
+# * * * * * * * * * * *     * * * *               - : string =
+"typ_of: the OCaml type int ref ref is (not yet) supported: only base-type ref types are allowed"
+#   * * *               - : string =
+"When binding variables of ref types, the RHS must be a function call (normally, a ref-function call): \n[\n  structure_item (//toplevel//[9,172+45]..//toplevel//[9,172+64])\n    Tstr_eval\n    expression (//toplevel//[9,172+45]..//toplevel//[9,172+64])\n      Texp_let Nonrec\n      [\n        <def>\n      "... (* string length 1006; truncated *)
+#   * * *         - : proc_t =
+Proc
+ ([("a_12", OffshoringIR.TArray1 OffshoringIR.TInt);
+   ("n_13", OffshoringIR.TInt)],
+ For
+  {OffshoringIR.id = "i_14"; ty = OffshoringIR.TInt;
+   lwb = Const (Const_int 0); upb = LocalVar ("n_13", OffshoringIR.TInt);
+   step = Const (Const_int 1);
+   body =
+    FunCallC ("array1_set",
+     [LocalVar ("a_12", OffshoringIR.TArray1 OffshoringIR.TInt);
+      LocalVar ("i_14", OffshoringIR.TInt);
+      LocalVar ("i_14", OffshoringIR.TInt)])})
+# * * * * * * * * * * * * * *       - : proc_t =
+Proc
+ ([("a_15", OffshoringIR.TArray1 OffshoringIR.TInt);
+   ("n_16", OffshoringIR.TInt)],
+ For
+  {OffshoringIR.id = "i_17"; ty = OffshoringIR.TInt;
+   lwb = Const (Const_int 0); upb = LocalVar ("n_16", OffshoringIR.TInt);
+   step = Const (Const_int 1);
+   body =
+    FunCallC ("array1_set",
+     [LocalVar ("a_15", OffshoringIR.TArray1 OffshoringIR.TInt);
+      LocalVar ("i_17", OffshoringIR.TInt);
+      LocalVar ("i_17", OffshoringIR.TInt)])})
+# # * * * * * * * * * * * * * *     * * * * * * * * * * * * * *     * * * * * * *                                                                                                                                                                           void foo(int * a_18, int n_19)
+ {int i_20;
+for(i_20=0; i_20<n_19; i_20+=1){
+a_18[i_20] = i_20;
+}
+}
+
+val pr_typ : Format.formatter -> typ -> unit = <fun>
+val pr_varname : Format.formatter -> varname -> unit = <fun>
+val pr_arg : Format.formatter -> varname * typ -> unit = <fun>
+val pr_arg_sep : Format.formatter -> unit -> unit = <fun>
+val pr_decls : Format.formatter -> cmd -> unit = <fun>
+val pr_exp : Format.formatter -> exp -> unit = <fun>
+val pr_app : Format.formatter -> varname * exp list -> unit = <fun>
+val pr_block : Format.formatter -> cmd -> unit = <fun>
+val pr_cmds : Format.formatter -> cmd -> unit = <fun>
+val offshore_to_c : name:string -> 'a code -> unit = <fun>
+#   * * * * * * * *     
+All Done
+- : unit = ()
+# 
