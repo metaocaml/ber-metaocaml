@@ -1268,6 +1268,56 @@ typing/tast_mapper.cmi : \
     typing/typedtree.cmi \
     typing/env.cmi \
     parsing/asttypes.cmi
+typing/trx.cmo : \
+    utils/warnings.cmi \
+    typing/types.cmi \
+    typing/typedtree.cmi \
+    typing/printtyp.cmi \
+    typing/predef.cmi \
+    parsing/pprintast.cmi \
+    typing/path.cmi \
+    parsing/parsetree.cmi \
+    parsing/parse.cmi \
+    utils/misc.cmi \
+    parsing/longident.cmi \
+    parsing/location.cmi \
+    typing/ident.cmi \
+    typing/env.cmi \
+    typing/ctype.cmi \
+    typing/btype.cmi \
+    parsing/asttypes.cmi \
+    parsing/ast_iterator.cmi \
+    parsing/ast_helper.cmi \
+    typing/trx.cmi
+typing/trx.cmx : \
+    utils/warnings.cmx \
+    typing/types.cmx \
+    typing/typedtree.cmx \
+    typing/printtyp.cmx \
+    typing/predef.cmx \
+    parsing/pprintast.cmx \
+    typing/path.cmx \
+    parsing/parsetree.cmi \
+    parsing/parse.cmx \
+    utils/misc.cmx \
+    parsing/longident.cmx \
+    parsing/location.cmx \
+    typing/ident.cmx \
+    typing/env.cmx \
+    typing/ctype.cmx \
+    typing/btype.cmx \
+    parsing/asttypes.cmi \
+    parsing/ast_iterator.cmx \
+    parsing/ast_helper.cmx \
+    typing/trx.cmi
+typing/trx.cmi : \
+    typing/types.cmi \
+    typing/typedtree.cmi \
+    parsing/parsetree.cmi \
+    parsing/longident.cmi \
+    parsing/location.cmi \
+    typing/env.cmi \
+    parsing/asttypes.cmi
 typing/type_immediacy.cmo : \
     parsing/builtin_attributes.cmi \
     typing/type_immediacy.cmi
@@ -1349,6 +1399,7 @@ typing/typecore.cmo : \
     typing/types.cmi \
     typing/typedtree.cmi \
     typing/typedecl.cmi \
+    typing/trx.cmi \
     typing/subst.cmi \
     typing/shape.cmi \
     typing/rec_check.cmi \
@@ -1381,6 +1432,7 @@ typing/typecore.cmx : \
     typing/types.cmx \
     typing/typedtree.cmx \
     typing/typedecl.cmx \
+    typing/trx.cmx \
     typing/subst.cmx \
     typing/shape.cmx \
     typing/rec_check.cmx \

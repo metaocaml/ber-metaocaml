@@ -15,6 +15,35 @@
 
 (* The lexer definition *)
 
+(* NNN
+   This lexer tries to automatically adapt to MetaOCaml source code.
+   MetaOCaml source is OCaml source with three extra tokens:
+   .<     DOTLESS
+   >.     GREATERDOT
+   .~     DOTTILDE
+
+   DOTLESS and DOTTILDE are not valid syntax in ordinary OCaml.
+   In particular, DOTTILDE has been specifically reserved for MetaOCaml
+
+  The only problem is with GREATERDOT or any other infix operator that
+  starts with >.  -- because they can appear both in MetaOCaml and ordinary
+  OCaml source, but with different meanings.
+  Especially problematic are things like >.>.
+  In MetaOCaml, it lexes as two tokens GREATERDOT GREATERDOT
+  But in ordinary OCaml, it lexes as a single token INFIXOP0(">.>.")
+
+  Adaptation heuristic: in well-formed MetaOCaml code, there must
+  invariably be DOTLESS before GREATERDOT (because they are paired delimiters
+  in MetaOCaml). Therefore, once we see DOTLESS, we know we are parsing
+  MetaOCaml and interpret subsequent >. as GREATERDOT.
+
+  It means that it is impossible to use infix operators starting with >.
+  in MetaOCaml files (which seems reasonable and expected). Actually,
+  it is impossible to use such infix operator *after* DOTLESS has been
+  seen. It is ok to use such infix operator before the first occurrence
+  of MetaOCaml brackets.
+ NNN end *)
+
 {
 open Lexing
 open Misc
@@ -327,6 +356,8 @@ let () =
           None
     )
 
+let metaocaml_lexing = ref false (* if we are lexing MetaOCaml code *) (* NNN *)
+
 }
 
 let newline = ('\013'* '\010')
@@ -342,6 +373,8 @@ let identchar_latin1 =
 
 let symbolchar =
   ['!' '$' '%' '&' '*' '+' '-' '.' '/' ':' '<' '=' '>' '?' '@' '^' '|' '~']
+let symbolcharnodot =                                                       (* NNN *)
+  ['!' '$' '%' '&' '*' '+' '-'     '/' ':' '<' '=' '>' '?' '@' '^' '|' '~'] (* NNN *)
 let dotsymbolchar =
   ['!' '$' '%' '&' '*' '+' '-' '/' ':' '=' '>' '?' '@' '^' '|']
 let symbolchar_or_hash =
@@ -389,9 +422,13 @@ rule token = parse
       { UNDERSCORE }
   | "~"
       { TILDE }
+  | ".<" { metaocaml_lexing := true; DOTLESS }     (* NNN *)
+  | ".~" { DOTTILDE }    (* NNN *)
+  (* NNN
   | ".~"
       { error lexbuf
           (Reserved_sequence (".~", Some "is reserved for use in MetaOCaml")) }
+  NNN end *)
   | "~" (lowercase identchar * as name) ':'
       { check_label_name lexbuf name;
         LABEL name }
@@ -564,8 +601,19 @@ rule token = parse
             { PREFIXOP op }
   | ['~' '?'] symbolchar_or_hash + as op
             { PREFIXOP op }
+  (* NNN The complicated case of >. or infix operator that starts with >. *)
+  (* NNN First, narrow the following original rule to exclude leading ">"
+     The single ">" has already been covered, see GREATER earlier
   | ['=' '<' '>' '|' '&' '$'] symbolchar * as op
             { INFIXOP0 op }
+  *)
+  | ['=' '<' '|' '&' '$'] symbolchar * as op	(* NNN: non-controversial INFIXOP0 *)
+            { INFIXOP0 op }
+  | ['>'] symbolcharnodot symbolchar * as op    (* NNN exclude ">." case *)
+            { INFIXOP0 op }                     (* NNN *)
+  (* NNN remaining case is ">." followed possibly by zero or more symbolchar *)
+  | ">."    { if !metaocaml_lexing then GREATERDOT else       (* NNN *)
+              INFIXOP0 (">." ^ symbolchars lexbuf) }          (* NNN *)
   | ['@' '^'] symbolchar * as op
             { INFIXOP1 op }
   | ['+' '-'] symbolchar * as op
@@ -584,6 +632,9 @@ rule token = parse
   | eof { EOF }
   | (_ as illegal_char)
       { error lexbuf (Illegal_character illegal_char) }
+
+and symbolchars = parse                 (* NNN for the sake of >. operators *)
+  | symbolchar * as op   { op }         (* NNN *)
 
 and directive = parse
   | ([' ' '\t']* (['0'-'9']+ as num) [' ' '\t']*
@@ -860,6 +911,7 @@ and skip_hash_bang = parse
     is_in_string := false;
     comment_start_loc := [];
     comment_list := [];
+    metaocaml_lexing := false;  (* NNN *)
     match !preprocessor with
     | None -> ()
     | Some (init, _preprocess) -> init ()

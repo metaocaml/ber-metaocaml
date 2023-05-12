@@ -1,0 +1,39 @@
+BER MetaOCaml toplevel, version N 114
+OCaml version 4.14.1
+Enter #help;; for help.
+
+#       #     * *   val t : (unit -> unit) code = .<fun () -> ()>. 
+#     * *   val t : (unit -> unit) code = .<fun () -> ()>. 
+#     * *   val t : (unit -> unit) pat_code = .<fun () -> ()>. 
+#     * * * *   Line 2, characters 8-42:
+2 | let t = .<let x = function () -> () in x>. [@metaocaml.functionliteral]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The expression does not appear to be a functional literal as requested
+# Error was expected
+- : unit = ()
+#         * *   val t : ('a -> 'a) pat_code = .<fun x_1 -> x_1>. 
+#       * *   val t : ('a list -> bool) pat_code = .<
+  function | [] -> true | _::_ -> false>. 
+#     * *   - : bool code = .<match [] with | [] -> true | _::_ -> false>. 
+#                 * * * * * * *       val c : int code = .<
+  match [2] with
+  | [] -> 0
+  | 1::[] -> 0
+  | x_4::[] -> x_4 + 1
+  | x_2::y_3 -> x_2 + 1>. 
+#           Exception: Failure "Code execution failed".
+#     Error was expected
+- : unit = ()
+#                   val sremove : int -> (int list -> int list) code = <fun>
+#     val c : (int list -> int list) code = .<
+  let rec loop_5 l_6 =
+    match l_6 with
+    | [] -> []
+    | h_9::t_10 when h_9 = 2 -> loop_5 t_10
+    | h_7::t_8 -> h_7 :: (loop_5 t_8) in
+  loop_5>. 
+# * * * * * * * *       #   
+All done
+
+- : unit = ()
+# 

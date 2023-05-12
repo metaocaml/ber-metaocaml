@@ -1,0 +1,148 @@
+BER MetaOCaml toplevel, version N 114
+OCaml version 4.14.1
+Enter #help;; for help.
+
+#     * *             # * * * * * * *       - : proc_t =
+([("x_2", OffshoringIR.TNum I32); ("y_3", OffshoringIR.TNum I32)],
+ OffshoringIR.TNum I32,
+ Block (<abstr>,
+  Exp
+   (FunCall (OffshoringIR.OP.ADD I32,
+     [FunCall (OffshoringIR.OP.MUL I32, [LocalVar "x_2"; LocalVar "y_3"]);
+      Const (Const_num (I32, "1"))]))))
+# * * * * * * * * *             - : string = "Don't know what to do with Stdlib.succ"
+# * *                       - : proc_t =
+([("x_5", OffshoringIR.TNum I32)], OffshoringIR.TNum I32,
+ Block (<abstr>,
+  Exp (FunCall (OffshoringIR.OP.Other "succ", [LocalVar "x_5"]))))
+# * * * * *                       - : proc_t =
+([], OffshoringIR.TVoid,
+ Block (<abstr>,
+  Exp
+   (FunCall (OffshoringIR.OP.Other "print", [Const (Const_string "hello")]))))
+# * * * * * *                       - : proc_t =
+([], OffshoringIR.TVoid,
+ Block (<abstr>, Exp (FunCall (OffshoringIR.OP.Other "fflush", []))))
+# * * * *         - : proc_t =
+([], OffshoringIR.TVoid,
+ Block (<abstr>,
+  Exp
+   (FunCall (OffshoringIR.OP.ASSIGN (OffshoringIR.TNum I32),
+     [MutVar "x_6";
+      FunCall (OffshoringIR.OP.ADD I32,
+       [FunCall (OffshoringIR.OP.DEREF (OffshoringIR.TNum I32),
+         [MutVar "x_6"]);
+        Const (Const_num (I32, "1"))])]))))
+# * * * * * * * * * * *       - : proc_t =
+([], OffshoringIR.TVoid,
+ Block (<abstr>,
+  Exp
+   (FunCall (OffshoringIR.OP.ASSIGN (OffshoringIR.TNum I32),
+     [MutVar "x_7";
+      FunCall (OffshoringIR.OP.ADD I32,
+       [FunCall (OffshoringIR.OP.DEREF (OffshoringIR.TNum I32),
+         [MutVar "x_7"]);
+        Const (Const_num (I32, "1"))])]))))
+# * * * * * * * * * * *         - : proc_t =
+([], OffshoringIR.TVoid,
+ Block (<abstr>,
+  Exp
+   (FunCall (OffshoringIR.OP.ASSIGN OffshoringIR.TBool,
+     [MutVar "x_8"; Const (Const_bool false)]))))
+# * * * * * * *     * * * *     * * * * * * *     * * *         - : proc_t =
+([], OffshoringIR.TVoid,
+ Block (<abstr>,
+  Exp
+   (FunCall (OffshoringIR.OP.ASSIGN (OffshoringIR.TNum I32),
+     [LocalVar "y_10"; Const (Const_num (I32, "2"))]))))
+#   * * * * * * *         - : proc_t =
+([("a_11", OffshoringIR.TArray1 (OffshoringIR.TNum I32));
+  ("n_12", OffshoringIR.TNum I32)],
+ OffshoringIR.TVoid,
+ Block (<abstr>,
+  For
+   {OffshoringIR.id = "i_13"; ty = OffshoringIR.TNum I32; guard = None;
+    lwb = Const (Const_num (I32, "0")); upe = LocalVar "n_12";
+    step = Const (Const_num (I32, "1"));
+    body =
+     Block (<abstr>,
+      Exp
+       (FunCall (OffshoringIR.OP.Array1_set (OffshoringIR.TNum I32),
+         [LocalVar "a_11"; LocalVar "i_13"; LocalVar "i_13"])))}))
+# * * * * * * * * * * * * * * *         - : proc_t =
+([("a_14", OffshoringIR.TArray1 (OffshoringIR.TNum I32));
+  ("n_15", OffshoringIR.TNum I32)],
+ OffshoringIR.TVoid,
+ Block (<abstr>,
+  For
+   {OffshoringIR.id = "i_16"; ty = OffshoringIR.TNum I32; guard = None;
+    lwb = Const (Const_num (I32, "0")); upe = LocalVar "n_15";
+    step = Const (Const_num (I32, "1"));
+    body =
+     Block (<abstr>,
+      Exp
+       (FunCall (OffshoringIR.OP.Array1_set (OffshoringIR.TNum I32),
+         [LocalVar "a_14"; LocalVar "i_16"; LocalVar "i_16"])))}))
+#     - : proc_t =
+([("a_17", OffshoringIR.TArray1 (OffshoringIR.TNum I32));
+  ("n_18", OffshoringIR.TNum I32)],
+ OffshoringIR.TVoid,
+ Block (<abstr>,
+  For
+   {OffshoringIR.id = "i_19"; ty = OffshoringIR.TNum I32; guard = None;
+    lwb = Const (Const_num (I32, "0")); upe = LocalVar "n_18";
+    step = Const (Const_num (I32, "1"));
+    body =
+     Block (<abstr>,
+      Exp
+       (FunCall (OffshoringIR.OP.Array1_set (OffshoringIR.TNum I32),
+         [LocalVar "a_17"; LocalVar "i_19"; LocalVar "i_19"])))}))
+# # * * * * * * * * * * * * * * *     * * * * * * * * * * * * * *                                             - : proc_t =
+([("a_20", OffshoringIR.TArray1 (OffshoringIR.TNum I32));
+  ("c_21", OffshoringIR.TArray1 (OffshoringIR.TNum I32));
+  ("n_22", OffshoringIR.TNum I32)],
+ OffshoringIR.TVoid,
+ Block (<abstr>,
+  For
+   {OffshoringIR.id = "gid_23"; ty = OffshoringIR.TNum I32; guard = None;
+    lwb =
+     FunCall (OffshoringIR.OP.Other "get_group_id",
+      [Const (Const_num (I32, "0"))]);
+    upe =
+     FunCall (OffshoringIR.OP.DIV I32,
+      [LocalVar "n_22"; Const (Const_num (I32, "1024"))]);
+    step =
+     FunCall (OffshoringIR.OP.Other "get_num_groups",
+      [Const (Const_num (I32, "0"))]);
+    body =
+     Block (<abstr>,
+      For
+       {OffshoringIR.id = "lid_24"; ty = OffshoringIR.TNum I32; guard = None;
+        lwb =
+         FunCall (OffshoringIR.OP.Other "get_local_id",
+          [Const (Const_num (I32, "0"))]);
+        upe = Const (Const_num (I32, "256"));
+        step =
+         FunCall (OffshoringIR.OP.Other "get_local_size",
+          [Const (Const_num (I32, "0"))]);
+        body =
+         Block (<abstr>,
+          For
+           {OffshoringIR.id = "i_25"; ty = OffshoringIR.TNum I32;
+            guard = None; lwb = Const (Const_num (I32, "0"));
+            upe = Const (Const_num (I32, "4"));
+            step = Const (Const_num (I32, "1"));
+            body =
+             Block (<abstr>,
+              Exp
+               (FunCall (OffshoringIR.OP.Array1_set (OffshoringIR.TNum I32),
+                 [LocalVar "c_21"; LocalVar "i_25";
+                  FunCall (OffshoringIR.OP.ADD I32,
+                   [FunCall
+                     (OffshoringIR.OP.Array1_get (OffshoringIR.TNum I32),
+                     [LocalVar "a_20"; LocalVar "idx_26"]);
+                    Const (Const_num (I32, "1"))])])))})})}))
+#   
+All Done
+- : unit = ()
+# 

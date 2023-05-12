@@ -1,0 +1,80 @@
+BER MetaOCaml toplevel, version N 114
+OCaml version 4.14.1
+Enter #help;; for help.
+
+#     #                                 val fib : int -> int -> int -> int = <fun>
+val sfib : int -> (int -> int -> int) code = <fun>
+#   * * * *                   val sfib : int -> (int -> int -> int) code = <fun>
+#   val c : (int -> int -> int) code = .<
+  let rec h_21 (x_22, y_23) = (h_9 (x_22, y_23)) + (h_15 (x_22, y_23))
+  and h_18 (x_19, y_20) = x_19
+  and h_15 (x_16, y_17) = (h_12 (x_16, y_17)) + (h_18 (x_16, y_17))
+  and h_12 (x_13, y_14) = y_14
+  and h_9 (x_10, y_11) = (h_15 (x_10, y_11)) + (h_12 (x_10, y_11))
+  and h_6 (x_7, y_8) = (h_21 (x_7, y_8)) + (h_9 (x_7, y_8)) in
+  fun x_4 -> fun y_5 -> h_6 (x_4, y_5)>. 
+# * * * * * * * * *                     val ack : int -> int -> int = <fun>
+# #                       val sack : int -> (int -> int) code = <fun>
+#   val sac2 : (int -> int) code = .<
+  let rec h_29 n_30 = n_30 + 1
+  and h_27 n_28 = if n_28 = 0 then h_29 1 else h_29 (h_27 (n_28 - 1))
+  and h_25 n_26 = if n_26 = 0 then h_27 1 else h_27 (h_25 (n_26 - 1)) in h_25>.
+  
+# * * * * * *   #     * * * * *                     val mkodds : int -> (int -> bool) code = <fun>
+#   val odd3 : (int -> bool) code = .<
+  let rec xx_36 n_37 = (n_37 <> 0) && (xx_32 (n_37 - 1))
+  and xx_34 n_35 = (n_35 <> 0) && (xx_36 (n_35 - 1))
+  and xx_32 n_33 = (n_33 = 0) || (xx_34 (n_33 - 1)) in xx_32>. 
+# * * * * *           #                               type state2 = S1 | S2 | S3 | S4
+type ('alph, 'state) automaton = {
+  finals : 'state list;
+  trans : ('state * ('alph * 'state) list) list;
+}
+val au3 : ([> `A | `B ], state2) automaton =
+  {finals = [S1; S2; S3];
+   trans =
+    [(S1, [(`A, S2); (`B, S3)]); (S2, [(`A, S3); (`B, S4)]);
+     (S3, [(`A, S4); (`B, S1)]); (S4, [(`A, S1); (`B, S2)])]}
+#                           val makeau :
+  ([ `A | `B ], 'state) automaton ->
+  'state -> ([ `A | `B ] list -> bool) code = <fun>
+#     - : ([ `A | `B ] list -> bool) code = .<
+let rec st_48 =
+  function | `A::r_49 -> st_42 r_49 | `B::r_50 -> st_45 r_50 | [] -> true
+and st_45 =
+  function | `A::r_46 -> st_39 r_46 | `B::r_47 -> st_48 r_47 | [] -> false
+and st_42 =
+  function | `A::r_43 -> st_45 r_43 | `B::r_44 -> st_39 r_44 | [] -> true
+and st_39 =
+  function | `A::r_40 -> st_48 r_40 | `B::r_41 -> st_42 r_41 | [] -> true in
+st_39>. 
+# * * * * * * * * * * *                                       val makeau :
+  ('alph, 'state) automaton ->
+  ('alph -> 'alph code) -> 'state -> ('alph list -> bool) code = <fun>
+#     - : ([ `A | `B ] list -> bool) code = .<
+let rec st_64 l_65 =
+  match l_65 with
+  | [] -> false
+  | x_66::r_67 when x_66 = `A -> st_52 r_67
+  | x_68::r_69 when x_68 = `B -> st_56 r_69
+and st_60 l_61 =
+  match l_61 with
+  | [] -> true
+  | x_62::r_63 when x_62 = `A -> st_64 r_63
+  | x_70::r_71 when x_70 = `B -> st_52 r_71
+and st_56 l_57 =
+  match l_57 with
+  | [] -> true
+  | x_58::r_59 when x_58 = `A -> st_60 r_59
+  | x_72::r_73 when x_72 = `B -> st_64 r_73
+and st_52 l_53 =
+  match l_53 with
+  | [] -> true
+  | x_54::r_55 when x_54 = `A -> st_56 r_55
+  | x_74::r_75 when x_74 = `B -> st_60 r_75 in
+st_52>. 
+#   * * * * * * * * * * * * * * * * * * * * * * *     
+All done
+
+- : unit = ()
+# 

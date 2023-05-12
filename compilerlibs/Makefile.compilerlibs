@@ -71,6 +71,7 @@ PARSING_CMI = \
   parsing/asttypes.cmi \
   parsing/parsetree.cmi
 
+#NNN trx.cmo
 TYPING = \
   typing/ident.cmo \
   typing/path.cmo \
@@ -115,6 +116,7 @@ TYPING = \
   typing/typedecl_separability.cmo \
   typing/typedecl.cmo \
   typing/typeopt.cmo \
+  typing/trx.cmo \
   typing/rec_check.cmo \
   typing/typecore.cmo \
   typing/typeclass.cmo \

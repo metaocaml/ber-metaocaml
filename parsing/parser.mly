@@ -636,6 +636,9 @@ let mk_directive ~loc name arg =
    string that will not trigger a syntax error; see how [not_expecting]
    is used in the definition of [type_variance]. */
 
+%token DOTLESS                ".<"  /* NNN */
+%token GREATERDOT             ">."  /* NNN */
+%token DOTTILDE               ".~"  /* NNN */
 %token AMPERAMPER             "&&"
 %token AMPERSAND              "&"
 %token AND                    "and"
@@ -828,6 +831,7 @@ The precedences must be listed from low to high.
           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
           NEW PREFIXOP STRING TRUE UIDENT
           LBRACKETPERCENT QUOTED_STRING_EXPR
+          DOTLESS DOTTILDE             /* NNN */
 
 
 /* Entry points */
@@ -2366,6 +2370,12 @@ simple_expr:
       { $1 }
 ;
 %inline simple_expr_attrs:
+  | DOTLESS e = seq_expr GREATERDOT                 /* NNN */
+    { (e.pexp_desc,
+       (Some  (mknoloc "metaocaml.bracket"),[])) }  /* NNN */
+  | DOTTILDE e = simple_expr                        /* NNN */
+    { (e.pexp_desc,
+       (Some (mknoloc "metaocaml.escape"), [])) }   /* NNN */
   | BEGIN ext = ext attrs = attributes e = seq_expr END
       { e.pexp_desc, (ext, attrs @ e.pexp_attributes) }
   | BEGIN ext_attributes END
